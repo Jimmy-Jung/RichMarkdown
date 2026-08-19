@@ -1,0 +1,22 @@
+{
+  "configurations": [
+    {
+      "id": "4454D08A-A575-4186-B614-6A96F797EF78",
+      "name": "Default",
+      "options": {}
+    }
+  ],
+  "defaultOptions": {
+    "codeCoverage": true
+  },
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:SwiftLatexDemo.xcodeproj",
+        "identifier": "SwiftLatexDemoUITests",
+        "name": "SwiftLatexDemoUITests"
+      }
+    }
+  ],
+  "version": 1
+}

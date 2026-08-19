@@ -1,0 +1,42 @@
+# xcodegen manifest — `xcodegen generate`로 SwiftLatexDemo.xcodeproj 생성 (DEVELOPMENT.md §7 P0).
+name: SwiftLatexDemo
+options:
+  bundleIdPrefix: dev.swiftlatex
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  SwiftLatex:
+    path: ../..
+targets:
+  SwiftLatexDemo:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    dependencies:
+      - package: SwiftLatex
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "1.0"
+        CODE_SIGN_STYLE: Automatic
+  SwiftLatexDemoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: SwiftLatexDemo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  SwiftLatexDemo:
+    build:
+      targets:
+        SwiftLatexDemo: all
+    test:
+      testPlans:
+        - path: SwiftLatexDemo.xctestplan
+          defaultPlan: true
