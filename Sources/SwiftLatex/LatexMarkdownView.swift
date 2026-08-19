@@ -162,26 +162,24 @@ struct InlineRunsText: View {
     }
 
     private func text(for run: InlineRun) -> Text {
-        var text: Text
         switch run.content {
         case .text(let string):
-            text = Text(verbatim: string)
+            return styled(Text(emphasized(AttributedString(string), run)), run)
 
         case .code(let code):
             var attributed = AttributedString(code)
             attributed.font = .body.monospaced()
             attributed.backgroundColor = theme.inlineCodeBackground
-            text = Text(attributed)
+            return styled(Text(emphasized(attributed, run)), run)
 
         case .math(let segment):
             if let rendered = images[segment] {
                 // `-descent` baseline 보정 (DEVELOPMENT.md §5).
-                text = Text(Image(uiImage: rendered.image))
+                return Text(Image(uiImage: rendered.image))
                     .baselineOffset(-rendered.descent)
-            } else {
-                // 렌더 전/실패 시 원래 구분자를 포함한 source를 표시한다.
-                text = Text(verbatim: segment.source)
             }
+            // 렌더 전/실패 시 원래 구분자를 포함한 source를 표시한다.
+            return styled(Text(emphasized(AttributedString(segment.source), run)), run)
 
         case .link(let label, let destination):
             var attributed = AttributedString(label)
@@ -189,18 +187,36 @@ struct InlineRunsText: View {
             // 대비 기준을 넘는 링크 색 + 밑줄(색 외 구분 수단).
             attributed.foregroundColor = theme.linkColor
             attributed.underlineStyle = .single
-            text = Text(attributed)
+            return styled(Text(emphasized(attributed, run)), run)
 
         case .hardBreak:
-            text = Text(verbatim: "\n")
+            return Text(verbatim: "\n")
 
         case .softBreak:
-            text = Text(verbatim: " ")
+            return Text(verbatim: " ")
         }
-        if run.bold { text = text.bold() }
-        if run.italic { text = text.italic() }
-        if run.strikethrough { text = text.strikethrough() }
-        return text
+    }
+
+    /// 굵게/기울임/취소선 적용.
+    ///
+    /// - 기울임·취소선은 AttributedString의 `inlinePresentationIntent`로 준다.
+    ///   `Text.italic()`/`.strikethrough()`는 여러 `Text`를 `+`로 합치면 사라진다.
+    /// - 굵게는 `Text.bold()`로 준다. bold를 intent로 함께 주면 italic과 겹칠 때
+    ///   한글처럼 italic 변형이 없는 폰트에서 굵기까지 잃는다.
+    /// - 한글은 시스템 폰트에 italic 변형이 없어 기울임이 시각적으로 적용되지 않는다
+    ///   (iOS 제약). 영문·숫자에는 적용된다.
+    private func styled(_ text: Text, _ run: InlineRun) -> Text {
+        run.bold ? text.bold() : text
+    }
+
+    private func emphasized(_ attributed: AttributedString, _ run: InlineRun) -> AttributedString {
+        var intent: InlinePresentationIntent = []
+        if run.italic { intent.insert(.emphasized) }
+        if run.strikethrough { intent.insert(.strikethrough) }
+        guard !intent.isEmpty else { return attributed }
+        var copy = attributed
+        copy.inlinePresentationIntent = intent
+        return copy
     }
 }
 
