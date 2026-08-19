@@ -261,6 +261,16 @@ import Testing
         #expect(plainText(of: firstParagraphRuns(doc)) == "이스케이프한 $100 과 *강조 아님* 과 _밑줄_")
     }
 
+    @Test func escapedMathDelimitersKeepBackslash() {
+        // 수식으로 인식되지 않은 구분자는 backslash를 유지해야 한다.
+        // 그래야 왜 수식이 되지 않았는지 사용자가 볼 수 있다(fail-open 계약).
+        let doc = parse(#"미완성 \(x + y 와 빈 \(\) 와 인라인 위치 \[x+y\]"#)
+        let text = plainText(of: firstParagraphRuns(doc))
+        #expect(text.contains(#"\(x + y"#))
+        #expect(text.contains(#"\(\)"#))
+        #expect(text.contains(#"\[x+y\]"#))
+    }
+
     @Test func escapedBackslashCollapsesToSingle() {
         let doc = parse(#"경로 C:\\temp 와 \\(x\\)"#)
         let text = plainText(of: firstParagraphRuns(doc))
