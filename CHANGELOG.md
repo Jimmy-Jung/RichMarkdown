@@ -3,6 +3,21 @@
 이 프로젝트는 [Semantic Versioning](https://semver.org/lang/ko/)을 따른다.
 `0.x`는 베타이며 minor 버전에서 공개 API가 바뀔 수 있다.
 
+## [0.1.1] - 2026-08-19
+
+### 수정
+
+- 수식으로 인식되지 않은 구분자가 backslash를 잃던 문제. `0.1.0`의 Markdown escape
+  해제가 `\(`, `\)`, `\[`, `\]`까지 벗겨서 미완성 수식이 `(x + y`로 보였다.
+  "잘못되거나 미완성인 LaTeX는 원래 구분자를 포함한 source를 표시한다"는 계약이
+  깨졌다. 수식 구분자 문자는 해제 대상에서 제외한다. `\$`, `\*`, `\_`, `\\`는
+  그대로 해제한다.
+
+### 문서
+
+- README에 실제 렌더 스크린샷 4장(수식, Markdown 요소, 달러 opt-in·fail-open,
+  코드 블록 dark) 추가
+
 ## [0.1.0] - 2026-08-19
 
 첫 베타 릴리스.
@@ -35,4 +50,5 @@
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
+[0.1.1]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.1
 [0.1.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.0

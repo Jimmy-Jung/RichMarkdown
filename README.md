@@ -3,9 +3,9 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.1%20beta-yellow.svg)](CHANGELOG.md)
 
-> **베타 (0.1.0)** — 공개 표면은 작지만 아직 `1.0`이 아니다. minor 버전에서 API가
+> **베타 (0.1.1)** — 공개 표면은 작지만 아직 `1.0`이 아니다. minor 버전에서 API가
 > 바뀔 수 있다. 변경 내역은 [CHANGELOG.md](CHANGELOG.md)를 본다.
 
 LLM 채팅 메시지를 네이티브 SwiftUI로 렌더하는 Swift Package. Markdown, 인라인/블록
@@ -26,6 +26,22 @@ API로 그대로 쓴다.
 
 ---
 
+## 스크린샷
+
+`Examples/SwiftLatexDemo`의 챗봇 화면. iPhone 16 Pro / iOS 18.6 실제 렌더다.
+
+| 인라인·블록 수식 | Markdown 요소 |
+|---|---|
+| ![인라인과 블록 수식](Docs/screenshots/01-math.png) | ![Markdown 블록과 인라인 강조](Docs/screenshots/02-markdown.png) |
+| 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 인라인 코드, 링크, 리스트, 인용, 구분선. `\*별표\*` 같은 escape 해제도 함께 |
+
+| 달러 수식 opt-in · fail-open | 코드 블록 (dark) |
+|---|---|
+| ![달러 수식과 실패 시 원문 표시](Docs/screenshots/03-dollar-fallback.png) | ![코드 블록 dark mode](Docs/screenshots/04-code-dark.png) |
+| `$` opt-in이 꺼지면 전부 텍스트. `$5`, `$5 and $10`은 켜도 수식이 아니다. 잘못된 LaTeX는 구분자를 포함한 원문 그대로 | 언어 라벨과 복사 버튼, 긴 줄 가로 스크롤. 색은 light/dark를 따라간다 |
+
+---
+
 ## 설치
 
 `Package.swift`:
@@ -33,7 +49,7 @@ API로 그대로 쓴다.
 ```swift
 dependencies: [
     // 0.x 베타다. minor 버전에서 공개 API가 바뀔 수 있으므로 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.1.0")),
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.1.1")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
