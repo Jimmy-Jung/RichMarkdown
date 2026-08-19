@@ -72,6 +72,11 @@ enum ChatFixtures {
 
         **굵게**, *기울임*, ~~취소선~~, `인라인 코드`, [절대 URL 링크](https://example.com).
 
+        영문으로도 확인: **bold**, *italic*, ~~strikethrough~~,
+        ***bold italic***, **굵게 안의 *기울임***.
+
+        이스케이프: \*별표\*, \_밑줄\_, \$100, 경로 C:\\temp
+
         - 순서 없는 항목 \(x_1\)
         - 중첩 없는 두 번째 항목
         - 세 번째 항목
@@ -163,7 +168,7 @@ enum ChatFixtures {
         한글과 English와 이모지 🙂🇰🇷 그리고 RTL עברית 사이에
         \(\sum_{k=0}^{n} \binom{n}{k} = 2^n \) 을 넣습니다.
 
-        결합 문자: e\u{301} café 와 \(\hat{x}\)
+        결합 문자: é (e + U+0301) 와 café 그리고 \(\hat{x}\)
 
         긴 한글 문단 안에서도 인라인 수식 \(\lim_{n \to \infty} \frac{1}{n} = 0\) 의
         baseline과 줄바꿈이 자연스러워야 합니다.
