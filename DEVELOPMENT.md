@@ -397,6 +397,19 @@ actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반
 - 30초 전체 측정 재실행: `TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test
   -scheme SwiftLatex -only-testing:SwiftLatexTests/StreamingBaselineTests ...`
 
+### 데모 앱 (2026-08-19)
+
+`Examples/SwiftLatexDemo`는 LLM 챗봇 형태의 화면을 제공한다. 한 화면을 스크롤하며
+v1 렌더 계약 케이스를 눈으로 확인하는 것이 목적이다.
+
+- 질문/답변 쌍 13개, 답변마다 확인 대상 케이스를 라벨로 표시
+- 커버 케이스: 인라인 수식 baseline, 블록 수식(가로 스크롤·복사), 큰 구조(행렬),
+  코드 블록(언어 라벨·긴 줄), 헤딩/리스트/인용/구분선, 링크 allowlist,
+  금지 문맥(코드·링크·HTML) 보호, Markdown 기호 포함 수식, dollar math opt-in과
+  통화 표기, 실패 시 원문 표시, 다국어·결합 문자·RTL, 미지원 노드(표) 강등, 긴 답변
+- 우측 상단 메뉴에서 `$` 수식 파싱 opt-in을 켜고/끄고 비교할 수 있다
+- UIKit `UIHostingConfiguration` 화면은 같은 답변 fixture를 셀로 렌더한다
+
 ### P2 검증 기록 (2026-08-19)
 
 `SwiftLatexDemoP2UITests`로 자동화 (iPhone 16 Pro, iOS 18.6 simulator):
@@ -408,6 +421,30 @@ actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반
 - 복사 버튼: 존재·hittable·44×44pt 확인 (UI 테스트) +
   pasteboard 내용 일치 확인 (`CopyActionTests`, 앱 프로세스)
 - `performAccessibilityAudit(for: .all.subtracting(.dynamicType))` (iOS 17+)
+
+### 데모 화면 캡처 검증에서 잡아낸 결함 (2026-08-19)
+
+챗봇 화면 전체(22장)를 스크롤 캡처해 눈으로 확인한 결과:
+
+1. **기울임·취소선이 적용되지 않음** — `Text`를 `+`로 합치면 `Text.italic()`과
+   `Text.strikethrough()`가 사라진다(`.bold()`만 남는다). 문단은 수식·코드·링크
+   런 때문에 항상 합성 `Text`라 두 스타일이 항상 유실됐다.
+   → 기울임·취소선은 `AttributedString.inlinePresentationIntent`로 준다.
+   굵게는 `Text.bold()`를 유지한다. bold를 intent로 함께 주면 italic과 겹칠 때
+   한글처럼 italic 변형이 없는 폰트에서 굵기까지 잃는다(`**굵게 안의 *기울임***`
+   에서 실측).
+2. **Markdown escape가 해제되지 않음** — 2차 파싱 Text 노드를 원문 slice로
+   되돌려 쓰기 때문에 파서의 escape 해제가 사라졌다. `\$100`이 백슬래시째
+   표시됐다.
+   → span 밖 텍스트에 `unescapingMarkdownPunctuation()`을 적용한다. 수식 span
+   source와 코드 span은 backslash를 그대로 보존한다.
+3. **audit `Text clipped`는 오탐** — 지적된 요소(문단 텍스트, HTML 리터럴)의
+   스크린샷을 확인한 결과 전체가 표시되고 잘림이 없었다. 합성 `Text` 문단의
+   접근성 프레임 측정이 어긋나는 것으로 보인다. audit에서 제외하고 근거를 남겼다.
+
+알려진 플랫폼 제약: **한글은 시스템 폰트에 italic 변형이 없어 기울임이 시각적으로
+적용되지 않는다.** 영문·숫자에는 적용된다. 파서는 두 경우 모두 italic 플래그를
+정상적으로 싣는다(`emphasisFlagsAreCarriedOnRuns`).
 
 P2에서 UI 테스트가 잡아낸 실제 결함과 수정:
 
@@ -423,6 +460,13 @@ P2에서 UI 테스트가 잡아낸 실제 결함과 수정:
    `testDynamicTypeExtremes`가 검증). audit에서 `dynamicType`만 제외했다.
 4. **러너 프로세스 pasteboard 읽기 금지** — 시스템 권한 프롬프트가 뜬다.
    → pasteboard 검증은 앱 프로세스 unit test(`CopyActionTests`)로 이동.
+5. **중첩 delimiter 안쪽이 수식으로 승격됨** — 챗봇 데모 화면에서 발견.
+   `\(a \(b\) c\)`에서 바깥 구간을 plain text + diagnostic으로 처리한 뒤
+   스캔 위치를 여는 delimiter 뒤로만 옮겨, 안쪽 `\(b\)`가 별도 수식으로 렌더됐다.
+   문서 계약("중첩 delimiter는 plain text와 내부 diagnostic")과 충돌.
+   → 중첩·빈 구분자는 닫는 delimiter 뒤로 건너뛴다. 미완성 구분자는 같은 줄의
+   다른 후보를 놓치지 않도록 여는 delimiter 뒤부터 계속 탐색한다.
+   닫는 delimiter 앞에 opener가 또 있으면 미완성이 아니라 중첩으로 판정한다.
 
 UI 테스트는 app launch가 회당 7~8초라 검증 항목을 launch 단위로 묶는다
 (기본 구성 / dark / Dynamic Type / collection = 3 테스트, 5 launch).

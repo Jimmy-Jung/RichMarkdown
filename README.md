@@ -21,6 +21,13 @@ LatexMarkdownView(
 시스템 블루가 아니라 대비 기준(4.5:1)을 넘는 `Color.accessibleLink`다
 (시스템 블루는 흰 배경에서 약 3.6:1로 접근성 audit에 걸린다).
 
+### 데모 앱
+
+`Examples/SwiftLatexDemo`에서 `xcodegen generate` 후 실행한다. LLM 챗봇 화면을
+스크롤하며 렌더 케이스를 한 번에 확인할 수 있다 — 인라인/블록 수식, 코드 블록,
+리스트·인용, 링크 allowlist, 금지 문맥 보호, 실패 시 원문 표시, 다국어·RTL,
+미지원 노드 강등, 긴 답변. 우측 상단 메뉴에서 `$` 수식 opt-in을 토글해 비교한다.
+
 UIKit 셀:
 
 ```swift
@@ -39,6 +46,13 @@ cell.contentConfiguration = UIHostingConfiguration {
 - 잘못되거나 미완성인 LaTeX는 구분자를 포함한 원문을 그대로 표시한다.
 - code/HTML 내부의 구분자는 수식이 아니다. 링크/이미지 문법 내부의 구분자도
   수식이 아니다. 단, `\([a](b)\)`처럼 수식이 link-like source를 완전히 감싸면 수식이다.
+
+## 알려진 제약
+
+- 한글은 시스템 폰트에 italic 변형이 없어 `*기울임*`이 시각적으로 적용되지 않는다
+  (iOS 제약). 영문·숫자에는 적용된다.
+- 표, 원격 이미지, 신택스 하이라이팅은 v1 비목표다. 미지원 노드는 삭제하지 않고
+  읽을 수 있는 plain text로 낮춘다.
 
 ## 지원 matrix
 
