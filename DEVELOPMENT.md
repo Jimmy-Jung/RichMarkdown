@@ -6,8 +6,8 @@ UIKit 앱은 Apple의 SwiftUI 호스팅 API로 사용한다.
 
 - 작성자: JunyoungJung
 - 최초 작성: 2026-08-19
-- 최종 개정: 2026-08-19 (rev.4)
-- 상태: 구현 전 설계 초안 — P0 검증 후 공개 API 확정
+- 최종 개정: 2026-08-19 (rev.5 — P0 검증 결과 반영)
+- 상태: P0 완료, P1 골격 구현 및 테스트 통과 (Core coverage 92.5%)
 - 배포 대상 후보: iOS/iPadOS 16 이상
 
 ---
@@ -16,8 +16,12 @@ UIKit 앱은 Apple의 SwiftUI 호스팅 API로 사용한다.
 
 ### 확인된 사실
 
-- SwiftMath `1.7.2`의 `MathImage.asImage()`는 이미지와
+- SwiftMath `1.7.3`의 `MathImage.asImage()`는 이미지와
   `LayoutInfo(ascent:descent:)`를 반환한다. 기존 fork 계획은 필요 없다.
+- P0 검증 결과(2026-08-19): SwiftMath `1.7.2`는 `MTMathListBuilder.swift`의
+  scope 버그(typo)로 Xcode `26.6 (17F113)`에서 컴파일되지 않는다. `1.7.3`이
+  수정 버전이며 `asImage()`의 `(NSError?, MTImage?, LayoutInfo?)` API는 동일하다.
+  고정 버전을 `exact: "1.7.3"`으로 확정했다.
 - `swift-markdown`은 수식 AST 노드를 제공하지 않는다. 수식 구간을 별도로 찾아
   원문 범위를 보존해야 한다.
 - 검토한 `swift-markdown 0.4.0`의 source column은 UTF-8 byte 기준이다.
@@ -103,11 +107,14 @@ LatexMarkdownView(
 
 ### 초기 Package.swift 방향
 
-- Swift tools `5.9`, platform `.iOS(.v16)`을 P0 시작점으로 사용한다.
+- Swift tools `6.0`, platform `.iOS(.v16)`을 사용한다 (P0 확정).
+  Swift Testing 채택으로 tools 6.0이 필요하며, 우리 target은 Swift 6 language
+  mode + complete concurrency로 빌드된다. host Core 검증을 위해 `.macOS(.v12)`
+  최소 선언을 추가한다(SwiftMath 요구, macOS UI 비목표 유지).
 - 공개 product는 `SwiftLatex` 하나다.
 - 비공개 `SwiftLatexCore` target은 `Markdown` product에 의존한다.
 - UI target은 Core와 SwiftMath에 의존한다.
-- P0 재현성은 SwiftMath `exact: "1.7.2"`, swift-markdown `exact: "0.4.0"`으로 시작한다.
+- P0 재현성은 SwiftMath `exact: "1.7.3"`, swift-markdown `exact: "0.4.0"`으로 고정한다.
 - 지원 toolchain을 확정한 뒤에만 CI에서 검증한 버전 범위로 넓힌다.
 
 `swift-markdown`을 `from: "0.4.0"`으로 선언하면 SwiftPM이 Swift tools 6.2가 필요한 이후
@@ -245,7 +252,7 @@ API는 현재 메시지 전체 `String`을 받으며 증분 parser를 제공하�
 
 ### 인라인 수식
 
-SwiftMath `1.7.2`의 공개 API만 사용한다.
+SwiftMath `1.7.3`의 공개 API만 사용한다.
 
 ```swift
 import SwiftMath
@@ -331,7 +338,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
 - 수식 source byte/구문 복잡도는 `MathImage.asImage()` 호출 전에 제한한다.
 - 내부 상한은 P0 adversarial fixture와 측정으로 정하며 v1 공개 API로 고정하지 않는다.
 
-SwiftMath `1.7.2`의 `MathImage.asImage()`는 내부에서 raster 크기를 계산한 뒤 바로
+SwiftMath `1.7.3`의 `MathImage.asImage()`는 내부에서 raster 크기를 계산한 뒤 바로
 `UIGraphicsImageRenderer`를 생성한다. 반환 이미지의 dimension을 사후 검사하는 것만으로는
 OOM을 예방할 수 없다. 다음 중 하나를 P0에서 검증하기 전에는 raster dimension 제한을
 보안 경계로 문서화하지 않는다.
@@ -360,7 +367,7 @@ actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반
 
 ### P0 — 기술 spike
 
-- Xcode `26.6 (17F113)`에서 exact SwiftMath `1.7.2`, swift-markdown `0.4.0` 조합 컴파일
+- Xcode `26.6 (17F113)`에서 exact SwiftMath `1.7.3`, swift-markdown `0.4.0` 조합 컴파일 (완료 — 1.7.2는 컴파일 불가)
 - 지원하려는 최소 Xcode로 같은 consumer build를 실행해 실제 최소 toolchain 확정
 - code/HTML/link 금지 범위와 수식 보호/복원 parser prototype
 - 동일 UTF-8 byte 길이 mask와 다국어 source range property test
@@ -371,7 +378,61 @@ actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반
 - iOS 16 실행 지원을 선언하려면 호환 Xcode/runtime 또는 실기기 검증 환경 별도 확보
 - 최소 `Examples/SwiftLatexDemo/SwiftLatexDemo.xcodeproj`, UI-test target,
   shared scheme/test plan 생성
-- 스트리밍 baseline 측정 환경과 P1 합격 수치 확정
+- 스트리밍 baseline 측정 환경과 P1 합격 수치 확정 (완료 — 아래 측정 기록)
+
+### P0 측정 기록 (2026-08-19)
+
+환경: Apple Silicon macOS 호스트, iPhone 16 Pro simulator, iOS 18.6, Debug, Xcode 26.6.
+
+- 50 KiB fixture parse (30회): p50 128–136ms, p95 191–230ms, max ~456ms
+- 10Hz × 30초 스트리밍 (300 ticks, 전체 String prefix 갱신):
+  - 실제 경과 36.5초 (유효 ~8.2Hz, MainActor 부하에 의한 sleep 지연 — coalescing이 흡수)
+  - 입력 종료 후 idle: 25–26ms (outstanding 0 도달)
+  - 최종 게시 = 최신 제출, 고유 수식 4개 전부 hydration
+- P1 gate (측정값 대비 여유 반영, `StreamingBaselineTests`):
+  - 50 KiB parse p95 < 300ms
+  - 입력 종료 후 idle < 3초
+- MainActor 검증: worker off-main 실행 테스트(`OffMainExecutionTests`) +
+  signpost `dev.swiftlatex`/`parse`·`raster` (Instruments 확인용)
+- 30초 전체 측정 재실행: `TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test
+  -scheme SwiftLatex -only-testing:SwiftLatexTests/StreamingBaselineTests ...`
+
+### P2 검증 기록 (2026-08-19)
+
+`SwiftLatexDemoP2UITests`로 자동화 (iPhone 16 Pro, iOS 18.6 simulator):
+
+- Dynamic Type: L / AccessibilityXXXL 양 극단 렌더 확인
+- dark mode(launch arg `-swiftlatexDark`), 회전(landscape 왕복)
+- `UIHostingConfiguration` 셀 재사용: 왕복 스크롤 후 콘텐츠 유지
+- 수식 접근성 label("수식: <LaTeX>") 노출 확인
+- 복사 버튼: 존재·hittable·44×44pt 확인 (UI 테스트) +
+  pasteboard 내용 일치 확인 (`CopyActionTests`, 앱 프로세스)
+- `performAccessibilityAudit(for: .all.subtracting(.dynamicType))` (iOS 17+)
+
+P2에서 UI 테스트가 잡아낸 실제 결함과 수정:
+
+1. **링크 대비 미달** — 시스템 블루(#007AFF)는 흰 배경에서 약 3.6:1로 본문
+   기준(4.5:1) 미달. audit `Contrast nearly passed`로 검출됨.
+   → `LatexTheme.linkColor` 추가(기본 `Color.accessibleLink`, light 약 7.5:1 /
+   dark 약 8.9:1)와 밑줄(색 외 구분 수단) 적용.
+2. **복사 버튼이 앱 idle을 붙잡음** — 아이콘 교체로 버튼 폭이 변해 가로
+   `ScrollView`가 재측정되고 XCUITest "wait for app to idle"이 풀리지 않았다.
+   → 버튼을 고정 44×44pt 프레임으로 변경. 타이머 기반 자동 복귀도 제거했다.
+3. **audit dynamicType 오탐** — 수식 raster 이미지는 크기가 고정이지만
+   `@ScaledMetric` point size로 매번 다시 렌더된다(실제 확대는
+   `testDynamicTypeExtremes`가 검증). audit에서 `dynamicType`만 제외했다.
+4. **러너 프로세스 pasteboard 읽기 금지** — 시스템 권한 프롬프트가 뜬다.
+   → pasteboard 검증은 앱 프로세스 unit test(`CopyActionTests`)로 이동.
+
+UI 테스트는 app launch가 회당 7~8초라 검증 항목을 launch 단위로 묶는다
+(기본 구성 / dark / Dynamic Type / collection = 3 테스트, 5 launch).
+
+남은 수동/별도 환경 항목:
+
+- iOS 16 실행 검증 — 호환 Xcode/runtime 또는 실기기 필요 (이 환경에 없음)
+- Bold Text / Increase Contrast / Full Keyboard Access — launch argument로
+  제어 불가, simctl 설정 또는 수동 검증 필요 (contrast는 audit이 일부 대체)
+- VoiceOver 실제 읽기 순서 청취 검증
 
 완료 조건: 위 결과와 충돌하는 설계 문구를 수정한 뒤에만 P1 API를 고정한다.
 
@@ -460,13 +521,13 @@ P0가 scheme을 만든 뒤 현재 로컬 최소 runtime에서는 다음 형태�
 swiftlatex_results_dir=$(mktemp -d /tmp/swiftlatex-results.XXXXXX)
 
 swiftlatex_package_status=0
+# P0 확정: package scheme의 실제 이름은 `SwiftLatex`다.
+# Swift 6 mode/strict concurrency는 tools 6.0 manifest가 적용한다. 전역
+# SWIFT_VERSION=6 / WARNINGS_AS_ERRORS override는 의존성까지 재컴파일하므로 쓰지 않는다.
 xcodebuild test \
-  -scheme SwiftLatex-Package \
+  -scheme SwiftLatex \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -resultBundlePath "$swiftlatex_results_dir/package.xcresult" \
-  SWIFT_VERSION=6 \
-  SWIFT_STRICT_CONCURRENCY=complete \
-  SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
   -enableCodeCoverage YES \
   > /tmp/swiftlatex-package-tests.log 2>&1 || swiftlatex_package_status=$?
 
@@ -477,9 +538,6 @@ xcodebuild test \
   -testPlan SwiftLatexDemo \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -resultBundlePath "$swiftlatex_results_dir/demo.xcresult" \
-  SWIFT_VERSION=6 \
-  SWIFT_STRICT_CONCURRENCY=complete \
-  SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
   -enableCodeCoverage YES \
   > /tmp/swiftlatex-demo-tests.log 2>&1 || swiftlatex_demo_status=$?
 
