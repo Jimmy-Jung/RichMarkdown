@@ -85,9 +85,32 @@ import Testing
         #expect(doc.diagnostics.contains { $0.kind == .emptyMath })
     }
 
-    @Test func nestedOpenerEmitsDiagnostic() {
+    @Test func nestedDelimiterStaysPlainTextEntirely() {
         let doc = parse(#"중첩 \(a \(b\) c\) 다"#)
         #expect(doc.diagnostics.contains { $0.kind == .nestedDelimiter })
+        // 안쪽 \(b\)도 수식으로 승격되지 않는다: 중첩 구간 전체가 plain text다.
+        #expect(doc.allMathSegments.isEmpty)
+        #expect(plainText(of: firstParagraphRuns(doc)).contains("c"))
+    }
+
+    @Test func openerBeforeCloseIsNestedNotUnterminated() {
+        // 닫는 delimiter 앞에 opener가 또 있으면 중첩으로 판정해 구간 전체가 plain text다.
+        let doc = parse(#"미완성 \(a 그리고 \(x+y\) 끝"#)
+        #expect(doc.allMathSegments.isEmpty)
+        #expect(doc.diagnostics.contains { $0.kind == .nestedDelimiter })
+    }
+
+    @Test func unterminatedOpenerDoesNotHideMathOnNextLine() {
+        // \(...\)는 한 logical line 안에서만 닫힌다. 다음 줄의 수식은 정상 인식한다.
+        let doc = parse("미완성 \\(a 끝\n정상 \\(x+y\\) 끝")
+        #expect(doc.allMathSegments.map(\.latex) == ["x+y"])
+        #expect(doc.diagnostics.contains { $0.kind == .unterminatedDelimiter })
+    }
+
+    @Test func emptyMathDoesNotSwallowFollowingMath() {
+        let doc = parse(#"빈 \(\) 뒤 \(z\)"#)
+        #expect(doc.allMathSegments.map(\.latex) == ["z"])
+        #expect(doc.diagnostics.contains { $0.kind == .emptyMath })
     }
 
     // MARK: - Dollar math (opt-in)
@@ -228,6 +251,48 @@ import Testing
             if case .link = $0.content { return true } else { return false }
         })
         #expect(plainText(of: runs).contains("라벨"))
+    }
+
+    // MARK: - Markdown escape 해제
+
+    @Test func escapedPunctuationLosesBackslashInDisplayText() {
+        // 2차 파싱 Text 노드를 원문 slice로 되돌리므로 escape 해제를 직접 해야 한다.
+        let doc = parse(#"이스케이프한 \$100 과 \*강조 아님\* 과 \_밑줄\_"#)
+        #expect(plainText(of: firstParagraphRuns(doc)) == "이스케이프한 $100 과 *강조 아님* 과 _밑줄_")
+    }
+
+    @Test func escapedBackslashCollapsesToSingle() {
+        let doc = parse(#"경로 C:\\temp 와 \\(x\\)"#)
+        let text = plainText(of: firstParagraphRuns(doc))
+        #expect(text.contains(#"C:\temp"#))
+        #expect(text.contains(#"\(x\)"#))
+        #expect(doc.allMathSegments.isEmpty)
+    }
+
+    @Test func mathSourceKeepsItsBackslashes() {
+        // 수식 span은 원래 구분자와 LaTeX backslash를 보존한다.
+        let doc = parse(#"수식 \(\frac{a}{b}\) 끝"#)
+        #expect(doc.allMathSegments.map(\.source) == [#"\(\frac{a}{b}\)"#])
+        #expect(doc.allMathSegments.map(\.latex) == [#"\frac{a}{b}"#])
+    }
+
+    @Test func codeSpanKeepsBackslashesLiterally() {
+        let doc = parse(#"코드 `\$100` 와 `\(x\)`"#)
+        let codes = firstParagraphRuns(doc).compactMap { run -> String? in
+            if case .code(let c) = run.content { return c }
+            return nil
+        }
+        #expect(codes == [#"\$100"#, #"\(x\)"#])
+    }
+
+    // MARK: - 인라인 강조
+
+    @Test func emphasisFlagsAreCarriedOnRuns() {
+        let doc = parse("**bold** 와 *italic* 와 ~~strike~~")
+        let runs = firstParagraphRuns(doc)
+        #expect(runs.contains { $0.bold && !$0.italic && !$0.strikethrough })
+        #expect(runs.contains { $0.italic && !$0.bold })
+        #expect(runs.contains { $0.strikethrough })
     }
 
     // MARK: - 다국어 UTF-8

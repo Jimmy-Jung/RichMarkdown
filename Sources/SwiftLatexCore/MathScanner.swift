@@ -135,12 +135,13 @@ package struct MathScanner: Sendable {
             let b = bytes[i]
             if b == UInt8(ascii: "\\"), i + 1 < segment.upperBound,
                bytes[i + 1] == UInt8(ascii: "("), !isBackslashEscaped(at: i) {
-                if let span = inlineParenSpan(openingAt: i, segment: segment, diagnostics: &diagnostics) {
+                let outcome = inlineParenSpan(openingAt: i, segment: segment, diagnostics: &diagnostics)
+                if let span = outcome.span {
                     spans.append(span)
                     i = span.originalUTF8Range.upperBound
-                    continue
+                } else {
+                    i = outcome.nextIndex
                 }
-                i += 2
                 continue
             }
             if b == UInt8(ascii: "\\"), i + 1 < segment.upperBound,
@@ -172,34 +173,41 @@ package struct MathScanner: Sendable {
     }
 
     /// `\( ... \)` — 한 logical line의 inline 수식.
+    ///
+    /// 수식이 아닐 때는 다음 스캔 위치도 함께 돌려준다. 중첩·빈 구분자는 닫는
+    /// delimiter 뒤로 건너뛰어야 구간 전체가 plain text로 남는다. 미완성 구분자는
+    /// 여는 delimiter 뒤부터 계속 탐색해 같은 줄의 다른 후보를 놓치지 않는다.
     private func inlineParenSpan(
         openingAt open: Int,
         segment: Range<Int>,
         diagnostics: inout [MathDiagnostic]
-    ) -> ProtectedMathSpan? {
+    ) -> (span: ProtectedMathSpan?, nextIndex: Int) {
         // 여는 delimiter가 link/image 내부에 있으면 수식이 아니다.
-        guard !insideSoftRange(open) else { return nil }
+        guard !insideSoftRange(open) else { return (nil, open + 2) }
         let contentStart = open + 2
         let lineEnd = endOfLine(from: contentStart, limit: segment.upperBound)
         guard let close = firstUnescapedDelimiter(prefixByte: UInt8(ascii: "\\"), byte: UInt8(ascii: ")"),
                                                   in: contentStart..<lineEnd)
         else {
             diagnostics.append(MathDiagnostic(kind: .unterminatedDelimiter, utf8Range: open..<lineEnd))
-            return nil
+            return (nil, open + 2)
         }
-        // 중첩 opener는 plain text + diagnostic.
+        let end = close + 2
+        // 중첩 opener는 구간 전체가 plain text + diagnostic이다.
         if firstUnescapedDelimiter(prefixByte: UInt8(ascii: "\\"), byte: UInt8(ascii: "("),
                                    in: contentStart..<close) != nil {
-            diagnostics.append(MathDiagnostic(kind: .nestedDelimiter, utf8Range: open..<(close + 2)))
-            return nil
+            diagnostics.append(MathDiagnostic(kind: .nestedDelimiter, utf8Range: open..<end))
+            return (nil, end)
         }
         let inner = trimWhitespace(contentStart..<close)
         guard !inner.isEmpty else {
-            diagnostics.append(MathDiagnostic(kind: .emptyMath, utf8Range: open..<(close + 2)))
-            return nil
+            diagnostics.append(MathDiagnostic(kind: .emptyMath, utf8Range: open..<end))
+            return (nil, end)
         }
-        guard softRangesAllow(span: open..<(close + 2), content: contentStart..<close) else { return nil }
-        return makeSpan(range: open..<(close + 2), kind: .inlineParen)
+        guard softRangesAllow(span: open..<end, content: contentStart..<close) else {
+            return (nil, end)
+        }
+        return (makeSpan(range: open..<end, kind: .inlineParen), end)
     }
 
     /// `$ ... $` — v1 자체 규칙 (DEVELOPMENT.md §3):

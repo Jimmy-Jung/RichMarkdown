@@ -254,7 +254,9 @@ private struct ModelBuilder {
         }
     }
 
+    /// span 밖 텍스트는 원문 slice에서 Markdown escape를 해제해 표시한다.
     private func slice(_ range: Range<Int>) -> String {
         String(decoding: originalBytes[range], as: UTF8.self)
+            .unescapingMarkdownPunctuation()
     }
 }
