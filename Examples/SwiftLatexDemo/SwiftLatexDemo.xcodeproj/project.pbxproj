@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		065B0E2D6BDF2954E89322DE /* SwiftLatexDemoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3720B48E616842162C068B /* SwiftLatexDemoUITests.swift */; };
 		59D049FCCED9008404DC5230 /* SwiftLatexDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */; };
+		68F8D704B08AC84E451F568C /* UIKitChatDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */; };
 		95F76104E6870628CB8221D5 /* ChatDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */; };
 		A93EAE4434196878D450B538 /* SwiftLatex in Frameworks */ = {isa = PBXBuildFile; productRef = AB53BA8DC0BF944EF3DFBA76 /* SwiftLatex */; };
 		C48157A3BC3618C2401F84D3 /* SwiftLatexDemoP2UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41D5AF6071E562518FEB6202 /* SwiftLatexDemoP2UITests.swift */; };
@@ -31,6 +32,7 @@
 		9FEA2AD826F43FCBB2F26ADB /* SwiftLatex */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftLatex; path = ../..; sourceTree = SOURCE_ROOT; };
 		A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDemo.swift; sourceTree = "<group>"; };
 		C13AFE67B49B50CF73B5F7FD /* SwiftLatexDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SwiftLatexDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIKitChatDemo.swift; sourceTree = "<group>"; };
 		F16177F9302D6C96C203536C /* SwiftLatexDemoUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SwiftLatexDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -87,6 +89,7 @@
 			children = (
 				A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */,
 				6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */,
+				C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -179,6 +182,7 @@
 			files = (
 				95F76104E6870628CB8221D5 /* ChatDemo.swift in Sources */,
 				59D049FCCED9008404DC5230 /* SwiftLatexDemoApp.swift in Sources */,
+				68F8D704B08AC84E451F568C /* UIKitChatDemo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

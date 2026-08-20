@@ -21,6 +21,9 @@ struct ContentView: View {
                 NavigationLink("AI 챗봇") {
                     ChatDemoView()
                 }
+                NavigationLink("UIKit 네이티브 (LatexMarkdownUIView)") {
+                    UIKitChatDemoView()
+                }
                 NavigationLink("UIKit UIHostingConfiguration") {
                     HostingConfigurationDemo()
                         .ignoresSafeArea()

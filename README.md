@@ -263,7 +263,15 @@ cd Examples/SwiftLatexDemo && xcodegen generate && open SwiftLatexDemo.xcodeproj
 LLM 챗봇 화면을 스크롤하며 렌더 케이스를 한 번에 확인한다 — 인라인/블록 수식,
 코드 블록, 리스트·인용, 링크 allowlist, 금지 문맥 보호, 실패 시 원문 표시,
 다국어·RTL, 미지원 노드 강등, 긴 답변. 우측 상단 메뉴에서 `$` 수식 opt-in을
-토글해 비교한다. UIKit `UIHostingConfiguration` 화면도 함께 들어 있다.
+토글해 비교한다.
+
+UIKit 화면 2개가 함께 들어 있다.
+
+- **UIKit 네이티브** — `LatexMarkdownUIView`를 재사용 셀에 직접 넣은 화면.
+  테마 프리셋(기본 / 큰 글자 / Serif / 색 강조)을 메뉴에서 바꿔 폰트·색·수식 서체
+  커스터마이즈를 눈으로 확인한다. `-swiftlatexPreset Serif` launch argument로
+  특정 프리셋에서 시작할 수 있다.
+- **UIKit UIHostingConfiguration** — SwiftUI 뷰를 호스팅하는 셀 예제.
 
 ---
 

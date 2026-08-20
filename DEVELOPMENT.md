@@ -361,7 +361,19 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
   `LatexTextView.spokenOverride`로 합성 label을 주고, 이중 낭독을 막기 위해
   `accessibilityValue`를 비운다.
 - 셀 재사용 환경에서는 hydration이 최초 레이아웃 뒤에 오므로 `onContentSizeChange`로
-  self-sizing 재측정을 요청한다. estimated height 레이아웃에서는 한 프레임 높이 점프가 남는다.
+  self-sizing 재측정을 요청한다.
+  - **`invalidateLayout()`만으로는 부족하다**(실측). compositional list layout은 이미 측정한
+    셀에게 `preferredLayoutAttributesFitting`을 다시 묻지 않는다. 셀이 옛 높이에 묶여
+    내용이 눌리고 텍스트가 겹치거나(긴 답변) 버블이 빈 채로 보인다(짧은 답변).
+    `collectionView.performBatchUpdates(nil)`이 재측정을 강제하는 경로다.
+  - **스크롤 중에는 batch update를 미룬다.** 드래그·감속 중에 호출하면 제스처를 방해해
+    스크롤이 진행되지 않는다(UI 테스트가 왕복 스크롤에서 실패하며 드러났다).
+    `isDragging`/`isDecelerating`을 확인하고 `scrollViewDidEndDragging`·
+    `scrollViewDidEndDecelerating`에서 flush한다.
+  - 새 markdown의 parse가 끝나기 전에는 **이전 문서가 그대로 보인다**. 스트리밍에서는
+    의도된 동작(최신 원문 fallback)이지만 셀 재사용에서는 남의 메시지가 보이는 셈이다.
+    데모는 첫 `onContentSizeChange`까지 뷰를 감춘다.
+  - 기준 구현: `Examples/SwiftLatexDemo/Sources/UIKitChatDemo.swift`.
 - 리스트 마커는 `alignment = .top`으로 고정한다. 중첩 `UIStackView`의 first baseline은
   안정적으로 노출되지 않는다.
 - **`NSTextAttachment.bounds`에 넣은 값은 `UITextView`에 실린 뒤 `.zero`로 읽힌다**(실측).

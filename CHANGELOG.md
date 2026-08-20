@@ -19,6 +19,12 @@
 - `LatexMathFont` — 수식 서체 12종. 이전에는 Latin Modern 고정이었다.
   `MathRenderKey`에 실려 서체별로 raster를 따로 캐시한다.
 
+- 데모 앱에 **UIKit 네이티브** 화면 추가
+  (`Examples/SwiftLatexDemo/Sources/UIKitChatDemo.swift`).
+  `LatexMarkdownUIView`를 `UICollectionView` 재사용 셀에 직접 넣고, 테마 프리셋
+  4종(기본 / 큰 글자 / Serif / 색 강조)으로 폰트·색·수식 서체 커스터마이즈를 확인한다.
+  프리셋별 스크린샷을 남기는 UI 테스트 `testUIKitNativeCellsRender`를 함께 추가했다.
+
 ### 수정
 
 - **SwiftUI 렌더러에서 `theme.textColor`가 본문 글자에 적용되지 않던 문제.**
