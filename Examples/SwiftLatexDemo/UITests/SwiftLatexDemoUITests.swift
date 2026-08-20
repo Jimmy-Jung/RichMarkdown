@@ -69,6 +69,20 @@ final class SwiftLatexDemoUITests: XCTestCase {
             }
             XCTAssertTrue(returnedToTop, "\(preset): 재사용 후에도 첫 답변이 남아야 한다")
 
+            // 같은 메시지로 재사용된 셀이 빈 버블이 되던 회귀를 잡는다.
+            let midPredicate = NSPredicate(
+                format: "label CONTAINS %@ OR value CONTAINS %@", "구분선 아래", "구분선 아래"
+            )
+            var foundMid = false
+            for _ in 0..<20 {
+                if app.textViews.matching(midPredicate).firstMatch.exists {
+                    foundMid = true
+                    break
+                }
+                list.swipeUp()
+            }
+            XCTAssertTrue(foundMid, "\(preset): 중간 답변이 재사용 후에도 렌더되어야 한다")
+
             app.terminate()
         }
     }

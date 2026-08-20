@@ -53,6 +53,35 @@ import UIKit
         #expect(spoken.contains { $0.contains("수식: a+b") }, "수식 문단에 합성 접근성 label이 있어야 한다")
     }
 
+    @MainActor
+    final class CallbackCounter {
+        private(set) var count = 0
+        func increment() { count += 1 }
+    }
+
+    /// 같은 값 재대입은 재파싱을 만들지 않는다 (중복 파싱 방지 계약).
+    ///
+    /// 소비자가 `onContentSizeChange`에만 의존해 셀 상태를 복구하면, 같은 메시지로
+    /// 재사용된 셀에서 콜백이 영구히 오지 않는다. 데모의 빈 버블 결함이 그 경로였다.
+    @Test func reassigningSameValuesDoesNotNotify() async throws {
+        let view = LatexMarkdownUIView(markdown: "본문 글자")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
+        try await waitForRender(view)
+
+        let counter = CallbackCounter()
+        view.onContentSizeChange = { counter.increment() }
+
+        view.markdown = "본문 글자"
+        view.parsesDollarMath = false
+        view.theme = .default
+        try await Task.sleep(nanoseconds: 200_000_000)
+        #expect(counter.count == 0, "값이 그대로면 재파싱도 콜백도 없어야 한다")
+
+        view.markdown = "다른 본문"
+        try await waitForRender(view)
+        #expect(counter.count > 0, "값이 바뀌면 콜백이 와야 한다")
+    }
+
     private func firstTextViewFont(in view: UIView) -> UIFont? {
         for textView in textViews(in: view) {
             guard let attributed = textView.attributedText, attributed.length > 0 else { continue }

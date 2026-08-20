@@ -86,6 +86,10 @@ struct UIKitChatDemoView: View {
         UIKitChatList(configuration: configuration)
             .ignoresSafeArea(edges: .bottom)
             .navigationTitle("UIKit 네이티브")
+            // large title 축소 전환은 스크롤 오프셋에 연동된다. 셀 재측정
+            // (`performBatchUpdates`)이 전환 중 contentSize를 바꾸면 nav bar가 중간
+            // 상태로 굳어 제목이 사라지고 영역만 남는다. inline로 고정해 회피한다.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -251,11 +255,15 @@ final class AssistantMessageCell: UICollectionViewCell {
         caseCapsule.layer.cornerCurve = .continuous
         caseCapsule.clipsToBounds = true
         caseCapsule.setContentHuggingPriority(.required, for: .horizontal)
+        // vertical hugging을 걸지 않으면 root(vertical, distribution .fill)가 셀의 남는
+        // 세로 공간을 caseRow에 배분하고 캡슐이 그대로 늘어난다. 남는 공간은 버블이 먹는다.
+        caseCapsule.setContentHuggingPriority(.required, for: .vertical)
 
         // 캡슐이 콘텐츠 폭만 갖도록 남는 폭을 빈 뷰가 먹는다.
         caseRow.axis = .horizontal
         caseRow.addArrangedSubview(caseCapsule)
         caseRow.addArrangedSubview(UIView())
+        caseRow.setContentHuggingPriority(.required, for: .vertical)
 
         bubble.backgroundColor = .secondarySystemGroupedBackground
         bubble.layer.cornerRadius = 18
@@ -311,8 +319,23 @@ final class AssistantMessageCell: UICollectionViewCell {
     func configure(_ message: ChatMessage, configuration: UIKitChatConfiguration) {
         caseName = message.caseName
         caseLabel.text = message.caseName
+
+        // `LatexMarkdownUIView`는 같은 값 재대입을 무시한다(중복 파싱 방지 계약).
+        // 셋 다 그대로면 재파싱도 `onContentSizeChange`도 없으므로 아래 alpha 복구와
+        // 높이 재측정이 영구히 오지 않는다. 같은 메시지로 재사용된 셀이 빈 버블로
+        // 보이고, 셀 높이가 이전 값에 묶여 케이스 라벨 캡슐이 늘어나던 원인이다.
+        let willReparse = latexView.markdown != message.text
+            || latexView.parsesDollarMath != configuration.parsesDollarMath
+            || latexView.theme != configuration.preset.theme
+
         apply(configuration)
         latexView.markdown = message.text
+
+        if !willReparse {
+            hasRenderedCurrentMessage = true
+            latexView.alpha = 1
+            onHeightChange?()
+        }
     }
 
     func apply(_ configuration: UIKitChatConfiguration) {
