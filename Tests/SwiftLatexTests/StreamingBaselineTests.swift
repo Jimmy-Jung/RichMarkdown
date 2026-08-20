@@ -9,7 +9,7 @@ import Testing
 /// 기본 지속시간은 CI용 5초. 30초 전체 측정은
 /// `TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test ...`로 실행한다.
 @MainActor
-@Suite struct StreamingBaselineTests {
+@Suite(.serialized) struct StreamingBaselineTests {
 
     /// 수식/코드/리스트가 섞인 약 50 KiB fixture.
     static func makeFixture() -> String {
@@ -71,6 +71,67 @@ import Testing
         // 있어(관측 302ms) 경계 flake가 된다. p95에는 넉넉한 천장만 둔다.
         #expect(p50 < 300, "50 KiB parse p50가 300ms를 넘으면 스트리밍 계약(10Hz)이 깨진다")
         #expect(p95 < 800, "p95 회귀 천장")
+    }
+
+    /// MainActor는 generation 관리와 게시만 한다 (DEVELOPMENT.md §4).
+    ///
+    /// `LatexRenderModel`은 `@MainActor`이고 global actor 표시는 static 멤버에도 적용되므로,
+    /// 처리 함수에 `nonisolated`가 빠지면 50 KiB parse가 main thread를 p50 약 119ms 막는다.
+    /// 그 상태에서는 아래 sampler가 굶어 최대 공백이 임계를 넘는다.
+    @Test func parseDoesNotBlockMainActor() async throws {
+        // 250 KiB(입력 상한 256 KiB 이하). main thread에서 parse하면 약 600ms 점유하므로
+        // 다른 suite의 우발적 간섭(수십 ms)과 신호가 확실히 갈린다.
+        let fixture = String(repeating: Self.makeFixture(), count: 5)
+        let model = LatexRenderModel()
+
+        let sampler = MainActorGapSampler()
+        let sampling = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000)
+                sampler.tick()
+            }
+        }
+        defer { sampling.cancel() }
+
+        model.submit(
+            LatexRenderModel.Request(
+                markdown: fixture,
+                parsesDollarMath: false,
+                pointSize: 17,
+                colorRGBA: 0x000000FF,
+                displayScale: 3
+            )
+        )
+
+        let deadline = Date().addingTimeInterval(20)
+        while model.hasOutstandingWork {
+            #expect(Date() < deadline, "20초 안에 처리가 끝나야 한다")
+            if Date() >= deadline { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        sampling.cancel()
+
+        print("[baseline] MainActor 최대 공백 \(String(format: "%.1f", sampler.worstGap * 1000))ms samples=\(sampler.sampleCount)")
+        #expect(sampler.sampleCount > 10, "샘플이 충분히 모여야 판정이 유효하다")
+        #expect(
+            sampler.worstGap < 0.250,
+            "MainActor 최대 공백 \(sampler.worstGap)s — CPU parse가 main thread를 점유하고 있다"
+        )
+    }
+
+    /// MainActor에서 연속 실행 사이의 최대 공백을 잰다.
+    @MainActor
+    final class MainActorGapSampler {
+        private var last = Date()
+        private(set) var worstGap: TimeInterval = 0
+        private(set) var sampleCount = 0
+
+        func tick() {
+            let now = Date()
+            worstGap = max(worstGap, now.timeIntervalSince(last))
+            last = now
+            sampleCount += 1
+        }
     }
 
     @Test func tenHertzStreamingContract() async throws {

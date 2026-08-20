@@ -15,7 +15,9 @@ public struct LatexMarkdownView: View {
     @Environment(\.latexTheme) private var theme
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
-    @ScaledMetric(relativeTo: .body) private var mathPointSize: CGFloat = 17
+    /// Dynamic Type 배율. `@ScaledMetric`의 `relativeTo`는 컴파일 시점 상수여야 해서
+    /// 크기 대신 배율만 재고 `bodyFont` 크기에 곱한다.
+    @ScaledMetric(relativeTo: .body) private var bodyScale: CGFloat = 100
 
     public init(markdown: String, parsesDollarMath: Bool = false) {
         self.markdown = markdown
@@ -41,9 +43,16 @@ public struct LatexMarkdownView: View {
         } else {
             // 최신 원문 fallback 즉시 표시 (§4).
             Text(markdown)
+                .font(theme.bodyFont.resolvedFont)
+                .foregroundStyle(theme.textColor)
                 .textSelection(.enabled)
         }
     }
+
+    /// 수식 raster 기준 크기. `theme.bodyFont` 크기를 Dynamic Type 배율로 스케일한다.
+    /// 배율 기준은 항상 `.body`다 — `bodyFont.relativeTo`를 다른 스타일로 두면
+    /// 수식은 body 배율로 커진다.
+    private var mathPointSize: CGFloat { theme.bodyFont.unscaledSize * bodyScale / 100 }
 
     private var currentRequest: LatexRenderModel.Request {
         LatexRenderModel.Request(
@@ -51,7 +60,8 @@ public struct LatexMarkdownView: View {
             parsesDollarMath: parsesDollarMath,
             pointSize: mathPointSize,
             colorRGBA: resolvedTextColorRGBA,
-            displayScale: displayScale
+            displayScale: displayScale,
+            mathFont: theme.mathFont
         )
     }
 
@@ -73,11 +83,10 @@ struct LatexBlockView: View {
     var body: some View {
         switch block {
         case .paragraph(let runs):
-            InlineRunsText(runs: runs, images: images)
+            InlineRunsText(runs: runs, images: images, font: theme.bodyFont)
 
         case .heading(let level, let runs):
-            InlineRunsText(runs: runs, images: images)
-                .font(Self.headingFont(level: level))
+            InlineRunsText(runs: runs, images: images, font: theme.headingFont(level: level))
                 .accessibilityAddTraits(.isHeader)
 
         case .codeBlock(let language, let code):
@@ -103,6 +112,8 @@ struct LatexBlockView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("•")
+                            .font(theme.bodyFont.resolvedFont)
+                            .foregroundStyle(theme.textColor)
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(Array(item.enumerated()), id: \.offset) { _, child in
                                 LatexBlockView(block: child, images: images)
@@ -117,7 +128,9 @@ struct LatexBlockView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("\(start + index).")
+                            .font(theme.bodyFont.resolvedFont)
                             .monospacedDigit()
+                            .foregroundStyle(theme.textColor)
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(Array(item.enumerated()), id: \.offset) { _, child in
                                 LatexBlockView(block: child, images: images)
@@ -132,14 +145,6 @@ struct LatexBlockView: View {
         }
     }
 
-    private static func headingFont(level: Int) -> Font {
-        switch level {
-        case 1: return .title.weight(.bold)
-        case 2: return .title2.weight(.bold)
-        case 3: return .title3.weight(.semibold)
-        default: return .headline
-        }
-    }
 }
 
 // MARK: - Inline runs
@@ -147,6 +152,8 @@ struct LatexBlockView: View {
 struct InlineRunsText: View {
     let runs: [InlineRun]
     let images: [MathSegment: RenderedMath]
+    /// 감싼 블록의 폰트. 문단은 `bodyFont`, 헤딩은 해당 레벨 폰트다.
+    let font: LatexFont
     @Environment(\.latexTheme) private var theme
 
     var body: some View {
@@ -164,11 +171,11 @@ struct InlineRunsText: View {
     private func text(for run: InlineRun) -> Text {
         switch run.content {
         case .text(let string):
-            return styled(Text(emphasized(AttributedString(string), run)), run)
+            return styled(Text(emphasized(base(string), run)), run)
 
         case .code(let code):
-            var attributed = AttributedString(code)
-            attributed.font = .body.monospaced()
+            var attributed = base(code)
+            attributed.font = theme.codeFont.resolvedFont
             attributed.backgroundColor = theme.inlineCodeBackground
             return styled(Text(emphasized(attributed, run)), run)
 
@@ -179,10 +186,10 @@ struct InlineRunsText: View {
                     .baselineOffset(-rendered.descent)
             }
             // 렌더 전/실패 시 원래 구분자를 포함한 source를 표시한다.
-            return styled(Text(emphasized(AttributedString(segment.source), run)), run)
+            return styled(Text(emphasized(base(segment.source), run)), run)
 
         case .link(let label, let destination):
-            var attributed = AttributedString(label)
+            var attributed = base(label)
             attributed.link = destination
             // 대비 기준을 넘는 링크 색 + 밑줄(색 외 구분 수단).
             attributed.foregroundColor = theme.linkColor
@@ -195,6 +202,19 @@ struct InlineRunsText: View {
         case .softBreak:
             return Text(verbatim: " ")
         }
+    }
+
+    /// 기본 전경색과 폰트를 실은 AttributedString.
+    ///
+    /// `Text`는 색·폰트를 지정하지 않으면 주변 환경 값을 쓴다. 그러면 `theme.textColor`와
+    /// `theme.bodyFont`가 본문 글자에 닿지 않고, 소비 앱이 바깥에 건 `.font(_:)`가
+    /// 우연히 새어 들어온다. 모든 텍스트 run은 여기서 값을 실어
+    /// UIKit 렌더러(`LatexMarkdownUIView`)와 같은 규칙을 갖는다.
+    private func base(_ string: String) -> AttributedString {
+        var attributed = AttributedString(string)
+        attributed.foregroundColor = theme.textColor
+        attributed.font = font.resolvedFont
+        return attributed
     }
 
     /// 굵게/기울임/취소선 적용.
@@ -259,6 +279,7 @@ private struct MathAccessibilityLabel: ViewModifier {
 struct BlockMathView: View {
     let segment: MathSegment
     let rendered: RenderedMath?
+    @Environment(\.latexTheme) private var theme
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -268,7 +289,8 @@ struct BlockMathView: View {
                         .accessibilityLabel("수식: \(segment.latex)")
                 } else {
                     Text(verbatim: segment.source)
-                        .font(.body.monospaced())
+                        .font(theme.codeFont.resolvedFont)
+                        .foregroundStyle(theme.textColor)
                         .textSelection(.enabled)
                 }
             }
@@ -288,7 +310,7 @@ struct CodeBlockView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 Text(language ?? "code")
-                    .font(.caption.monospaced())
+                    .font(theme.codeLabelFont.resolvedFont)
                     // secondary(60% 회색)를 밝은 헤더 배경에 쓰면 작은 텍스트 대비
                     // 기준(4.5:1)에 미달해 접근성 audit이 실패한다. 테마 텍스트 색을 쓴다.
                     .foregroundStyle(theme.textColor)
@@ -300,7 +322,8 @@ struct CodeBlockView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(verbatim: code)
-                    .font(.body.monospaced())
+                    .font(theme.codeFont.resolvedFont)
+                    .foregroundStyle(theme.textColor)
                     .textSelection(.enabled)
                     .padding(12)
             }
@@ -316,6 +339,7 @@ struct CopyButton: View {
     let text: String
     let accessibilityLabel: String
     @State private var copied = false
+    @Environment(\.latexTheme) private var theme
 
     /// 복사 동작. 원래 구분자를 포함한 원문 source를 그대로 넣는다.
     /// 러너 프로세스에서 pasteboard를 읽으면 권한 프롬프트가 뜨므로
@@ -332,6 +356,9 @@ struct CopyButton: View {
         } label: {
             Image(systemName: copied ? "checkmark" : "doc.on.doc")
                 .imageScale(.small)
+                // UIKit 렌더러와 같은 색 규칙. 기본 accent(파랑)로 두면 두 렌더러의
+                // 아이콘 색이 갈리고 테마로 제어할 수 없다.
+                .foregroundStyle(theme.textColor)
                 // 최소 44×44pt hit target (§5 접근성).
                 // 고정 크기다: 아이콘 교체로 폭이 바뀌면 가로 ScrollView가 재측정되고
                 // XCUITest의 "wait for app to idle"이 풀리지 않는다.

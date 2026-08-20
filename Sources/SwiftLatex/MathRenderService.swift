@@ -3,10 +3,10 @@ import SwiftMath
 import SwiftLatexCore
 
 /// 수식 raster 요청 key (DEVELOPMENT.md §6 cache key):
-/// LaTeX source, font 식별자+point size, resolved RGBA, inline/display mode, display scale.
+/// LaTeX source, 수식 서체+point size, resolved RGBA, inline/display mode, display scale.
 package struct MathRenderKey: Hashable, Sendable {
     package let latex: String
-    package let fontIdentifier: String
+    package let mathFont: LatexMathFont
     package let pointSize: CGFloat
     package let colorRGBA: UInt32
     package let isDisplay: Bool
@@ -14,14 +14,14 @@ package struct MathRenderKey: Hashable, Sendable {
 
     package init(
         latex: String,
-        fontIdentifier: String = "latinModern",
+        mathFont: LatexMathFont = .latinModern,
         pointSize: CGFloat,
         colorRGBA: UInt32,
         isDisplay: Bool,
         displayScale: CGFloat
     ) {
         self.latex = latex
-        self.fontIdentifier = fontIdentifier
+        self.mathFont = mathFont
         self.pointSize = pointSize
         self.colorRGBA = colorRGBA
         self.isDisplay = isDisplay
@@ -55,20 +55,31 @@ package actor MathRenderService {
         }
     }
 
+    /// `NSCache`는 문서상 thread-safe하지만 `Sendable`로 표시되어 있지 않다.
+    /// notification 클로저가 안전하게 캡처하도록 검사 면제 박스로 감싼다.
+    /// 참조는 weak다 — 원래 `[weak cache]` 캡처와 같은 수명 규칙을 유지한다.
+    private struct CacheRef: @unchecked Sendable {
+        weak var cache: NSCache<KeyBox, Entry>?
+    }
+
     private let cache = NSCache<KeyBox, Entry>()
 
     package init() {
         // ponytail: cache 상한은 P0 측정 전 잠정값. cost는 이미지 pixel byte.
         cache.countLimit = 256
         cache.totalCostLimit = 64 * 1024 * 1024
+        // `self`를 캡처하면 nonisolated init에서 isolation 검사에 걸린다.
+        // 캐시만 Sendable 박스로 감싸 캡처한다.
+        let cacheRef = CacheRef(cache: cache)
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: nil
-        ) { [weak cache] _ in
-            cache?.removeAllObjects()
+        ) { _ in
+            cacheRef.cache?.removeAllObjects()
         }
     }
+
 
     package func cachedImage(for key: MathRenderKey) -> RenderedMath? {
         cache.object(forKey: KeyBox(key: key))?.value
@@ -96,6 +107,7 @@ package actor MathRenderService {
             labelMode: key.isDisplay ? .display : .text,
             textAlignment: .left
         )
+        mathImage.font = key.mathFont.swiftMathFont
         let (error, image, layout) = mathImage.asImage()
         guard error == nil, let image, let layout else { return nil }
 
@@ -103,6 +115,27 @@ package actor MathRenderService {
         let pixelCost = Int(image.size.width * image.scale) * Int(image.size.height * image.scale) * 4
         cache.setObject(Entry(value: rendered), forKey: KeyBox(key: key), cost: pixelCost)
         return rendered
+    }
+}
+
+extension LatexMathFont {
+    /// SwiftMath 번들 서체 매핑.
+    /// SwiftMath 타입을 공개 API로 새지 않게 변환을 여기 한 곳에 둔다.
+    var swiftMathFont: MathFont {
+        switch self {
+        case .latinModern: return .latinModernFont
+        case .kpMathLight: return .kpMathLightFont
+        case .kpMathSans: return .kpMathSansFont
+        case .xits: return .xitsFont
+        case .termes: return .termesFont
+        case .asana: return .asanaFont
+        case .euler: return .eulerFont
+        case .fira: return .firaFont
+        case .notoSans: return .notoSansFont
+        case .libertinus: return .libertinusFont
+        case .garamond: return .garamondFont
+        case .leteSans: return .leteSansFont
+        }
     }
 }
 

@@ -1,8 +1,9 @@
 # SwiftLatex 개발 문서
 
-SwiftUI 기반의 메시지 렌더러다. Markdown, 인라인/블록 LaTeX, 코드 블록을
-네이티브 UI로 표시하는 재사용 가능한 Swift Package를 목표로 한다.
-UIKit 앱은 Apple의 SwiftUI 호스팅 API로 사용한다.
+메시지 렌더러다. Markdown, 인라인/블록 LaTeX, 코드 블록을 네이티브 UI로
+표시하는 재사용 가능한 Swift Package를 목표로 한다. SwiftUI는 `LatexMarkdownView`,
+UIKit은 네이티브 `LatexMarkdownUIView`가 담당하고 파서·수식 raster·generation
+관리는 두 뷰가 공유한다.
 
 - 작성자: JunyoungJung
 - 최초 작성: 2026-08-19
@@ -58,15 +59,15 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 | 코드 블록 | 언어 라벨, 가로 스크롤, 복사 버튼, plain monospace |
 | 스트리밍 | 최신 전체 `String` 입력, coalescing과 latest-wins 게시 |
 | 선택 | SwiftUI `.textSelection(.enabled)`의 시스템 동작 |
-| UIKit | `UIHostingConfiguration`, `UIHostingController` 사용 예제 |
+| UIKit | 네이티브 `LatexMarkdownUIView` + `UIHostingConfiguration`·`UIHostingController` 사용 예제 |
 | 접근성 | Dynamic Type, VoiceOver, 키보드, 명암/굵은 텍스트 검증 |
 
 ### 명시적 비목표
 
 - 공개 parser/AST product
 - 신택스 하이라이팅과 Highlightr 의존성
-- `UITextView`/`NSTextAttachment` 기반의 두 번째 렌더 경로
 - 여러 블록을 가로지르는 연속 범위 선택
+- 범위(문자 구간) 단위 색·폰트 지정. 테마는 요소 단위다
 - callback 기반 링크/복사 API
 - 공개 입력 제한 설정
 - 표, 원격 이미지, Mermaid, HTML 실행, WebView, 편집, macOS UI
@@ -99,9 +100,15 @@ LatexMarkdownView(
 ```
 
 - `parsesDollarMath` 기본값은 `false`다.
+- 테마는 색 6종 + 폰트 7종 + 수식 서체를 **요소 단위**로 갖는다. `LatexFont`는
+  `Font`/`UIFont`가 아니라 `Sendable` 값이라 렌더 요청 key에 넣을 수 있다.
+- 텍스트 색·폰트는 두 렌더러 모두 **명시 지정**한다. SwiftUI에서 환경 값에 맡기면
+  `theme`가 본문에 닿지 않고 소비 앱의 바깥 `.font(_:)`가 우연히 새어 들어온다.
 - 링크 실행은 allowlist를 통과한 뒤 SwiftUI `OpenURLAction`을 사용한다.
 - 코드 복사는 패키지의 native `Button` 동작으로 제공한다.
-- UIKit 전용 wrapper와 범용 custom renderer API는 만들지 않는다.
+- UIKit은 `LatexMarkdownUIView`(네이티브 `UIView`)가 담당한다. SwiftUI 뷰를 감싼
+  래퍼가 아니며 파서·`MathRenderService`·`LatexRenderModel`을 SwiftUI 경로와 공유한다.
+- 범용 custom renderer API는 만들지 않는다.
 - 내부 parser target은 테스트와 UI target 분리를 위해 두되 외부 product로 노출하지 않는다.
   UI target이 쓰는 교차 target 심볼은 Swift 5.9의 `package` 접근 수준으로 한정한다.
 
@@ -223,7 +230,16 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
   └─ MainActor: generation 일치 시 hydrated RenderedDocument 게시
 ```
 
-- request key에는 source, dollar 옵션, theme, scaled point size, resolved color를 포함한다.
+- **`@MainActor` 타입의 처리 함수에는 `nonisolated`를 붙인다.** global actor 표시는
+  static 멤버에도 적용되므로, `nonisolated` 없는 `LatexRenderModel`의 static 처리 함수는
+  전체가 MainActor에서 실행되고 `swift-markdown` parse가 main thread를 점유한다
+  (50 KiB에서 p50 약 119ms). 컴파일러의
+  `no 'async' operations occur within 'await' expression` 경고가 이 표시가 빠졌다는 신호다.
+  경고를 지우려고 `await`를 떼면 결함이 남고 신호만 사라진다.
+  회귀 방지: `StreamingBaselineTests.parseDoesNotBlockMainActor`가 250 KiB 처리 중
+  MainActor 최대 공백을 잰다(정상 약 7ms, 단독 실행 기준).
+- request key에는 source, dollar 옵션, theme, scaled point size, resolved color,
+  수식 서체를 포함한다.
 - 새 요청은 현재 generation을 stale로 표시하고 대기 요청을 최신 값으로 교체한다.
 - 장수명 worker 하나만 요청을 소비한다. 현재 동기 구간이 반환되기 전에는 다음 요청을
   시작하지 않으며, `.bufferingNewest(1)` 같은 경계로 대기는 하나만 유지한다.
@@ -322,7 +338,41 @@ cell.contentConfiguration = UIHostingConfiguration {
 Dynamic Type 뒤 높이를 UI 테스트한다.
 
 일반 화면은 `UIHostingController`를 사용한다. child containment는 `addChild`, Auto Layout,
-`didMove(toParent:)` 순서를 지킨다. 패키지는 별도 UIKit wrapper를 제공하지 않는다.
+`didMove(toParent:)` 순서를 지킨다.
+
+### UIKit 네이티브 렌더러
+
+`LatexMarkdownUIView`는 뷰 계층만 UIKit으로 구성하고 나머지는 SwiftUI 경로와 공유한다.
+
+| 관심사 | SwiftUI | UIKit |
+|---|---|---|
+| 블록 배치 | `VStack` + `ForEach` | `UIStackView`(`alignment = .fill`) |
+| 인라인 수식 | `Text(Image)` + `baselineOffset(-descent)` | `MathTextAttachment.attachmentBounds(...)`가 `-descent` 반환 |
+| 텍스트 | `Text` + `AttributedString` | `UITextView`(`isScrollEnabled = false`) + `NSAttributedString` |
+| 폰트·색 출처 | `LatexTheme`의 `LatexFont` → `resolvedFont` | 같은 값 → `resolvedUIFont(compatibleWith:)` |
+| Dynamic Type | `@ScaledMetric` 배율 × `LatexFont.unscaledSize` | `UIFontMetrics(compatibleWith: traitCollection)` |
+| 색·scale | `@Environment(colorScheme/displayScale)` | `traitCollection` |
+| 재렌더 트리거 | `.task(id:)` | `registerForTraitChanges`(iOS 17+) / `traitCollectionDidChange`(iOS 16) |
+| 게시 구독 | `@StateObject` | `objectWillChange` + MainActor hop 1회 coalescing |
+
+- 한 요청의 게시는 3회(document, mathImages 초기화, hydration)다. `objectWillChange`를
+  다음 MainActor hop으로 미뤄 rebuild를 1회로 합친다.
+- 수식 attachment는 본문 텍스트로 읽히지 않는다. 수식이 있고 링크가 없는 문단은
+  `LatexTextView.spokenOverride`로 합성 label을 주고, 이중 낭독을 막기 위해
+  `accessibilityValue`를 비운다.
+- 셀 재사용 환경에서는 hydration이 최초 레이아웃 뒤에 오므로 `onContentSizeChange`로
+  self-sizing 재측정을 요청한다. estimated height 레이아웃에서는 한 프레임 높이 점프가 남는다.
+- 리스트 마커는 `alignment = .top`으로 고정한다. 중첩 `UIStackView`의 first baseline은
+  안정적으로 노출되지 않는다.
+- **`NSTextAttachment.bounds`에 넣은 값은 `UITextView`에 실린 뒤 `.zero`로 읽힌다**(실측).
+  프로퍼티를 믿으면 baseline 보정이 조용히 사라진다. `MathTextAttachment`가
+  `attachmentBounds(for:proposedLineFragment:glyphPosition:characterIndex:)`를 override해
+  TextKit이 실제로 묻는 값을 답한다. 테스트도 프로퍼티가 아니라 이 메서드를 확인한다.
+- **폰트는 반드시 뷰의 `traitCollection`으로 해석한다**(`compatibleWith:`). 앰비언트
+  trait을 쓰면 `traitOverrides`를 건 뷰에서 색·displayScale만 따라오고 글자 크기는
+  안 따라온다. `traitOverrides`는 window 계층에 붙은 뒤에만 반영된다(실측).
+- 복사 버튼 아이콘은 `tintColor = theme.textColor`로 고정한다. `UIButton(type: .system)`
+  기본 tint는 시스템 파랑이라 SwiftUI 렌더러(`.buttonStyle(.plain)`)와 색이 갈린다.
 
 ---
 

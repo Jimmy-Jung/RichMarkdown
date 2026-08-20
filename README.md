@@ -8,9 +8,10 @@
 > **베타 (0.1.1)** — 공개 표면은 작지만 아직 `1.0`이 아니다. minor 버전에서 API가
 > 바뀔 수 있다. 변경 내역은 [CHANGELOG.md](CHANGELOG.md)를 본다.
 
-LLM 채팅 메시지를 네이티브 SwiftUI로 렌더하는 Swift Package. Markdown, 인라인/블록
-LaTeX 수식, 코드 블록을 하나의 뷰로 표시한다. UIKit 앱은 Apple의 SwiftUI 호스팅
-API로 그대로 쓴다.
+LLM 채팅 메시지를 네이티브로 렌더하는 Swift Package. Markdown, 인라인/블록
+LaTeX 수식, 코드 블록을 하나의 뷰로 표시한다. SwiftUI는 `LatexMarkdownView`,
+UIKit은 네이티브 `LatexMarkdownUIView`를 쓴다 — 두 뷰는 같은 파서·수식 raster·
+generation 관리를 공유한다.
 
 ```
 원의 넓이는 \( A = \pi r^2 \)입니다.
@@ -84,8 +85,11 @@ struct MessageView: View {
 | API | 설명 |
 |---|---|
 | `LatexMarkdownView(markdown:parsesDollarMath:)` | 렌더 뷰. `parsesDollarMath` 기본값 `false` |
-| `.latexTheme(_:)` | 색을 바꾸는 View modifier |
-| `LatexTheme` | 텍스트·링크·코드 배경 색 |
+| `.latexTheme(_:)` | 색·폰트를 바꾸는 View modifier |
+| `LatexTheme` | 요소별 색 6종 + 폰트 7종 + 수식 서체 |
+| `LatexFont` | 폰트 지정값 (서체·Dynamic Type 기준·크기·굵기) |
+| `LatexTextStyle` / `LatexFontWeight` | Dynamic Type 기준 스타일, 굵기 |
+| `LatexMathFont` | 수식 서체 12종 |
 | `Color.accessibleLink` | 대비 기준을 넘는 기본 링크 색 |
 
 메시지 전체의 세로 스크롤과 목록 virtualization은 소비 앱 책임이다. 뷰는 자기
@@ -132,6 +136,8 @@ p95 129–230ms. 10Hz로 30초 갱신 후 마지막 입력에서 idle까지 25�
 
 ### 테마
 
+색과 폰트 모두 **요소 단위**다. 범위(문자 구간) 단위 지정은 없다.
+
 ```swift
 LatexMarkdownView(markdown: message)
     .latexTheme(
@@ -141,10 +147,43 @@ LatexMarkdownView(markdown: message)
             codeBlockBackground: Color(.secondarySystemBackground),
             inlineCodeBackground: Color(.secondarySystemFill),
             quoteBar: Color(.systemGray3),
-            codeHeaderBackground: Color(.tertiarySystemBackground)
+            codeHeaderBackground: Color(.tertiarySystemBackground),
+            bodyFont: LatexFont(relativeTo: .body),
+            heading1Font: LatexFont(relativeTo: .title1, weight: .bold),
+            heading2Font: LatexFont(relativeTo: .title2, weight: .bold),
+            heading3Font: LatexFont(relativeTo: .title3, weight: .semibold),
+            heading4Font: LatexFont(relativeTo: .headline),
+            codeFont: LatexFont(design: .monospaced, relativeTo: .body),
+            codeLabelFont: LatexFont(design: .monospaced, relativeTo: .caption),
+            mathFont: .latinModern
         )
     )
 ```
+
+어느 폰트가 어디에 닿는지:
+
+| 필드 | 적용 대상 |
+|---|---|
+| `bodyFont` | 본문 문단, 리스트 마커, 링크, 인라인 수식 fallback, 원문 fallback. **수식 raster 기준 크기** |
+| `heading1~4Font` | 헤딩. 4단계 이하는 전부 `heading4Font` |
+| `codeFont` | 인라인 코드, 코드 블록 본문, 블록 수식 fallback |
+| `codeLabelFont` | 코드 블록 헤더의 언어 라벨 |
+| `mathFont` | 수식 서체 (raster cache key에 포함) |
+
+`LatexFont`는 `Font`/`UIFont`가 아니라 `Sendable` 값이다. 두 타입 사이에 손실 없는
+변환이 없고 `UIFont`가 `Sendable`이 아니라서 중간 표현을 둔다. 두 렌더러가 같은 값에서
+각자 폰트를 만든다.
+
+```swift
+// 커스텀 서체. 앱이 등록한 이름을 쓴다. 못 찾으면 시스템 서체로 물러난다.
+LatexFont(design: .custom(name: "Georgia"), relativeTo: .body)
+
+// 크기 고정 + 굵기. size가 nil이면 relativeTo의 기본 크기를 쓴다.
+LatexFont(relativeTo: .title1, size: 34, weight: .heavy)
+```
+
+`size`를 줘도 Dynamic Type 스케일은 `relativeTo` 기준으로 계속 적용된다.
+수식 크기는 `bodyFont` 크기를 따라가지만 배율 기준은 항상 `.body`다.
 
 기본 `linkColor`는 시스템 블루가 아니다. `#007AFF`는 흰 배경에서 약 3.6:1로 본문
 텍스트 대비 기준(4.5:1)에 미달해 접근성 audit에 걸린다. `Color.accessibleLink`는
@@ -161,7 +200,30 @@ LatexMarkdownView(markdown: message, parsesDollarMath: true)
 
 ### UIKit
 
-패키지는 UIKit wrapper를 만들지 않는다. Apple의 호스팅 API를 그대로 쓴다.
+`LatexMarkdownUIView`는 SwiftUI 호스팅 래퍼가 아니다. `UIView` 하위 클래스로
+블록을 `UIStackView`에, 인라인 수식을 `NSTextAttachment`로 직접 배치한다.
+
+```swift
+let view = LatexMarkdownUIView(markdown: message, parsesDollarMath: false)
+view.theme = .default
+```
+
+셀에서 쓸 때는 수식 이미지 hydration이 최초 레이아웃 뒤에 오므로,
+`onContentSizeChange`로 self-sizing 재측정을 요청한다.
+
+```swift
+let registration = UICollectionView.CellRegistration<UICollectionViewCell, String> { cell, _, message in
+    let view = LatexMarkdownUIView(markdown: message)
+    view.onContentSizeChange = { [weak cell] in cell?.invalidateIntrinsicContentSize() }
+    cell.contentView.addSubview(view)
+    // view를 contentView 4변에 pin
+}
+```
+
+Dynamic Type·다크 모드·display scale 변경은 뷰가 trait 변화로 직접 감지해
+다시 렌더한다. 소비 앱이 할 일은 없다.
+
+SwiftUI 뷰를 호스팅해서 쓰는 경로도 그대로 유지된다.
 
 셀:
 
@@ -353,6 +415,13 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
 - 여러 블록을 가로지르는 연속 범위 선택은 지원하지 않는다(블록 단위 시스템 선택).
 - 링크·이미지 Markdown 문법 **내부**의 LaTeX는 해석하지 않는다.
 - 공개 parser/AST는 없다. `SwiftLatexCore`는 내부 target이다.
+- UIKit 렌더러는 리스트 마커를 baseline이 아니라 top 정렬한다(중첩 스택의
+  baseline이 불안정하다). SwiftUI 렌더러는 first text baseline 정렬이다.
+- **범위(문자 구간) 단위 색·폰트 지정은 없다.** 테마는 요소 단위다. 굵게·기울임·
+  취소선은 Markdown 원문이 정하고 소비 앱 API로는 지정할 수 없다.
+- 인라인 코드는 감싼 블록 크기를 따르지 않고 `codeFont` 크기를 쓴다.
+  헤딩 안의 인라인 코드도 `codeFont` 크기다.
+- `.custom` 서체에서는 `weight` 지정이 무시될 수 있다(서체가 해당 굵기를 갖고 있어야 한다).
 
 ---
 

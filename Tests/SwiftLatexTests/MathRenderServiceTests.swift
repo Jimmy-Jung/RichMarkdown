@@ -10,12 +10,20 @@ import UIKit
 
     private func makeKey(
         latex: String = "x^2",
+        mathFont: LatexMathFont = .latinModern,
         pointSize: CGFloat = 17,
         rgba: UInt32 = 0x000000FF,
         display: Bool = false,
         scale: CGFloat = 3
     ) -> MathRenderKey {
-        MathRenderKey(latex: latex, pointSize: pointSize, colorRGBA: rgba, isDisplay: display, displayScale: scale)
+        MathRenderKey(
+            latex: latex,
+            mathFont: mathFont,
+            pointSize: pointSize,
+            colorRGBA: rgba,
+            isDisplay: display,
+            displayScale: scale
+        )
     }
 
     // MARK: - cache key (font/size/color/mode/scale)
@@ -23,6 +31,7 @@ import UIKit
     @Test func cacheKeyDistinguishesAllComponents() {
         let base = makeKey()
         #expect(base != makeKey(latex: "x^3"))
+        #expect(base != makeKey(mathFont: .xits))
         #expect(base != makeKey(pointSize: 21))
         #expect(base != makeKey(rgba: 0xFFFFFFFF))
         #expect(base != makeKey(display: true))
@@ -59,6 +68,27 @@ import UIKit
         let service = MathRenderService()
         let rendered = await service.render(key: makeKey(latex: #"\frac{"#))
         #expect(rendered == nil, "malformed LaTeX는 nil → 호출자가 원문 source 표시")
+    }
+
+    /// 수식 서체가 실제로 raster에 반영되는지. key만 갈리고 글리프가 같으면
+    /// `fontIdentifier`처럼 캐시만 쪼개는 죽은 필드가 된다.
+    @Test func mathFontChangesRasterOutput() async throws {
+        let service = MathRenderService()
+        let latinModern = try #require(await service.render(key: makeKey(latex: "x+y", mathFont: .latinModern)))
+        let xits = try #require(await service.render(key: makeKey(latex: "x+y", mathFont: .xits)))
+
+        let a = try #require(latinModern.image.pngData())
+        let b = try #require(xits.image.pngData())
+        #expect(a != b, "서체가 다르면 raster 결과가 달라야 한다")
+    }
+
+    /// 12종 전부 SwiftMath 번들에서 실제로 로드되는지 확인한다.
+    @Test func everyMathFontRenders() async throws {
+        let service = MathRenderService()
+        for font in LatexMathFont.allCases {
+            let rendered = await service.render(key: makeKey(latex: "a+b", mathFont: font))
+            #expect(rendered != nil, "\(font.rawValue) 서체가 raster를 만들어야 한다")
+        }
     }
 
     @Test func memoryWarningClearsCache() async throws {

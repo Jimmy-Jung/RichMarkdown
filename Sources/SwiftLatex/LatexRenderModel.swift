@@ -13,19 +13,22 @@ package final class LatexRenderModel: ObservableObject {
         package var pointSize: CGFloat
         package var colorRGBA: UInt32
         package var displayScale: CGFloat
+        package var mathFont: LatexMathFont
 
         package init(
             markdown: String,
             parsesDollarMath: Bool,
             pointSize: CGFloat,
             colorRGBA: UInt32,
-            displayScale: CGFloat
+            displayScale: CGFloat,
+            mathFont: LatexMathFont = .latinModern
         ) {
             self.markdown = markdown
             self.parsesDollarMath = parsesDollarMath
             self.pointSize = pointSize
             self.colorRGBA = colorRGBA
             self.displayScale = displayScale
+            self.mathFont = mathFont
         }
     }
 
@@ -84,13 +87,21 @@ package final class LatexRenderModel: ObservableObject {
         mathImages = images
     }
 
-    private static func process(_ job: Job, model: LatexRenderModel?) async {
+    /// `nonisolated`가 이 설계의 핵심이다.
+    ///
+    /// `LatexRenderModel`은 `@MainActor`이고 global actor 표시는 **static 멤버에도 적용된다**.
+    /// 그래서 `nonisolated` 없이 두면 이 함수 전체가 MainActor에서 실행되고
+    /// `SwiftLatexParser.parse`가 main thread를 점유한다(50 KiB에서 p50 약 119ms).
+    /// `nonisolated`면 worker executor에서 실행되고 `await model.…`만 MainActor로 hop한다.
+    /// 컴파일러가 "no 'async' operations occur within 'await' expression" 경고를 내면
+    /// 이 표시가 빠졌다는 신호다.
+    private nonisolated static func process(_ job: Job, model: LatexRenderModel?) async {
         guard let model else { return }
         await run(job, model: model)
         await model.markCompleted(job.generation)
     }
 
-    private static func run(_ job: Job, model: LatexRenderModel) async {
+    private nonisolated static func run(_ job: Job, model: LatexRenderModel) async {
         // service 진입 직후 generation 확인.
         guard await model.isCurrent(job.generation) else { return }
 
@@ -109,6 +120,7 @@ package final class LatexRenderModel: ObservableObject {
             guard await model.isCurrent(job.generation) else { return }
             let key = MathRenderKey(
                 latex: segment.latex,
+                mathFont: job.request.mathFont,
                 pointSize: job.request.pointSize,
                 colorRGBA: job.request.colorRGBA,
                 isDisplay: segment.kind.isDisplay,
