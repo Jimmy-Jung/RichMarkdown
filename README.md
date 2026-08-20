@@ -208,6 +208,9 @@ let view = LatexMarkdownUIView(markdown: message, parsesDollarMath: false)
 view.theme = .default
 ```
 
+`markdown` setter는 입력 보호 상한을 적용한다. 따라서 getter는 원문이 아니라 실제로
+렌더되는 canonical 텍스트(상한 초과 시 bounded prefix와 생략 marker)를 반환한다.
+
 셀에서 쓸 때는 수식 이미지 hydration이 최초 레이아웃 뒤에 오므로,
 `onContentSizeChange`로 self-sizing 재측정을 요청한다.
 
@@ -358,6 +361,7 @@ inline/display mode, display scale이다. cost는 이미지 pixel byte(현재 �
 | 수식 source byte | 4 KiB | `asImage()` 호출 전에 거부 |
 
 수치는 내부 구현이며 공개 설정으로 노출하지 않는다.
+UIKit의 `LatexMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스트를 반환한다.
 
 ---
 

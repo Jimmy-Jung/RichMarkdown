@@ -6,11 +6,19 @@ import Markdown
 /// → byte-length-preserving mask → 2차 파싱 → ParsedDocument.
 package enum SwiftLatexParser {
     package static func parse(markdown: String, parsesDollarMath: Bool) -> ParsedDocument {
+        parse(InputLimits.bound(markdown), parsesDollarMath: parsesDollarMath)
+    }
+
+    /// UI ingress에서 한 번 제한한 입력을 재검사 없이 파싱한다.
+    /// `wasTruncated`는 원문 제한 상태이므로 결과에 그대로 보존한다.
+    package static func parse(
+        _ boundedInput: InputLimits.BoundedInput,
+        parsesDollarMath: Bool
+    ) -> ParsedDocument {
         let signpostState = SwiftLatexSignposts.parse.beginInterval("parse")
         defer { SwiftLatexSignposts.parse.endInterval("parse", signpostState) }
 
-        let bounded = InputLimits.bound(markdown)
-        let text = bounded.text
+        let text = boundedInput.text
         let bytes = Array(text.utf8)
         let lineMap = UTF8LineMap(utf8: bytes)
 
@@ -37,7 +45,7 @@ package enum SwiftLatexParser {
 
         return ParsedDocument(
             blocks: blocks,
-            wasTruncated: bounded.wasTruncated,
+            wasTruncated: boundedInput.wasTruncated,
             diagnostics: scan.diagnostics
         )
     }
@@ -237,8 +245,31 @@ private struct ModelBuilder {
             runs.append(style(.text(text.string)))
             return
         }
+
+        // span이 없으면 second pass의 Text가 Markdown entity/escape를 이미 해제했다.
+        // 단, 수식 구분자 escape는 malformed LaTex를 원문으로 보여 주는 fail-open 계약이라
+        // 원문 slice 경로를 유지한다. 이 fast path가 여러 entity Text마다 parser를 다시
+        // 만드는 O(n^2) 경로를 막는다.
+        let overlappingSpans = inlineSpans.filter { $0.originalUTF8Range.overlaps(range) }
+        let source = String(decoding: originalBytes[range], as: UTF8.self)
+        if overlappingSpans.isEmpty, !containsLiteralMathDelimiterEscape(in: range) {
+            runs.append(style(.text(text.string)))
+            return
+        }
+
+        if source.contains("&"), appendEntityDecodedRuns(
+            in: range,
+            source: source,
+            decodedText: text.string,
+            spans: overlappingSpans,
+            style: style,
+            into: &runs
+        ) {
+            return
+        }
+
         var cursor = range.lowerBound
-        for span in inlineSpans where span.originalUTF8Range.overlaps(range) {
+        for span in overlappingSpans {
             let spanRange = span.originalUTF8Range
             guard spanRange.lowerBound >= cursor, spanRange.upperBound <= range.upperBound else {
                 continue // 부분 겹침은 발생하지 않아야 한다. fail-open으로 원문 텍스트에 남긴다.
@@ -254,9 +285,145 @@ private struct ModelBuilder {
         }
     }
 
+    /// entity가 수식 span의 앞뒤에 있어도 second pass와 같은 의미 해석을 유지한다.
+    /// marker는 Markdown parser가 바꾸지 않는 PUA 문자로 만들어 수식 source와 분리한다.
+    private func appendEntityDecodedRuns(
+        in range: Range<Int>,
+        source: String,
+        decodedText: String,
+        spans: [ProtectedMathSpan],
+        style: (InlineRun.Content) -> InlineRun,
+        into runs: inout [InlineRun]
+    ) -> Bool {
+        guard spans.allSatisfy({ range.contains($0.originalUTF8Range) }) else { return false }
+
+        var markers = OpaqueMarkerFactory(rawSource: source, decodedText: decodedText)
+        var markdown = ""
+        var cursor = range.lowerBound
+        var mathMarkers: [(marker: String, span: ProtectedMathSpan)] = []
+
+        for span in spans {
+            markdown += String(decoding: originalBytes[cursor..<span.originalUTF8Range.lowerBound], as: UTF8.self)
+            let marker = markers.next()
+            markdown += marker
+            mathMarkers.append((marker, span))
+            cursor = span.originalUTF8Range.upperBound
+        }
+        markdown += String(decoding: originalBytes[cursor..<range.upperBound], as: UTF8.self)
+
+        let protected = protectLiteralMathDelimiterEscapes(in: markdown, markers: &markers)
+        guard var decoded = decodedParagraphText(from: protected.markdown) else { return false }
+        for restoration in protected.restorations {
+            decoded = decoded.replacingOccurrences(of: restoration.marker, with: restoration.value)
+        }
+
+        var textStart = decoded.startIndex
+        for entry in mathMarkers {
+            guard let markerRange = decoded.range(of: entry.marker, range: textStart..<decoded.endIndex) else {
+                return false
+            }
+            if textStart < markerRange.lowerBound {
+                runs.append(style(.text(String(decoded[textStart..<markerRange.lowerBound]))))
+            }
+            runs.append(style(.math(MathSegment(span: entry.span))))
+            textStart = markerRange.upperBound
+        }
+        if textStart < decoded.endIndex {
+            runs.append(style(.text(String(decoded[textStart...]))))
+        }
+        return true
+    }
+
+    private func containsLiteralMathDelimiterEscape(in range: Range<Int>) -> Bool {
+        let source = String(decoding: originalBytes[range], as: UTF8.self)
+        return source.contains(#"\("#)
+            || source.contains(#"\)"#)
+            || source.contains(#"\["#)
+            || source.contains(#"\]"#)
+    }
+
     /// span 밖 텍스트는 원문 slice에서 Markdown escape를 해제해 표시한다.
     private func slice(_ range: Range<Int>) -> String {
         String(decoding: originalBytes[range], as: UTF8.self)
             .unescapingMarkdownPunctuation()
     }
+}
+
+/// raw/decoded corpus에 모두 없는 Plane 15/16 private-use scalar를 marker prefix로 쓴다.
+///
+/// HTML numeric entity가 이전 marker 문자열로 decode되는 충돌을 막고, marker마다 source를
+/// 재검색하지 않아 수식 수에 비례해 CPU가 증폭되지 않는다.
+private struct OpaqueMarkerFactory {
+    private let sentinel: String
+    private var serial = 0
+
+    init(rawSource: String, decodedText: String) {
+        let occupied = Set(rawSource.unicodeScalars).union(decodedText.unicodeScalars)
+        // 한 입력은 256 KiB로 제한된다. 131k개가 넘는 Plane 15/16 scalar 전부를 raw와
+        // decoded corpus에 동시에 넣을 수 없으므로 충돌 없는 scalar가 항상 존재한다.
+        for value in 0xF0000...0x10FFFD {
+            guard let scalar = Unicode.Scalar(value), !occupied.contains(scalar) else { continue }
+            sentinel = String(scalar)
+            return
+        }
+        preconditionFailure("bounded input must leave an opaque marker scalar")
+    }
+
+    mutating func next() -> String {
+        defer { serial += 1 }
+        return "\(sentinel)swiftlatex-\(serial)\(sentinel)"
+    }
+}
+
+private struct LiteralMathEscapeProtection {
+    let markdown: String
+    let restorations: [(marker: String, value: String)]
+}
+
+/// `\(` 등의 malformed 수식 구분자는 Markdown parser가 escape를 벗기기 전에 보호한다.
+private func protectLiteralMathDelimiterEscapes(
+    in markdown: String,
+    markers: inout OpaqueMarkerFactory
+) -> LiteralMathEscapeProtection {
+    var protected = ""
+    var restorations: [(marker: String, value: String)] = []
+    var index = markdown.startIndex
+
+    while index < markdown.endIndex {
+        guard markdown[index] == "\\" else {
+            protected.append(markdown[index])
+            index = markdown.index(after: index)
+            continue
+        }
+
+        let runStart = index
+        while index < markdown.endIndex, markdown[index] == "\\" {
+            index = markdown.index(after: index)
+        }
+        guard index < markdown.endIndex,
+              markdown[index] == "(" || markdown[index] == ")"
+                || markdown[index] == "[" || markdown[index] == "]"
+        else {
+            protected += String(markdown[runStart..<index])
+            continue
+        }
+
+        let marker = markers.next()
+        protected += marker
+        restorations.append((marker, String(markdown[runStart...index]).unescapingMarkdownPunctuation()))
+        index = markdown.index(after: index)
+    }
+
+    return LiteralMathEscapeProtection(markdown: protected, restorations: restorations)
+}
+
+/// `Markdown.Text.string`과 같은 entity/escape 의미 해석이 필요한 text fragment의 최소 경로.
+private func decodedParagraphText(from markdown: String) -> String? {
+    let document = Document(parsing: markdown)
+    for block in document.blockChildren {
+        if let paragraph = block as? Paragraph {
+            return paragraph.plainText
+        }
+    }
+    return nil
 }

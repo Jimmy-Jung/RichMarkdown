@@ -53,7 +53,7 @@ import UIKit
         let service = MathRenderService()
         let key = makeKey(latex: "a+b")
         let first = try #require(await service.render(key: key))
-        let cached = try #require(await service.cachedImage(for: key))
+        let cached = try #require(service.cachedImage(for: key))
         #expect(first.image === cached.image, "두 번째 조회는 cache hit이어야 한다")
     }
 
@@ -62,6 +62,25 @@ import UIKit
         let huge = String(repeating: "x+", count: InputLimits.maxMathSourceUTF8Bytes)
         let rendered = await service.render(key: makeKey(latex: huge))
         #expect(rendered == nil, "수식 source 상한 초과는 asImage() 호출 전에 거부한다")
+    }
+
+    @Test func invalidRasterParametersFailPreflight() async {
+        let service = MathRenderService()
+        for pointSize in [CGFloat(-1), 0, .nan, .infinity, 257] {
+            let rendered = await service.render(key: makeKey(pointSize: pointSize))
+            #expect(rendered == nil, "비정상 point size는 asImage() 전에 거부한다")
+        }
+        for scale in [CGFloat(-1), 0, .nan, .infinity, 4.5] {
+            let rendered = await service.render(key: makeKey(scale: scale))
+            #expect(rendered == nil, "비정상 display scale은 asImage() 전에 거부한다")
+        }
+    }
+
+    @Test func oversizedEstimatedBitmapFailsPreflight() async {
+        let service = MathRenderService()
+        // 짧은 source라도 256pt·4x의 추정 bitmap은 4 Mi pixels를 넘는다.
+        let rendered = await service.render(key: makeKey(latex: "a+b+c", pointSize: 256, scale: 4))
+        #expect(rendered == nil, "bitmap 작업 상한 초과는 asImage() 전에 거부한다")
     }
 
     @Test func invalidLatexFallsBackToNil() async {
@@ -82,6 +101,21 @@ import UIKit
         #expect(a != b, "서체가 다르면 raster 결과가 달라야 한다")
     }
 
+    @Test func renderUsesRequestedDisplayScale() async throws {
+        let service = MathRenderService()
+        let oneX = try #require(await service.render(key: makeKey(latex: #"\frac{a}{b}"#, scale: 1)))
+        let threeX = try #require(await service.render(key: makeKey(latex: #"\frac{a}{b}"#, scale: 3)))
+        let oneCGImage = try #require(oneX.image.cgImage)
+        let threeCGImage = try #require(threeX.image.cgImage)
+
+        #expect(oneX.image.scale == 1)
+        #expect(threeX.image.scale == 3)
+        #expect(abs(oneX.image.size.width - threeX.image.size.width) < 1)
+        #expect(abs(oneX.image.size.height - threeX.image.size.height) < 1)
+        #expect(threeCGImage.width > oneCGImage.width)
+        #expect(threeCGImage.height > oneCGImage.height)
+    }
+
     /// 12종 전부 SwiftMath 번들에서 실제로 로드되는지 확인한다.
     @Test func everyMathFontRenders() async throws {
         let service = MathRenderService()
@@ -95,13 +129,13 @@ import UIKit
         let service = MathRenderService()
         let key = makeKey(latex: "c^2")
         _ = await service.render(key: key)
-        #expect(await service.cachedImage(for: key) != nil)
+        #expect(service.cachedImage(for: key) != nil)
         await MainActor.run {
             NotificationCenter.default.post(
                 name: UIApplication.didReceiveMemoryWarningNotification, object: nil
             )
         }
         try await Task.sleep(nanoseconds: 100_000_000)
-        #expect(await service.cachedImage(for: key) == nil, "memory warning에서 cache를 비운다")
+        #expect(service.cachedImage(for: key) == nil, "memory warning에서 cache를 비운다")
     }
 }

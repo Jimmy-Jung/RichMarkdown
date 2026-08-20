@@ -7,6 +7,7 @@ import Foundation
 package actor CoalescingWorker<Input: Sendable> {
     private var pending: Input?
     private var isRunning = false
+    private var latestGeneration: Int?
     private let perform: @Sendable (Input) async -> Void
 
     package init(perform: @escaping @Sendable (Input) async -> Void) {
@@ -18,6 +19,14 @@ package actor CoalescingWorker<Input: Sendable> {
         guard !isRunning else { return }
         isRunning = true
         Task { await self.drain() }
+    }
+
+    /// generation이 작은 늦은 제출은 최신 대기 입력을 덮을 수 없다.
+    /// 이 actor turn에는 `await`가 없어 ingress 순서가 곧 high-water 판정 순서다.
+    package func submit(_ input: Input, generation: Int) {
+        guard latestGeneration.map({ generation > $0 }) ?? true else { return }
+        latestGeneration = generation
+        submit(input)
     }
 
     /// 입력 종료 후 idle 검증용. 실행 중이거나 대기가 남아 있으면 true.

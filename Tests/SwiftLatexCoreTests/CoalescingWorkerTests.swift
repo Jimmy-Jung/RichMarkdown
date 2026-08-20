@@ -62,4 +62,22 @@ import Testing
         try await waitForIdle(worker)
         #expect(await recorder.executed == [1, 2])
     }
+
+    @Test func lowerGenerationCannotReplaceNewerPendingInput() async throws {
+        let recorder = Recorder()
+        let worker = CoalescingWorker<Int> { value in
+            await recorder.begin(value)
+            try? await Task.sleep(nanoseconds: 5_000_000)
+            await recorder.end()
+        }
+
+        await worker.submit(1, generation: 1)
+        await worker.submit(3, generation: 3)
+        await worker.submit(2, generation: 2) // 늦게 도착한 과거 generation
+        try await waitForIdle(worker)
+
+        let executed = await recorder.executed
+        #expect(executed.last == 3)
+        #expect(!executed.contains(2))
+    }
 }

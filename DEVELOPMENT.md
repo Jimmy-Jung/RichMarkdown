@@ -266,6 +266,46 @@ API는 현재 메시지 전체 `String`을 받으며 증분 parser를 제공하�
 
 ## 5. 렌더링과 플랫폼 계약
 
+### 수식 엔진 선정 근거 (2026-08-20 기록)
+
+이 절은 사후 기록이다. SwiftMath는 문서 초안부터 전제로 잡혀 있었고 선정 근거가
+남아 있지 않아, 대안을 실측 조사한 뒤 정리했다.
+
+요구조건으로 후보를 거르면 SwiftMath 하나가 남는다.
+
+| 요구 | 탈락 후보 | 근거 |
+|---|---|---|
+| iOS 16 | `swiftui-math` | Package.swift `platforms: .iOS(.v17)` |
+| UIKit 렌더러에서 사용 | `swiftui-math` | SwiftUI `Math` 뷰만 노출. `UIImage` 경로 없음 |
+| JS 런타임 없음 | `LaTeXSwiftUI`/`MathJaxSwift` | JavaScriptCore + MathJax |
+| WebView 없음 | KaTeX/MathJax | — |
+| Swift 6 동시성 | `iosMath` | Objective-C, 유지보수 중단 |
+
+설계가 의존하는 SwiftMath의 성질은 둘이다.
+
+1. **`asImage()`가 `MTImage`(=`UIImage`)를 반환한다.** 이것이 두 렌더러가 같은
+   raster를 공유하는 전제다. SwiftUI는 `Text(Image(uiImage:))`, UIKit은
+   `NSTextAttachment`로 같은 결과물을 쓴다. 수식 엔진이 SwiftUI 뷰였다면 아래
+   "UIKit 네이티브 렌더러" 절은 성립하지 않는다.
+2. **`LayoutInfo(ascent:descent:)`를 함께 반환한다.** `-layout.descent` baseline
+   보정의 유일한 근거다. 이미지만 주는 엔진으로는 인라인 정렬을 맞출 수 없다.
+
+`swiftui-math`(Textual이 사용)는 SwiftMath 파생이다 — LICENSE에 SwiftMath와
+iosMath 저작권이 함께 표기돼 있다. 조판 엔진은 같고 출력이 vector/raster로 갈렸을
+뿐이며, 그 선택이 UIKit 지원 가능 여부를 결정한다.
+
+**자체 구현하지 않는다.** SwiftMath 소스는 60파일 약 469 KB이고 `MTTypesetter.swift`
+하나가 93 KB다. TeX atom 간격표, 스타일 4단계, OpenType MATH 테이블, extensible
+delimiter 글리프 조립을 다시 구현하는 것은 이 패키지의 목표가 아니다.
+
+**통제권** — SwiftMath는 MIT다. §6의 raster preflight API 부재처럼 아쉬운 지점은
+상류 기여 또는 fork로 해결한다. 엔진 교체 사유가 아니다. SwiftMath 호출은
+`MathRenderService`에 가둬 두므로 교체 시 그 파일만 바뀐다.
+
+**재검토 조건** — ① upstream 유지보수 중단 ② 신규 iOS/Swift에서 구조적 사용 불가
+③ raster 방식이 성능 병목으로 *측정*됨. ③에서도 자체 구현이 아니라 vector 방식
+검토가 먼저다.
+
 ### 인라인 수식
 
 SwiftMath `1.7.3`의 공개 API만 사용한다.

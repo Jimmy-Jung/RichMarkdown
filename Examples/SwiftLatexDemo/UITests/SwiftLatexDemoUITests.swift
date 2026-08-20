@@ -13,13 +13,30 @@ final class SwiftLatexDemoUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.navigationBars["SwiftLatex Demo"].waitForExistence(timeout: 10))
-        app.buttons["AI 챗봇"].firstMatch.tap()
+        app.buttons["AI 챗봇 (SwiftUI)"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["AI 챗봇"].waitForExistence(timeout: 10))
         // 비동기 parse/render 뒤 텍스트 블록이 나타난다.
         XCTAssertTrue(
             app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "원의 넓이는"))
                 .firstMatch.waitForExistence(timeout: 10)
         )
+    }
+
+    @MainActor
+    func testChatRenderOptionsMenuIncludesThemePresets() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["SwiftLatex Demo"].waitForExistence(timeout: 10))
+        app.buttons["AI 챗봇 (SwiftUI)"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["AI 챗봇"].waitForExistence(timeout: 10))
+
+        let renderOptions = app.buttons["렌더 옵션"]
+        XCTAssertTrue(renderOptions.waitForExistence(timeout: 10))
+        renderOptions.tap()
+        XCTAssertTrue(app.buttons["큰 글자"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Serif"].exists)
+        XCTAssertTrue(app.buttons["색 강조"].exists)
     }
 
     /// UIKit 네이티브 렌더러 화면. 재사용 셀에서 렌더가 유지되는지와 테마 프리셋별
@@ -36,13 +53,14 @@ final class SwiftLatexDemoUITests: XCTestCase {
             app.launch()
 
             XCTAssertTrue(app.navigationBars["SwiftLatex Demo"].waitForExistence(timeout: 10))
-            app.buttons["UIKit 네이티브 (LatexMarkdownUIView)"].firstMatch.tap()
+            app.buttons["AI 챗봇 (UIKit)"].firstMatch.tap()
             XCTAssertTrue(app.navigationBars["UIKit 네이티브"].waitForExistence(timeout: 10))
 
-            let list = app.collectionViews["uikitChatList"]
-            XCTAssertTrue(list.waitForExistence(timeout: 10))
-            XCTAssertTrue(
-                app.textViews.matching(bodyPredicate).firstMatch.waitForExistence(timeout: 10),
+        let list = app.collectionViews["uikitChatList"]
+        XCTAssertTrue(list.waitForExistence(timeout: 10))
+        XCTAssertNotEqual(list.value as? String, "preparing")
+        XCTAssertTrue(
+            app.textViews.matching(bodyPredicate).firstMatch.waitForExistence(timeout: 10),
                 "\(preset): 첫 답변이 렌더되어야 한다"
             )
 
@@ -82,6 +100,18 @@ final class SwiftLatexDemoUITests: XCTestCase {
                 list.swipeUp()
             }
             XCTAssertTrue(foundMid, "\(preset): 중간 답변이 재사용 후에도 렌더되어야 한다")
+
+            // 같은 완성 메시지를 두 번째로 다시 붙이는 경로도 비어 있지 않아야 한다.
+            // 고정 횟수 대신 실제 첫 답변의 재등장으로 완료를 판정한다.
+            var returnedToTopAgain = false
+            for _ in 0..<20 {
+                if app.textViews.matching(bodyPredicate).firstMatch.exists {
+                    returnedToTopAgain = true
+                    break
+                }
+                list.swipeDown()
+            }
+            XCTAssertTrue(returnedToTopAgain, "\(preset): 두 번째 재방문에도 첫 답변이 유지되어야 한다")
 
             app.terminate()
         }

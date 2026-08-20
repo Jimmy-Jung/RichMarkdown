@@ -36,6 +36,36 @@ package struct RenderedMath: Sendable {
     package let ascent: CGFloat
 }
 
+/// SwiftMath 1.7.3은 allocation 전에 실제 layout dimension을 알려주는 public API를
+/// 제공하지 않는다. 이 값들은 그 공백을 완전히 증명하는 보안 경계가 아니라, font/scale과
+/// source 길이를 함께 제한해 비정상 요청을 `asImage()` 전에 막는 보수적 작업 상한이다.
+private enum RasterInputLimits {
+    static let minimumPointSize: CGFloat = 1
+    static let maximumPointSize: CGFloat = 256
+    static let maximumDisplayScale: CGFloat = 4
+    static let maximumEstimatedPixelEdge: CGFloat = 8_192
+    static let maximumEstimatedPixelCount: CGFloat = 4_194_304
+
+    static func allows(_ key: MathRenderKey, sourceRendererScale: CGFloat) -> Bool {
+        guard key.pointSize.isFinite,
+              key.pointSize >= minimumPointSize,
+              key.pointSize <= maximumPointSize,
+              key.displayScale.isFinite,
+              key.displayScale >= 1,
+              key.displayScale <= maximumDisplayScale,
+              key.latex.utf8.count <= InputLimits.maxMathSourceUTF8Bytes else {
+            return false
+        }
+
+        // `MathImage`는 현재 main renderer의 scale로 먼저 bitmap을 만든다. target과
+        // source 중 큰 쪽으로 잡아 source bitmap과 scale 변환 bitmap 모두를 고려한다.
+        let pixelsPerEm = key.pointSize * max(key.displayScale, sourceRendererScale)
+        let sourceUnits = CGFloat(key.latex.utf8.count)
+        return sourceUnits * pixelsPerEm <= maximumEstimatedPixelEdge
+            && sourceUnits * pixelsPerEm * pixelsPerEm <= maximumEstimatedPixelCount
+    }
+}
+
 /// SwiftMath raster를 담당하는 actor. MainActor에서 CPU raster를 실행하지 않는다.
 package actor MathRenderService {
     package static let shared = MathRenderService()
@@ -62,7 +92,17 @@ package actor MathRenderService {
         weak var cache: NSCache<KeyBox, Entry>?
     }
 
-    private let cache = NSCache<KeyBox, Entry>()
+    /// `NSCache`는 문서상 thread-safe다. `cachedImage`를 actor 밖(MainActor의
+    /// 동기 fast path, worker의 일괄 게시 판단)에서 hop 없이 읽기 위해 면제한다.
+    private nonisolated(unsafe) let cache = NSCache<KeyBox, Entry>()
+
+    /// `MathImage.asImage()`가 사용하는 기본 renderer scale을 한 번만 실측한다.
+    /// SwiftMath 1.7.3은 renderer format을 받지 않으므로, scale 불일치 요청의
+    /// preflight에는 이 source bitmap scale도 포함해야 한다.
+    private static let sourceRendererScale: CGFloat = {
+        let probe = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
+        return probe.scale.isFinite && probe.scale > 0 ? probe.scale : 1
+    }()
 
     package init() {
         // ponytail: cache 상한은 P0 측정 전 잠정값. cost는 이미지 pixel byte.
@@ -81,7 +121,7 @@ package actor MathRenderService {
     }
 
 
-    package func cachedImage(for key: MathRenderKey) -> RenderedMath? {
+    package nonisolated func cachedImage(for key: MathRenderKey) -> RenderedMath? {
         cache.object(forKey: KeyBox(key: key))?.value
     }
 
@@ -91,11 +131,12 @@ package actor MathRenderService {
 
     /// 렌더 실패(오류·preflight 초과)는 nil. 호출자는 해당 노드만 원문 source로 유지한다.
     package func render(key: MathRenderKey) -> RenderedMath? {
+        guard RasterInputLimits.allows(key, sourceRendererScale: Self.sourceRendererScale) else {
+            return nil
+        }
         if let cached = cache.object(forKey: KeyBox(key: key)) {
             return cached.value
         }
-        // 수식 source byte 상한을 asImage() 호출 전에 검사한다 (§6 입력 보호).
-        guard key.latex.utf8.count <= InputLimits.maxMathSourceUTF8Bytes else { return nil }
 
         let signpostState = SwiftLatexSignposts.raster.beginInterval("raster")
         defer { SwiftLatexSignposts.raster.endInterval("raster", signpostState) }
@@ -111,10 +152,37 @@ package actor MathRenderService {
         let (error, image, layout) = mathImage.asImage()
         guard error == nil, let image, let layout else { return nil }
 
-        let rendered = RenderedMath(image: image, descent: layout.descent, ascent: layout.ascent)
-        let pixelCost = Int(image.size.width * image.scale) * Int(image.size.height * image.scale) * 4
+        guard let scaledImage = image.withDisplayScale(key.displayScale),
+              let pixelCost = scaledImage.pixelByteCost,
+              pixelCost <= Int(RasterInputLimits.maximumEstimatedPixelCount * 4) else {
+            return nil
+        }
+
+        let rendered = RenderedMath(image: scaledImage, descent: layout.descent, ascent: layout.ascent)
         cache.setObject(Entry(value: rendered), forKey: KeyBox(key: key), cost: pixelCost)
         return rendered
+    }
+}
+
+private extension UIImage {
+    /// SwiftMath 1.7.3의 `MathImage`는 renderer scale을 지정받지 않는다. 같은 scale이면
+    /// 원본을 그대로 쓰고, 외부 display/trait에서 달라질 때만 target scale bitmap을 만든다.
+    func withDisplayScale(_ scale: CGFloat) -> UIImage? {
+        guard scale.isFinite, scale > 0 else { return nil }
+        guard self.scale != scale else { return self }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
+    var pixelByteCost: Int? {
+        guard let cgImage else { return nil }
+        let (cost, overflow) = cgImage.bytesPerRow.multipliedReportingOverflow(by: cgImage.height)
+        return overflow ? nil : cost
     }
 }
 

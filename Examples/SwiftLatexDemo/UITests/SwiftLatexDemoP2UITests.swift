@@ -22,7 +22,7 @@ final class SwiftLatexDemoP2UITests: XCTestCase {
         app.launchArguments += arguments
         app.launch()
         XCTAssertTrue(app.navigationBars["SwiftLatex Demo"].waitForExistence(timeout: 20))
-        app.buttons["AI 챗봇"].firstMatch.tap()
+        app.buttons["AI 챗봇 (SwiftUI)"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["AI 챗봇"].waitForExistence(timeout: 20))
         return app
     }
@@ -108,11 +108,17 @@ final class SwiftLatexDemoP2UITests: XCTestCase {
         XCTAssertTrue(collection.waitForExistence(timeout: 20))
         // 재사용/비동기 높이 갱신 경로: 왕복 스크롤 후에도 첫 메시지가 살아 있다.
         for _ in 0..<3 { collection.swipeUp() }
-        for _ in 0..<3 { collection.swipeDown() }
-        XCTAssertTrue(
-            collection.staticTexts
-                .containing(NSPredicate(format: "label CONTAINS %@", "원의 넓이는"))
-                .firstMatch.waitForExistence(timeout: 15)
-        )
+        // parse·raster 캐시 도입 후 높이가 hydration을 기다리지 않고 정착해
+        // 스와이프 이동 거리가 위/아래 대칭이 아니다. 고정 횟수 대신
+        // 첫 메시지가 보일 때까지 되돌린다 (위 copyButton 탐색과 같은 관용구).
+        let firstMessage = collection.staticTexts
+            .containing(NSPredicate(format: "label CONTAINS %@", "원의 넓이는"))
+            .firstMatch
+        var swipes = 0
+        while !firstMessage.exists && swipes < 8 {
+            collection.swipeDown()
+            swipes += 1
+        }
+        XCTAssertTrue(firstMessage.waitForExistence(timeout: 15))
     }
 }

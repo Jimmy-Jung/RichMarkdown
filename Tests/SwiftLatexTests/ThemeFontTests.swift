@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 import UIKit
 @testable import SwiftLatex
@@ -100,6 +101,55 @@ import UIKit
     @Test func monospacedDesignResolvesToFixedWidthFont() {
         let font = LatexFont(design: .monospaced, relativeTo: .body).resolvedUIFont(compatibleWith: nil)
         #expect(font.fontDescriptor.symbolicTraits.contains(.traitMonoSpace))
+    }
+
+    @Test func invalidExplicitFontSizeFallsBackToStyleDefault() {
+        for invalidSize in [CGFloat(-1), 0, .nan, .infinity] {
+            let font = LatexFont(relativeTo: .title2, size: invalidSize)
+            #expect(font.unscaledSize == LatexTextStyle.title2.defaultSize)
+        }
+    }
+
+    @Test func invalidExplicitFontSizesHaveStableHashableIdentity() {
+        let defaultFont = LatexFont(relativeTo: .title2)
+        for invalidSize in [CGFloat(-1), 0, .nan, .infinity] {
+            let invalidFont = LatexFont(relativeTo: .title2, size: invalidSize)
+            #expect(invalidFont == defaultFont)
+            #expect(Set([defaultFont, invalidFont]).count == 1)
+        }
+    }
+
+    @Test func headingStylesUseMatchingUIKitAndSwiftUILevels() {
+        #expect(LatexTextStyle.title1.uiTextStyle == .title1)
+        #expect(LatexTextStyle.title1.swiftUITextStyle == .title)
+        #expect(LatexTextStyle.title2.uiTextStyle == .title2)
+        #expect(LatexTextStyle.title2.swiftUITextStyle == .title2)
+        #expect(LatexTextStyle.title3.uiTextStyle == .title3)
+        #expect(LatexTextStyle.title3.swiftUITextStyle == .title3)
+    }
+
+    private func renderedTextImage(font: LatexFont, scale: LatexFontScale) throws -> UIImage {
+        let renderer = ImageRenderer(
+            content: Text("SwiftLatex")
+                .latexFont(font)
+                .fixedSize()
+                .environment(\.latexFontScale, scale)
+        )
+        renderer.scale = 1
+        return try #require(renderer.uiImage)
+    }
+
+    @Test func explicitSwiftUISystemSizeUsesDynamicTypeScale() throws {
+        let font = LatexFont(relativeTo: .title2, size: 24)
+        var enlarged = LatexFontScale()
+        enlarged.title2 = 1.8
+
+        let normalImage = try renderedTextImage(font: font, scale: LatexFontScale())
+        let enlargedImage = try renderedTextImage(font: font, scale: enlarged)
+
+        #expect(enlargedImage.size.width > normalImage.size.width)
+        #expect(enlargedImage.size.height > normalImage.size.height)
+        #expect(abs(font.scaledPointSize(using: enlarged) - 43.2) < 0.001)
     }
 
     // MARK: - UIKit 렌더러 반영

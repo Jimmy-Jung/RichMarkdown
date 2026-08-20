@@ -218,6 +218,7 @@ enum ChatFixtures {
 struct ChatDemoView: View {
     @State private var parsesDollarMath = false
     @State private var showsCaseLabels = true
+    @State private var preset = LatexThemePreset.fromLaunchArguments()
 
     var body: some View {
         ScrollView {
@@ -226,7 +227,8 @@ struct ChatDemoView: View {
                     ChatBubble(
                         message: message,
                         parsesDollarMath: parsesDollarMath,
-                        showsCaseLabel: showsCaseLabels
+                        showsCaseLabel: showsCaseLabels,
+                        theme: preset.theme
                     )
                 }
             }
@@ -240,6 +242,11 @@ struct ChatDemoView: View {
                 Menu {
                     Toggle("$ 수식 파싱 (opt-in)", isOn: $parsesDollarMath)
                     Toggle("케이스 라벨 표시", isOn: $showsCaseLabels)
+                    Picker("테마", selection: $preset) {
+                        ForEach(LatexThemePreset.allCases) { preset in
+                            Text(verbatim: preset.rawValue).tag(preset)
+                        }
+                    }
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }
@@ -253,6 +260,7 @@ struct ChatBubble: View {
     let message: ChatMessage
     let parsesDollarMath: Bool
     let showsCaseLabel: Bool
+    let theme: LatexTheme
 
     var body: some View {
         switch message.role {
@@ -279,7 +287,7 @@ struct ChatBubble: View {
                         .clipShape(Capsule())
                 }
                 LatexMarkdownView(markdown: message.text, parsesDollarMath: parsesDollarMath)
-                    .latexTheme(.default)
+                    .latexTheme(theme)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color(.secondarySystemGroupedBackground))

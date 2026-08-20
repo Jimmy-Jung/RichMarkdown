@@ -16,8 +16,18 @@ import SwiftLatexCore
 /// view.onContentSizeChange = { [weak cell] in cell?.invalidateIntrinsicContentSize() }
 /// ```
 public final class LatexMarkdownUIView: UIView {
+    /// public ingress에서 한 번 제한한 canonical 입력이다. 과대 원문을 뷰 수명 동안
+    /// 보관하지 않고, getter도 실제로 렌더링되는 안전한 텍스트만 반환한다.
+    private var boundedMarkdown: InputLimits.BoundedInput
+
     public var markdown: String {
-        didSet { if markdown != oldValue { submit() } }
+        get { boundedMarkdown.text }
+        set {
+            let bounded = InputLimits.bound(newValue)
+            guard bounded != boundedMarkdown else { return }
+            boundedMarkdown = bounded
+            submit()
+        }
     }
 
     public var parsesDollarMath: Bool {
@@ -25,7 +35,13 @@ public final class LatexMarkdownUIView: UIView {
     }
 
     public var theme: LatexTheme {
-        didSet { if theme != oldValue { submit() } }
+        didSet {
+            guard theme != oldValue else { return }
+            // Request에 실리지 않는 변경(인용 바 색 등)은 model이 같은 요청으로 보고
+            // dedupe해 게시가 없다. 색·폰트 반영은 rebuild 몫이므로 직접 예약한다.
+            scheduleRebuild()
+            submit()
+        }
     }
 
     /// 블록 재구성으로 높이가 바뀔 때 호출된다.
@@ -47,9 +63,13 @@ public final class LatexMarkdownUIView: UIView {
 
     private var cancellable: AnyCancellable?
     private var rebuildScheduled = false
+    private var contentSizeChangeScheduled = false
+
+    /// 테스트의 조건 기반 idle 대기용 상태다. 외부 API 계약은 아니다.
+    var hasPendingRebuild: Bool { rebuildScheduled || contentSizeChangeScheduled }
 
     public init(markdown: String = "", parsesDollarMath: Bool = false, theme: LatexTheme = .default) {
-        self.markdown = markdown
+        self.boundedMarkdown = InputLimits.bound(markdown)
         self.parsesDollarMath = parsesDollarMath
         self.theme = theme
         super.init(frame: .zero)
@@ -88,7 +108,9 @@ public final class LatexMarkdownUIView: UIView {
             }
         }
 
-        submit()
+        // 초기 렌더는 worker 게시를 기다리지 않는다. `submit`이 동기 갱신한 제한된
+        // fallback을 바로 구성해 빈 UIView가 한 프레임 보이지 않게 한다.
+        submit(showFallbackImmediately: true)
     }
 
     /// iOS 16 배포 타깃용 경로. iOS 17+는 `registerForTraitChanges`가 담당한다.
@@ -102,16 +124,25 @@ public final class LatexMarkdownUIView: UIView {
 
     // MARK: - Render request
 
-    private func submit() {
-        model.submit(
-            LatexRenderModel.Request(
-                markdown: markdown,
-                parsesDollarMath: parsesDollarMath,
-                pointSize: bodyUIFont.pointSize,
-                colorRGBA: UIColor(theme.textColor).resolvedColor(with: traitCollection).rgbaValue,
-                displayScale: displayScale,
-                mathFont: theme.mathFont
-            )
+    private func submit(showFallbackImmediately: Bool = false) {
+        model.submit(currentRequest)
+
+        // 초기 setup에서만 worker 게시 이전 fallback을 즉시 구성한다. 이후 property
+        // setter는 coalesced rebuild를 써서 self-sizing callback이 스크롤 중 동기로
+        // 재진입하지 않게 한다.
+        if showFallbackImmediately {
+            rebuildImmediately()
+        }
+    }
+
+    private var currentRequest: LatexRenderModel.Request {
+        LatexRenderModel.Request(
+            boundedInput: boundedMarkdown,
+            parsesDollarMath: parsesDollarMath,
+            pointSize: bodyUIFont.pointSize,
+            colorRGBA: UIColor(theme.textColor).resolvedColor(with: traitCollection).rgbaValue,
+            displayScale: displayScale,
+            mathFont: theme.mathFont
         )
     }
 
@@ -135,10 +166,17 @@ public final class LatexMarkdownUIView: UIView {
         guard !rebuildScheduled else { return }
         rebuildScheduled = true
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, self.rebuildScheduled else { return }
             self.rebuildScheduled = false
             self.rebuild()
         }
+    }
+
+    private func rebuildImmediately() {
+        // `objectWillChange`가 같은 turn에 예약한 rebuild는 취소한다. 초기 fallback은
+        // 지금 그렸으므로 다음 MainActor hop에서 같은 계층을 또 만들 필요가 없다.
+        rebuildScheduled = false
+        rebuild()
     }
 
     private func rebuild() {
@@ -148,14 +186,16 @@ public final class LatexMarkdownUIView: UIView {
         }
 
         if let document = model.document {
-            let images = model.mathImages
+            // 문서는 같아도 theme/color/scale 요청이 바뀌면 새 raster가 필요하다.
+            // `imageRequest`가 일치할 때만 이전 bitmap을 쓴다.
+            let images = model.imageRequest == currentRequest ? model.mathImages : [:]
             for block in document.blocks {
                 blockStack.addArrangedSubview(blockView(block, images: images))
             }
         } else {
             // 최신 원문 fallback 즉시 표시 (DEVELOPMENT.md §4).
             blockStack.addArrangedSubview(
-                textView(NSAttributedString(string: markdown, attributes: [
+                textView(NSAttributedString(string: model.fallbackMarkdown, attributes: [
                     .font: bodyUIFont,
                     .foregroundColor: UIColor(theme.textColor),
                 ]))
@@ -163,7 +203,17 @@ public final class LatexMarkdownUIView: UIView {
         }
 
         invalidateIntrinsicContentSize()
-        onContentSizeChange?()
+        scheduleContentSizeChange()
+    }
+
+    private func scheduleContentSizeChange() {
+        guard !contentSizeChangeScheduled else { return }
+        contentSizeChangeScheduled = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.contentSizeChangeScheduled = false
+            self.onContentSizeChange?()
+        }
     }
 
     // MARK: - Blocks

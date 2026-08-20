@@ -8,55 +8,80 @@ import SwiftLatexCore
 ///     .latexTheme(.default)
 /// ```
 public struct LatexMarkdownView: View {
-    private let markdown: String
+    /// public ingress에서 한 번 제한한 canonical 입력. 원문 전체를 View 수명 동안
+    /// 보관하지 않아 large markdown이 SwiftUI state에 남지 않는다.
+    private let boundedMarkdown: InputLimits.BoundedInput
     private let parsesDollarMath: Bool
 
     @StateObject private var model = LatexRenderModel()
     @Environment(\.latexTheme) private var theme
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
-    /// Dynamic Type 배율. `@ScaledMetric`의 `relativeTo`는 컴파일 시점 상수여야 해서
-    /// 크기 대신 배율만 재고 `bodyFont` 크기에 곱한다.
-    @ScaledMetric(relativeTo: .body) private var bodyScale: CGFloat = 100
+    /// `@ScaledMetric(relativeTo:)`의 기준 style은 컴파일 시점 상수여서 style별
+    /// 배율을 root에서 측정한 뒤 하위 renderer에 environment로 전달한다.
+    @ScaledMetric(relativeTo: .body) private var bodyScale: CGFloat = 1
+    @ScaledMetric(relativeTo: .headline) private var headlineScale: CGFloat = 1
+    @ScaledMetric(relativeTo: .title) private var titleScale: CGFloat = 1
+    @ScaledMetric(relativeTo: .title2) private var title2Scale: CGFloat = 1
+    @ScaledMetric(relativeTo: .title3) private var title3Scale: CGFloat = 1
+    @ScaledMetric(relativeTo: .caption) private var captionScale: CGFloat = 1
 
     public init(markdown: String, parsesDollarMath: Bool = false) {
-        self.markdown = markdown
+        self.boundedMarkdown = InputLimits.bound(markdown)
         self.parsesDollarMath = parsesDollarMath
     }
 
     public var body: some View {
-        content
-            .task(id: currentRequest) {
-                model.submit(currentRequest)
+        // 요청을 한 번만 canonicalize한다. 대형 원문의 bounded fallback도 body와
+        // `.task(id:)`가 같은 값을 써야 이전 문서가 한 프레임 되살아나지 않는다.
+        let request = currentRequest
+        content(for: request)
+            .environment(\.latexFontScale, fontScale)
+            .task(id: request) {
+                model.submit(request)
             }
     }
 
     @ViewBuilder
-    private var content: some View {
-        if let document = model.document {
+    private func content(for request: LatexRenderModel.Request) -> some View {
+        // `.task(id:)`는 body 뒤에 시작된다. 따라서 새 요청의 parse identity와 모델이
+        // 보유한 document identity가 다르면, 이전 문서 대신 현재 bounded fallback을 그린다.
+        if model.parseIdentity == request.parseIdentity, let document = model.document {
+            // 동일 문서라도 색·폰트·scale이 바뀐 새 raster가 아직 준비되지 않았으면
+            // 이전 bitmap을 섞지 않고 source fallback을 유지한다.
+            let images = model.imageRequest == request ? model.mathImages : [:]
             VStack(alignment: .leading, spacing: 12) {
                 // identity는 렌더 시점의 위치 + content digest. 편집 사이 영속성은 약속하지 않는다.
                 ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
-                    LatexBlockView(block: block, images: model.mathImages)
+                    LatexBlockView(block: block, images: images)
                 }
             }
         } else {
-            // 최신 원문 fallback 즉시 표시 (§4).
-            Text(markdown)
-                .font(theme.bodyFont.resolvedFont)
+            // Request가 입력을 제한해 보관하므로 raw markdown을 UI에 직접 전달하지 않는다.
+            Text(request.markdown)
+                .latexFont(theme.bodyFont)
                 .foregroundStyle(theme.textColor)
                 .textSelection(.enabled)
         }
     }
 
-    /// 수식 raster 기준 크기. `theme.bodyFont` 크기를 Dynamic Type 배율로 스케일한다.
-    /// 배율 기준은 항상 `.body`다 — `bodyFont.relativeTo`를 다른 스타일로 두면
-    /// 수식은 body 배율로 커진다.
-    private var mathPointSize: CGFloat { theme.bodyFont.unscaledSize * bodyScale / 100 }
+    /// 수식 raster 기준 크기. 수식은 본문 폰트가 선택한 Dynamic Type 기준을 따른다.
+    private var mathPointSize: CGFloat { theme.bodyFont.scaledPointSize(using: fontScale) }
+
+    private var fontScale: LatexFontScale {
+        LatexFontScale(
+            body: bodyScale,
+            headline: headlineScale,
+            title: titleScale,
+            title2: title2Scale,
+            title3: title3Scale,
+            caption: captionScale
+        )
+    }
 
     private var currentRequest: LatexRenderModel.Request {
         LatexRenderModel.Request(
-            markdown: markdown,
+            boundedInput: boundedMarkdown,
             parsesDollarMath: parsesDollarMath,
             pointSize: mathPointSize,
             colorRGBA: resolvedTextColorRGBA,
@@ -112,7 +137,7 @@ struct LatexBlockView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("•")
-                            .font(theme.bodyFont.resolvedFont)
+                            .latexFont(theme.bodyFont)
                             .foregroundStyle(theme.textColor)
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(Array(item.enumerated()), id: \.offset) { _, child in
@@ -128,7 +153,7 @@ struct LatexBlockView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("\(start + index).")
-                            .font(theme.bodyFont.resolvedFont)
+                            .latexFont(theme.bodyFont)
                             .monospacedDigit()
                             .foregroundStyle(theme.textColor)
                         VStack(alignment: .leading, spacing: 4) {
@@ -155,6 +180,7 @@ struct InlineRunsText: View {
     /// 감싼 블록의 폰트. 문단은 `bodyFont`, 헤딩은 해당 레벨 폰트다.
     let font: LatexFont
     @Environment(\.latexTheme) private var theme
+    @Environment(\.latexFontScale) private var fontScale
 
     var body: some View {
         combinedText
@@ -175,7 +201,9 @@ struct InlineRunsText: View {
 
         case .code(let code):
             var attributed = base(code)
-            attributed.font = theme.codeFont.resolvedFont
+            attributed.font = theme.codeFont.resolvedFont(
+                scaledBy: fontScale.factor(for: theme.codeFont.relativeTo)
+            )
             attributed.backgroundColor = theme.inlineCodeBackground
             return styled(Text(emphasized(attributed, run)), run)
 
@@ -213,7 +241,7 @@ struct InlineRunsText: View {
     private func base(_ string: String) -> AttributedString {
         var attributed = AttributedString(string)
         attributed.foregroundColor = theme.textColor
-        attributed.font = font.resolvedFont
+        attributed.font = font.resolvedFont(scaledBy: fontScale.factor(for: font.relativeTo))
         return attributed
     }
 
@@ -289,7 +317,7 @@ struct BlockMathView: View {
                         .accessibilityLabel("수식: \(segment.latex)")
                 } else {
                     Text(verbatim: segment.source)
-                        .font(theme.codeFont.resolvedFont)
+                        .latexFont(theme.codeFont)
                         .foregroundStyle(theme.textColor)
                         .textSelection(.enabled)
                 }
@@ -310,7 +338,7 @@ struct CodeBlockView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 Text(language ?? "code")
-                    .font(theme.codeLabelFont.resolvedFont)
+                    .latexFont(theme.codeLabelFont)
                     // secondary(60% 회색)를 밝은 헤더 배경에 쓰면 작은 텍스트 대비
                     // 기준(4.5:1)에 미달해 접근성 audit이 실패한다. 테마 텍스트 색을 쓴다.
                     .foregroundStyle(theme.textColor)
@@ -322,7 +350,7 @@ struct CodeBlockView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(verbatim: code)
-                    .font(theme.codeFont.resolvedFont)
+                    .latexFont(theme.codeFont)
                     .foregroundStyle(theme.textColor)
                     .textSelection(.enabled)
                     .padding(12)

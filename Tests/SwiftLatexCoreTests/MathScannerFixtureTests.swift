@@ -261,6 +261,25 @@ import Testing
         #expect(plainText(of: firstParagraphRuns(doc)) == "이스케이프한 $100 과 *강조 아님* 과 _밑줄_")
     }
 
+    @Test func htmlEntitiesUseMarkdownDecodedText() {
+        let doc = parse("A &amp; B &#169; &NotEqualTilde; &NotAnEntity;")
+        #expect(plainText(of: firstParagraphRuns(doc)) == "A & B © ≂\u{0338} &NotAnEntity;")
+    }
+
+    @Test func htmlEntitiesAroundInlineMathRemainDecoded() {
+        let doc = parse(#"A &amp; \(x\) &copy;"#)
+        #expect(plainText(of: firstParagraphRuns(doc)) == #"A & \(x\) ©"#)
+    }
+
+    @Test func decodedEntityCannotCollideWithOpaqueMathMarker() {
+        let doc = parse(#"&#xE000;swiftlatex-0&#xE001; &amp; \(x\)"#)
+        #expect(
+            plainText(of: firstParagraphRuns(doc))
+                == "\u{E000}swiftlatex-0\u{E001} & \\(x\\)"
+        )
+        #expect(doc.allMathSegments.map(\.latex) == ["x"])
+    }
+
     @Test func escapedMathDelimitersKeepBackslash() {
         // 수식으로 인식되지 않은 구분자는 backslash를 유지해야 한다.
         // 그래야 왜 수식이 되지 않았는지 사용자가 볼 수 있다(fail-open 계약).
@@ -328,8 +347,56 @@ import Testing
     }
 
     @Test func deepMarkdownDoesNotCrash() {
-        let deep = String(repeating: "> ", count: 64) + "깊다"
-        #expect(!parse(deep).blocks.isEmpty)
+        let deep = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth) + "깊다"
+        let doc = parse(deep)
+        #expect(!doc.wasTruncated)
+        #expect(!doc.blocks.isEmpty)
+    }
+
+    @Test func excessiveBlockQuoteDepthIsTruncatedBeforeParsing() {
+        let deep = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth + 1) + "깊다"
+        let bounded = InputLimits.bound(deep)
+        #expect(bounded.wasTruncated)
+        #expect(bounded.text.contains(InputLimits.truncationMarker))
+
+        let doc = parse(deep)
+        #expect(doc.wasTruncated)
+        #expect(plainText(of: firstParagraphRuns(doc)).contains(InputLimits.truncationMarker))
+    }
+
+    @Test func quoteLikeTextInsideFencedCodeDoesNotTriggerDepthLimit() {
+        let quoteLikeCode = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth + 1) + "코드"
+        let markdown = "```text\n\(quoteLikeCode)\n```"
+
+        let bounded = InputLimits.bound(markdown)
+        #expect(!bounded.wasTruncated)
+
+        let doc = parse(markdown)
+        #expect(!doc.wasTruncated)
+        #expect(doc.blocks.contains { block in
+            if case .codeBlock(_, let code) = block {
+                return code == quoteLikeCode
+            }
+            return false
+        })
+    }
+
+    @Test func deepBlockQuoteAfterCRLineEndingIsTruncated() {
+        let deep = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth + 1) + "깊다"
+        let bounded = InputLimits.bound("첫 줄\r\(deep)")
+        #expect(bounded.wasTruncated)
+    }
+
+    @Test func crlfFenceClosingDoesNotBypassFollowingDepthLimit() {
+        let deep = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth + 1) + "깊다"
+        let markdown = "```\r\ncode\r\n```\r\n\(deep)"
+        #expect(InputLimits.bound(markdown).wasTruncated)
+    }
+
+    @Test func exitingQuotedFenceRestoresDepthLimit() {
+        let deep = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth + 1) + "깊다"
+        let markdown = "> ```\noutside\n\(deep)"
+        #expect(InputLimits.bound(markdown).wasTruncated)
     }
 
     @Test func manyNodesDoesNotCrash() {

@@ -18,10 +18,10 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
-                NavigationLink("AI 챗봇") {
+                NavigationLink("AI 챗봇 (SwiftUI)") {
                     ChatDemoView()
                 }
-                NavigationLink("UIKit 네이티브 (LatexMarkdownUIView)") {
+                NavigationLink("AI 챗봇 (UIKit)") {
                     UIKitChatDemoView()
                 }
                 NavigationLink("UIKit UIHostingConfiguration") {

@@ -5,10 +5,11 @@ import SwiftLatex
 /// UIKit 네이티브 렌더러(`LatexMarkdownUIView`) 확인 화면.
 ///
 /// `UIHostingConfiguration`을 쓰지 않는다. 확인 대상은 세 가지다.
-/// 1. 재사용 셀 안의 self-sizing — 수식 hydration은 최초 레이아웃 뒤에 오므로
-///    `onContentSizeChange`로 높이를 다시 재야 한다.
-/// 2. 테마 색·폰트 교체가 살아 있는 뷰에 즉시 반영되는지.
-/// 3. 같은 fixture를 SwiftUI 화면(`ChatDemoView`)과 나란히 비교.
+/// 1. 메시지별 완성 뷰 재사용 — 다시 보이는 답변은 UIKit 뷰 계층을 재구성하지 않는다.
+/// 2. 재사용 셀 안의 self-sizing — fallback이 수식 이미지로 바뀌면 해당 셀만
+///    다시 측정해 SwiftUI 화면과 같은 progressive 표시를 유지한다.
+/// 3. 테마 색·폰트 교체가 살아 있는 뷰에 즉시 반영되는지.
+/// 4. 같은 fixture를 SwiftUI 화면(`ChatDemoView`)과 나란히 비교.
 
 // MARK: - 테마 프리셋
 
@@ -86,9 +87,9 @@ struct UIKitChatDemoView: View {
         UIKitChatList(configuration: configuration)
             .ignoresSafeArea(edges: .bottom)
             .navigationTitle("UIKit 네이티브")
-            // large title 축소 전환은 스크롤 오프셋에 연동된다. 셀 재측정
-            // (`performBatchUpdates`)이 전환 중 contentSize를 바꾸면 nav bar가 중간
-            // 상태로 굳어 제목이 사라지고 영역만 남는다. inline로 고정해 회피한다.
+            // large title 축소 전환은 스크롤 오프셋에 연동된다. 셀 재측정이 전환 중
+            // contentSize를 바꾸면 nav bar가 중간 상태로 굳어 제목이 사라지고
+            // 영역만 남는다. inline로 고정해 회피한다.
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -124,29 +125,30 @@ struct UIKitChatList: UIViewControllerRepresentable {
 // MARK: - Collection view
 
 final class UIKitChatViewController: UICollectionViewController {
+    private let assistantMessageViewCache = AssistantMessageViewCache()
+
     var configuration: UIKitChatConfiguration {
         didSet {
             guard configuration != oldValue else { return }
-            // 화면에 있는 셀은 즉시 갱신한다. 재사용될 셀은 configure에서 새 값을 받는다.
-            for cell in collectionView.visibleCells {
-                (cell as? AssistantMessageCell)?.apply(configuration)
+            let mustDiscardCachedViews = configuration.parsesDollarMath != oldValue.parsesDollarMath
+                || configuration.preset != oldValue.preset
+            if mustDiscardCachedViews {
+                assistantMessageViewCache.removeAll()
             }
-            invalidateHeights()
+            for case let cell as AssistantMessageCell in collectionView.visibleCells {
+                cell.apply(configuration)
+            }
         }
     }
 
     private var dataSource: UICollectionViewDiffableDataSource<Int, ChatMessage>!
-    private var heightInvalidationScheduled = false
-    private var needsHeightInvalidation = false
 
     init(configuration: UIKitChatConfiguration) {
         self.configuration = configuration
         var listConfiguration = UICollectionLayoutListConfiguration(appearance: .plain)
         listConfiguration.showsSeparators = false
         listConfiguration.backgroundColor = .systemGroupedBackground
-        super.init(
-            collectionViewLayout: UICollectionViewCompositionalLayout.list(using: listConfiguration)
-        )
+        super.init(collectionViewLayout: UICollectionViewCompositionalLayout.list(using: listConfiguration))
     }
 
     @available(*, unavailable)
@@ -158,12 +160,16 @@ final class UIKitChatViewController: UICollectionViewController {
         super.viewDidLoad()
         collectionView.backgroundColor = .systemGroupedBackground
         collectionView.accessibilityIdentifier = "uikitChatList"
+        collectionView.selfSizingInvalidation = .enabled
 
         let assistantRegistration = UICollectionView.CellRegistration<AssistantMessageCell, ChatMessage> {
             [weak self] cell, _, message in
             guard let self else { return }
-            cell.onHeightChange = { [weak self] in self?.invalidateHeights() }
-            cell.configure(message, configuration: self.configuration)
+            cell.configure(
+                message,
+                configuration: self.configuration,
+                entry: self.assistantMessageViewCache.entry(for: message)
+            )
         }
         let userRegistration = UICollectionView.CellRegistration<UserMessageCell, ChatMessage> { cell, _, message in
             cell.configure(message)
@@ -187,58 +193,70 @@ final class UIKitChatViewController: UICollectionViewController {
         snapshot.appendItems(ChatFixtures.conversation)
         dataSource.apply(snapshot, animatingDifferences: false)
     }
+}
 
-    /// 수식 이미지 hydration과 테마 교체는 최초 레이아웃 뒤에 높이를 바꾼다.
-    ///
-    /// `invalidateLayout()`만으로는 부족하다(실측). compositional list layout은 이미 측정한
-    /// 셀에게 `preferredLayoutAttributesFitting`을 다시 묻지 않아서, 셀이 옛 높이에 묶인 채
-    /// 내용이 눌리고 텍스트가 겹친다. `performBatchUpdates(nil)`이 self-sizing 셀의
-    /// 재측정을 강제하는 경로다.
-    ///
-    /// 셀마다 즉시 호출하면 스크롤 중 과도하게 재계산되므로 runloop당 1회로 합친다.
-    /// 스크롤 중에는 batch update가 제스처·감속을 방해하므로 멈춘 뒤로 미룬다.
-    private func invalidateHeights() {
-        guard !heightInvalidationScheduled else { return }
-        heightInvalidationScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.heightInvalidationScheduled = false
-            guard !self.collectionView.isDragging, !self.collectionView.isDecelerating else {
-                self.needsHeightInvalidation = true
-                return
+/// 고정 fixture 데모용 캐시다. 셀 재사용과 별개로 메시지 identity가 뷰 identity를 결정한다.
+/// 실제 무한 피드에는 메모리 비용을 측정한 뒤 상한과 eviction 정책을 추가해야 한다.
+@MainActor
+private final class AssistantMessageViewCache {
+    final class Entry {
+        let view = LatexMarkdownUIView()
+        private(set) var hasRenderedContent = false
+        private weak var cell: AssistantMessageCell?
+        private var observesContentChanges = false
+
+        func attach(to cell: AssistantMessageCell) {
+            self.cell = cell
+        }
+
+        func detach(from cell: AssistantMessageCell) {
+            guard self.cell === cell else { return }
+            self.cell = nil
+        }
+
+        /// 생성 직후의 빈 fallback 콜백은 무시하고, 현재 메시지를 넣은 뒤의 갱신만 받는다.
+        func beginObservingContentChanges() {
+            guard !observesContentChanges else { return }
+            observesContentChanges = true
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.view.onContentSizeChange = { [weak self] in
+                    guard let self else { return }
+                    self.hasRenderedContent = true
+                    self.cell?.renderedContentDidChange(for: self)
+                }
             }
-            self.collectionView.performBatchUpdates(nil)
         }
     }
 
-    private func flushHeightInvalidation() {
-        guard needsHeightInvalidation else { return }
-        needsHeightInvalidation = false
-        collectionView.performBatchUpdates(nil)
+    private var entries: [ChatMessage.ID: Entry] = [:]
+
+    func entry(for message: ChatMessage) -> Entry {
+        if let entry = entries[message.id] {
+            return entry
+        }
+
+        let entry = Entry()
+        entries[message.id] = entry
+        return entry
     }
 
-    override func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if !decelerate { flushHeightInvalidation() }
-    }
-
-    override func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        flushHeightInvalidation()
+    func removeAll() {
+        entries.removeAll()
     }
 }
 
 // MARK: - 답변 셀
 
 final class AssistantMessageCell: UICollectionViewCell {
-    private let latexView = LatexMarkdownUIView()
     private let caseLabel = UILabel()
     private let caseCapsule = UIStackView()
     private let caseRow = UIStackView()
     private let bubble = UIView()
 
     private var caseName = ""
-    private var hasRenderedCurrentMessage = false
-
-    var onHeightChange: (() -> Void)?
+    private var entry: AssistantMessageViewCache.Entry?
+    private var latexViewConstraints: [NSLayoutConstraint] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -270,15 +288,6 @@ final class AssistantMessageCell: UICollectionViewCell {
         bubble.layer.cornerCurve = .continuous
         bubble.clipsToBounds = true
 
-        latexView.translatesAutoresizingMaskIntoConstraints = false
-        bubble.addSubview(latexView)
-        NSLayoutConstraint.activate([
-            latexView.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 14),
-            latexView.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: 14),
-            latexView.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -14),
-            latexView.bottomAnchor.constraint(equalTo: bubble.bottomAnchor, constant: -14),
-        ])
-
         let root = UIStackView(arrangedSubviews: [caseRow, bubble])
         root.axis = .vertical
         root.spacing = 8
@@ -291,15 +300,6 @@ final class AssistantMessageCell: UICollectionViewCell {
             root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
         ])
-
-        latexView.onContentSizeChange = { [weak self] in
-            guard let self else { return }
-            if !self.hasRenderedCurrentMessage {
-                self.hasRenderedCurrentMessage = true
-                self.latexView.alpha = 1
-            }
-            self.onHeightChange?()
-        }
     }
 
     @available(*, unavailable)
@@ -307,41 +307,63 @@ final class AssistantMessageCell: UICollectionViewCell {
         fatalError("AssistantMessageCell은 코드로만 생성한다")
     }
 
-    /// 새 markdown의 parse가 끝나기 전에는 이전 문서가 남아 보인다. 스트리밍에서는 그 잔상이
-    /// 의도된 동작(최신 원문 fallback)이지만 셀 재사용에서는 다른 메시지가 보이는 셈이다.
-    /// 첫 렌더까지 감춰 둔다.
     override func prepareForReuse() {
         super.prepareForReuse()
-        hasRenderedCurrentMessage = false
-        latexView.alpha = 0
+        detachMessageView()
     }
 
-    func configure(_ message: ChatMessage, configuration: UIKitChatConfiguration) {
+    fileprivate func configure(
+        _ message: ChatMessage,
+        configuration: UIKitChatConfiguration,
+        entry: AssistantMessageViewCache.Entry
+    ) {
         caseName = message.caseName
         caseLabel.text = message.caseName
-
-        // `LatexMarkdownUIView`는 같은 값 재대입을 무시한다(중복 파싱 방지 계약).
-        // 셋 다 그대로면 재파싱도 `onContentSizeChange`도 없으므로 아래 alpha 복구와
-        // 높이 재측정이 영구히 오지 않는다. 같은 메시지로 재사용된 셀이 빈 버블로
-        // 보이고, 셀 높이가 이전 값에 묶여 케이스 라벨 캡슐이 늘어나던 원인이다.
-        let willReparse = latexView.markdown != message.text
-            || latexView.parsesDollarMath != configuration.parsesDollarMath
-            || latexView.theme != configuration.preset.theme
-
+        attachMessageView(entry)
         apply(configuration)
-        latexView.markdown = message.text
-
-        if !willReparse {
-            hasRenderedCurrentMessage = true
-            latexView.alpha = 1
-            onHeightChange?()
-        }
+        entry.view.markdown = message.text
+        entry.beginObservingContentChanges()
     }
 
     func apply(_ configuration: UIKitChatConfiguration) {
         caseRow.isHidden = !(configuration.showsCaseLabels && !caseName.isEmpty)
-        latexView.theme = configuration.preset.theme
-        latexView.parsesDollarMath = configuration.parsesDollarMath
+        entry?.view.theme = configuration.preset.theme
+        entry?.view.parsesDollarMath = configuration.parsesDollarMath
+    }
+
+    fileprivate func renderedContentDidChange(for entry: AssistantMessageViewCache.Entry) {
+        guard self.entry === entry else { return }
+        entry.view.alpha = 1
+        contentView.invalidateIntrinsicContentSize()
+    }
+
+    private func attachMessageView(_ newEntry: AssistantMessageViewCache.Entry) {
+        guard entry !== newEntry else { return }
+        detachMessageView()
+
+        entry = newEntry
+        let latexView = newEntry.view
+        latexView.alpha = newEntry.hasRenderedContent ? 1 : 0
+        latexView.translatesAutoresizingMaskIntoConstraints = false
+        bubble.addSubview(latexView)
+        latexViewConstraints = [
+            latexView.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 14),
+            latexView.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: 14),
+            latexView.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -14),
+            latexView.bottomAnchor.constraint(equalTo: bubble.bottomAnchor, constant: -14),
+        ]
+        NSLayoutConstraint.activate(latexViewConstraints)
+        newEntry.attach(to: self)
+        contentView.invalidateIntrinsicContentSize()
+    }
+
+    private func detachMessageView() {
+        guard let entry else { return }
+        entry.detach(from: self)
+        NSLayoutConstraint.deactivate(latexViewConstraints)
+        latexViewConstraints.removeAll()
+        entry.view.removeFromSuperview()
+        self.entry = nil
     }
 }
 
