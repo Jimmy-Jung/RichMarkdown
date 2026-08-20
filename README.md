@@ -3,10 +3,10 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **1.2.0** — SwiftUI와 UIKit이 같은 parse·raster·theme 경로를 공유하는 안정 릴리스다.
-> 공개 API 변경은 [Semantic Versioning](https://semver.org/lang/ko/)을 따른다. 변경 내역은
+> **0.2.0 beta** — SwiftUI와 UIKit이 같은 parse·raster·theme 경로를 공유한다.
+> `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
 LLM 채팅 메시지를 네이티브로 렌더하는 Swift Package. Markdown, 인라인/블록
@@ -24,7 +24,7 @@ generation 관리를 공유한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다.
 
-## 1.2.0 핵심
+## 0.2.0 베타 핵심
 
 - **두 renderer, 하나의 결과** — SwiftUI `LatexMarkdownView`와 네이티브 UIKit
   `LatexMarkdownUIView`가 같은 parser, 수식 raster cache, theme, 입력 보호 규칙을 쓴다.
@@ -60,8 +60,8 @@ generation 관리를 공유한다.
 
 ```swift
 dependencies: [
-    // 1.x는 안정 SemVer를 따른다. 1.2 이상 2.0 미만의 호환 릴리스를 받는다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMajor(from: "1.2.0")),
+    // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.2 minor로 고정한다.
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.2.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),

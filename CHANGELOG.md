@@ -1,11 +1,11 @@
 # Changelog
 
 이 프로젝트는 [Semantic Versioning](https://semver.org/lang/ko/)을 따른다.
-`1.x`부터 공개 API의 호환성은 major/minor/patch 규칙으로 관리한다.
+`0.x`는 베타이며 minor 버전에서 공개 API가 바뀔 수 있다.
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-08-20
+## [0.2.0] - 2026-08-20
 
 ### 추가
 
@@ -111,6 +111,6 @@
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
-[1.2.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/1.2.0
+[0.2.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.2.0
 [0.1.1]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.1
 [0.1.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.0
