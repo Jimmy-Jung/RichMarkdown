@@ -1,9 +1,11 @@
 # Changelog
 
 이 프로젝트는 [Semantic Versioning](https://semver.org/lang/ko/)을 따른다.
-`0.x`는 베타이며 minor 버전에서 공개 API가 바뀔 수 있다.
+`1.x`부터 공개 API의 호환성은 major/minor/patch 규칙으로 관리한다.
 
 ## [Unreleased]
+
+## [1.2.0] - 2026-08-20
 
 ### 추가
 
@@ -18,12 +20,19 @@
   같은 값에서 각자 폰트를 만들고 렌더 요청 key에도 들어간다.
 - `LatexMathFont` — 수식 서체 12종. 이전에는 Latin Modern 고정이었다.
   `MathRenderKey`에 실려 서체별로 raster를 따로 캐시한다.
+- `ParseCache` — canonical bounded 입력과 dollar-math 설정을 key로 ParsedDocument를
+  보관한다. 같은 메시지의 재렌더에서 Markdown parsing을 줄이고, stale generation은
+  cache에 저장하지 않는다.
+- 입력 제한 강화 — byte 상한뿐 아니라 과도하게 깊은 block quote를 Markdown parser 전에
+  제한해 pathological input이 UI를 점유하지 않게 한다.
 
 - 데모 앱에 **UIKit 네이티브** 화면 추가
   (`Examples/SwiftLatexDemo/Sources/UIKitChatDemo.swift`).
   `LatexMarkdownUIView`를 `UICollectionView` 재사용 셀에 직접 넣고, 테마 프리셋
   4종(기본 / 큰 글자 / Serif / 색 강조)으로 폰트·색·수식 서체 커스터마이즈를 확인한다.
   프리셋별 스크린샷을 남기는 UI 테스트 `testUIKitNativeCellsRender`를 함께 추가했다.
+- 데모의 `렌더 옵션` 메뉴에 SwiftUI/UIKit 공통 테마 프리셋을 추가하고, 루트 진입 이름을
+  **AI 챗봇 (SwiftUI)** / **AI 챗봇 (UIKit)**으로 맞췄다.
 
 ### 수정
 
@@ -50,6 +59,10 @@
   weak 참조를 담은 `Sendable` 박스로 감싼다(수명 규칙은 기존 `[weak cache]`와 동일).
 - `MathRenderKey`의 `fontIdentifier: String`이 `mathFont: LatexMathFont`로 바뀐다
   (`package` 심볼이라 공개 API 영향 없음).
+- 새 render request가 cache miss일 때 이전 문서·수식 이미지를 보이지 않게 하고 최신
+  bounded fallback을 즉시 표시한다. UIKit 셀 재사용 중 다른 메시지의 잔상이 남지 않는다.
+- UIKit 네이티브 데모는 완성된 메시지 뷰를 ID별로 보관해 재방문 시 `UIStackView` 블록
+  계층을 다시 만들지 않는다. 테마·파싱 옵션 변경 시에는 cache를 비운다.
 
 ## [0.1.1] - 2026-08-19
 
@@ -98,5 +111,6 @@
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
+[1.2.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/1.2.0
 [0.1.1]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.1
 [0.1.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.0

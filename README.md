@@ -3,10 +3,11 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.1%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)](CHANGELOG.md)
 
-> **베타 (0.1.1)** — 공개 표면은 작지만 아직 `1.0`이 아니다. minor 버전에서 API가
-> 바뀔 수 있다. 변경 내역은 [CHANGELOG.md](CHANGELOG.md)를 본다.
+> **1.2.0** — SwiftUI와 UIKit이 같은 parse·raster·theme 경로를 공유하는 안정 릴리스다.
+> 공개 API 변경은 [Semantic Versioning](https://semver.org/lang/ko/)을 따른다. 변경 내역은
+> [CHANGELOG.md](CHANGELOG.md)를 본다.
 
 LLM 채팅 메시지를 네이티브로 렌더하는 Swift Package. Markdown, 인라인/블록
 LaTeX 수식, 코드 블록을 하나의 뷰로 표시한다. SwiftUI는 `LatexMarkdownView`,
@@ -22,6 +23,16 @@ generation 관리를 공유한다.
 - WebView·HTML 실행 없음. 전부 `Text`, `Image`, `ScrollView`로 렌더한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다.
+
+## 1.2.0 핵심
+
+- **두 renderer, 하나의 결과** — SwiftUI `LatexMarkdownView`와 네이티브 UIKit
+  `LatexMarkdownUIView`가 같은 parser, 수식 raster cache, theme, 입력 보호 규칙을 쓴다.
+- **UIKit self-sizing** — 수식 hydration으로 높이가 바뀌면 `onContentSizeChange`가 해당
+  셀만 다시 측정하게 한다. 데모는 한 번 완성된 메시지 뷰를 ID별로 다시 붙여 스크롤 중
+  뷰 계층 재구성을 피한다.
+- **안전한 스트리밍** — 최신 누적 원문만 처리하고, cache miss에서는 이전 메시지 대신
+  최신 bounded fallback을 즉시 표시한다. 입력 크기와 비정상적으로 깊은 인용도 제한한다.
 
 설계 문서: [DEVELOPMENT.md](DEVELOPMENT.md)
 
@@ -49,8 +60,8 @@ generation 관리를 공유한다.
 
 ```swift
 dependencies: [
-    // 0.x 베타다. minor 버전에서 공개 API가 바뀔 수 있으므로 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.1.1")),
+    // 1.x는 안정 SemVer를 따른다. 1.2 이상 2.0 미만의 호환 릴리스를 받는다.
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMajor(from: "1.2.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
@@ -211,6 +222,18 @@ view.theme = .default
 `markdown` setter는 입력 보호 상한을 적용한다. 따라서 getter는 원문이 아니라 실제로
 렌더되는 canonical 텍스트(상한 초과 시 bounded prefix와 생략 marker)를 반환한다.
 
+### UICollectionView 재사용
+
+일반적인 피드에서는 셀이 재사용될 때 `markdown`을 새 메시지로 설정하면 된다. 다만
+현재 세션의 메시지 ID가 고정되어 있고 이미 완성된 답변을 자주 다시 보여 주는 경우에는
+소비 앱이 `message.id → LatexMarkdownUIView`를 보관한 뒤 같은 뷰를 다시 부착할 수 있다.
+`UIView`는 한 번에 하나의 superview만 가질 수 있으므로, 기존 셀의 제약을 deactivate하고
+분리한 뒤 새 bubble에 pin해야 한다. 테마·달러 수식 설정·Dynamic Type·display scale이
+바뀌면 해당 캐시는 무효화한다. 무한 피드에서는 뷰를 무제한 보관하지 말고 상한을 둔다.
+
+`Examples/SwiftLatexDemo`의 **AI 챗봇 (UIKit)**이 이 전략을 보여 준다. 이는 패키지 API가
+아니며 메시지 수명과 메모리 예산은 소비 앱이 결정한다.
+
 셀에서 쓸 때는 수식 이미지 hydration이 최초 레이아웃 뒤에 오므로,
 `onContentSizeChange`로 self-sizing 재측정을 요청한다.
 
@@ -263,17 +286,17 @@ host.didMove(toParent: self)
 cd Examples/SwiftLatexDemo && xcodegen generate && open SwiftLatexDemo.xcodeproj
 ```
 
-LLM 챗봇 화면을 스크롤하며 렌더 케이스를 한 번에 확인한다 — 인라인/블록 수식,
-코드 블록, 리스트·인용, 링크 allowlist, 금지 문맥 보호, 실패 시 원문 표시,
-다국어·RTL, 미지원 노드 강등, 긴 답변. 우측 상단 메뉴에서 `$` 수식 opt-in을
-토글해 비교한다.
+루트 목록의 **AI 챗봇 (SwiftUI)**와 **AI 챗봇 (UIKit)**에서 같은 fixture를 비교한다.
+인라인/블록 수식, 코드 블록, 리스트·인용, 링크 allowlist, 금지 문맥 보호, 실패 시
+원문 표시, 다국어·RTL, 미지원 노드 강등, 긴 답변을 한 화면에서 확인한다. 두 화면의
+우측 상단 `렌더 옵션` 메뉴는 `$` 수식 opt-in, 케이스 라벨, 테마 프리셋을 제공한다.
 
 UIKit 화면 2개가 함께 들어 있다.
 
 - **UIKit 네이티브** — `LatexMarkdownUIView`를 재사용 셀에 직접 넣은 화면.
-  테마 프리셋(기본 / 큰 글자 / Serif / 색 강조)을 메뉴에서 바꿔 폰트·색·수식 서체
-  커스터마이즈를 눈으로 확인한다. `-swiftlatexPreset Serif` launch argument로
-  특정 프리셋에서 시작할 수 있다.
+  메시지 ID별 완성 뷰를 다시 부착해 재방문 스크롤 비용을 줄인다. 테마 프리셋
+  (기본 / 큰 글자 / Serif / 색 강조)을 메뉴에서 바꿔 폰트·색·수식 서체를 확인한다.
+  `-swiftlatexPreset Serif` launch argument로 특정 프리셋에서 시작할 수 있다.
 - **UIKit UIHostingConfiguration** — SwiftUI 뷰를 호스팅하는 셀 예제.
 
 ---
