@@ -180,6 +180,9 @@ public final class LatexMarkdownUIView: UIView {
     }
 
     private func rebuild() {
+        let signpostState = SwiftLatexSignposts.rebuild.beginInterval("rebuild")
+        defer { SwiftLatexSignposts.rebuild.endInterval("rebuild", signpostState) }
+
         for view in blockStack.arrangedSubviews {
             blockStack.removeArrangedSubview(view)
             view.removeFromSuperview()
