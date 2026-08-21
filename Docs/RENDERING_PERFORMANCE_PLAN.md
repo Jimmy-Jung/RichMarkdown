@@ -1,8 +1,8 @@
 # UIKit 렌더링 성능 개선안 — 벡터 렌더링 검토 포함
 
 - 작성자: JunyoungJung
-- 작성일: 2026-08-21 (rev.3 — P2·P3 구현 완료. 실측 정정과 구현 기록을 §9에 추가)
-- 상태: **P2·P3 구현 완료** (코드·테스트·`scripts/ci-test.sh` 통과).
+- 작성일: 2026-08-21 (rev.4 — §9.4·§9.5 부채 해소 반영)
+- 상태: **P2·P3 구현 완료 + §9.4·§9.5 부채 해소** (코드·테스트·`scripts/ci-test.sh` 통과).
   **P1의 실기기 Instruments 측정은 미완** — signpost 계측만 들어갔다. §9.1을 먼저 읽어라
 - 참고 소스: `~/Documents/GitHub/SwiftMath` (upstream master), `~/Documents/GitHub/textual` (Textual + swiftui-math)
 - 관련 문서: `DEVELOPMENT.md` §4(비동기 계약), §6(raster 캐시), §"엔진 선택 근거"
@@ -483,23 +483,47 @@ raster(`MathImage`, 실제 요청 size 사용)와 정렬 기준이 갈리므로 
 | 17 | `displayErrorInline = false`를 `latex` 대입 **뒤에** 설정 | 대입 시점에 내부 errorLabel 표시 여부가 정해진다 — 뒤에 걸면 오류 텍스트가 한 번 보인다 |
 | 18 | 뷰 파일에 `import SwiftMath` 추가 | §5 통제권 계약(SwiftMath 호출을 한 파일에 가둔다)이 깨진다. `BlockMathVectorView.make`가 `UIView?`를 반환한다 (§9.2-③) |
 
-### 9.4 남은 낭비 — 아무도 읽지 않는 블록 수식 raster
+### 9.4 [해소] 아무도 읽지 않는 블록 수식 raster — `rastersDisplayMath` opt-out
 
-§8.3-"`LatexRenderModel`은 변경하지 않는다"를 지켰으므로, model은 여전히
-`ParsedDocument.allMathSegments` 전체(블록 수식 포함)를 raster한다. UIKit 렌더러만
-쓰는 앱에서 블록 수식 raster 결과는 **아무도 읽지 않는다.**
+**해소됨 (2026-08-21, 커밋 `5b09c6d`).** 원래 기록: §8.3-"`LatexRenderModel`은
+변경하지 않는다"를 지켰으므로 model이 `allMathSegments` 전체(블록 수식 포함)를
+raster했고, UIKit 렌더러에서 블록 수식 raster 결과는 아무도 읽지 않았다.
 
-방치한 이유: worker에서 실행되고 main을 잡지 않으며, 게시 계약·generation 규칙·idle
-계약을 건드리지 않는다. 없애려면 model이 렌더러별로 필요한 segment 집합을 구분해야
-하고 그건 두 렌더러가 공유하는 게시 계약을 바꾸는 일이다. P1 측정에서 `raster`
-signpost가 hitch 상위로 나오면 그때 다루는 게 맞다.
+해소 방식 — "렌더러가 필요한 segment 집합을 요청에 싣는다"의 최소형:
 
-### 9.5 재사용률이 낮은 경로 — 원문 fallback 프레임
+- `LatexRenderModel.Request.rastersDisplayMath: Bool = true` (package). 기본값
+  true라 SwiftUI 렌더러·기존 호출부는 무변경. UIKit 뷰만 false를 보낸다.
+- model의 raster 루프와 `cachedImages`가 `rasterSegments(for:request:)`를 공유 —
+  false면 `kind.isDisplay` segment 제외. display delimiter는 공백 제외 paragraph
+  전체일 때만 segment가 되므로(§3) 이 필터가 곧 "블록 수식 제외"다.
+- **게시 계약·generation 규칙·idle 계약은 그대로다.** 2단계 게시 구조 무변경 —
+  raster할 목록만 줄었다.
+- 부수 개선: 블록 수식만 있는 문서는 기다릴 raster가 없어 원문 fallback 단계 없이
+  **단일 게시**(publishComplete)로 끝난다. UIKit에서 rebuild가 1회 줄어든다.
 
-P2로 블록 뷰는 재사용되지만 **fallback 프레임 자체는 남는다.** markdown이 바뀌면
-`document = nil` 게시 → rebuild가 원문 전체를 담은 `UITextView` 하나를 만든다. 즉
-스트리밍 갱신마다 큰 `UITextView` 하나를 만들고 버린다.
+회귀 방지: `skipsDisplayMathRasterWhenRequestOptsOut`(캐시 부재로 raster 미실행
+판정), `blockMathOnlyDocumentCompletesWithoutRasterWhenOptedOut`,
+`doesNotRasterBlockMath`(UIKit 뷰 경유).
 
-없애려면 model이 "이전 문서를 유지한 채 새 parse를 기다리는" 상태를 갖거나 뷰가
-fallback 표시를 한 프레임 미뤄야 한다. 둘 다 §4의 "최신 원문 fallback 즉시 표시"
-계약과 §8.5-8(새 비동기 hop 금지)에 걸리므로 P1 측정 없이 손대지 않는다.
+### 9.5 [해소] 원문 fallback 프레임의 `UITextView` churn — 인스턴스 재사용
+
+**해소됨 (2026-08-21, 커밋 `c7fe0a7`).** 원래 기록: markdown이 바뀌면
+`document = nil` 게시 → rebuild가 원문 전체를 담은 `UITextView`를 만들었다 —
+스트리밍 갱신마다 TextKit 스택 하나를 만들고 버렸다.
+
+해소 방식: fallback 전용 `LatexTextView` 인스턴스 하나(`fallbackTextView`)를 뷰가
+유지하고 attributed string만 교체한다. `setBlockViews`의 `reusedCount: 1`로 연속
+fallback 프레임(스트리밍)에서는 계층 조작도 없다. 폰트·색 속성은 매번 현재 값으로
+다시 만들므로 fallback 표시 중의 테마·trait 변경도 흡수된다.
+
+원래 검토했던 두 방안(model이 이전 문서를 유지, 뷰가 fallback을 한 프레임 지연)은
+채택하지 않았다 — §4 "최신 원문 fallback 즉시 표시" 계약과 §8.5-8(새 비동기 hop
+금지)에 걸린다는 판단 그대로다. 인스턴스 재사용은 두 계약을 건드리지 않는다.
+
+**남는 상한**: fallback 프레임 자체와 텍스트 레이아웃 비용은 남는다 — 내용이 실제로
+바뀌므로 피할 수 없다. 사라진 것은 TextKit 스택 생성/파괴다. 이 상한이 P1 측정에서
+hitch 상위로 나오면 그때 §4 계약 개정을 검토한다.
+
+회귀 방지: `reusesFallbackTextViewAcrossStreamingUpdates` — MainActor 큐 순서
+(coalesced rebuild Task가 worker kick Task보다 먼저 enqueue)로 fallback 프레임을
+결정적으로 관측해 인스턴스 identity를 확인한다.

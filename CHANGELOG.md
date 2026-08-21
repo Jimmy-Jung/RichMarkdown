@@ -23,6 +23,13 @@ UIKit 렌더러(`LatexMarkdownUIView`)의 스크롤 버벅임 개선. 공개 API
 - **`rebuild` signpost 추가** (`dev.swiftlatex` / `rebuild`). Instruments의
   Time Profiler + Hitches에서 hitch 원인이 뷰 재생성·Auto Layout인지 수식 raster인지
   갈라낼 수 있다.
+- **블록 수식 raster 생략.** UIKit 렌더러의 요청은 블록 수식을 raster 대상에서
+  제외한다 — 벡터 뷰로 그리므로 아무도 읽지 않던 bitmap을 더 이상 만들지 않는다.
+  블록 수식만 있는 문서는 원문 fallback 단계 없이 단일 게시로 렌더된다.
+  SwiftUI 렌더러의 raster 범위는 그대로다.
+- **원문 fallback 뷰 재사용.** 스트리밍 갱신마다 fallback 프레임이 새 `UITextView`
+  (TextKit 스택 통째)를 만들고 버리던 것을, 인스턴스 하나를 유지하고 attributed
+  string만 교체하도록 바꿨다.
 
 SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는다 — 블록 수식 raster를
 유지한다.

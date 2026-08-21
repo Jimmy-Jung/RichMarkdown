@@ -256,6 +256,9 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
   시점에 동기 확정된다. 위 파이프라인은 model 계약이라 그대로다 — 인라인 수식이
   여전히 raster를 쓰고 게시 횟수·generation 규칙·idle 계약이 바뀌지 않는다.
   SwiftUI 렌더러는 블록 수식도 raster를 유지한다.
+  raster 대상에서도 빠진다: UIKit 요청은 `rastersDisplayMath: false`라 model이
+  display segment를 raster하지 않는다 (§6). 블록 수식만 있는 문서는 기다릴 raster가
+  없어 원문 fallback 단계 없이 단일 게시로 끝난다.
 - 게시 경로에 **새 비동기 hop을 넣지 않는다.** 테스트의 idle 판정은
   `hasPendingRebuild`/`hasOutstandingWork` 두 값에만 의존하므로 중간 단계를 늘리면
   기존 테스트가 flaky해진다.
@@ -422,6 +425,10 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
   - `addArrangedSubview`는 **계층에서 떼어낸 뷰에만** 호출한다. 이미 arranged인 뷰에
     다시 호출하면 순서가 바뀔 수 있다. 제거는 `removeArrangedSubview` +
     `removeFromSuperview` 짝으로 한다.
+  - **원문 fallback 뷰도 인스턴스 하나를 재사용한다** (2026-08-21, 같은 문서 §9.5).
+    스트리밍은 markdown 갱신마다 fallback 게시를 거치므로, 매 tick `UITextView`
+    (TextKit 스택 통째)를 만들지 않고 `fallbackTextView` 하나에 attributed string만
+    바꾼다. 텍스트 레이아웃 비용은 남는다 — 내용이 실제로 바뀌므로 피할 수 없다.
 - **블록 수식은 벡터 뷰다** (2026-08-21, 같은 문서 §8.3). `BlockMathVectorView.make`가
   SwiftMath `MTMathUILabel`을 만들어 `UIView?`로 반환한다.
   - 반환 타입을 `UIView`로 둬서 SwiftMath 타입이 뷰 계층으로 새지 않는다 (§5 통제권:
@@ -517,10 +524,10 @@ actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반
 (`MathRenderService.preflightAllows(_:)`). 동기 typeset도 병리적 입력에서는 main을
 오래 잡으므로 raster와 상한을 나누지 않는다.
 
-미해결: `LatexRenderModel`은 여전히 `allMathSegments` 전체를 raster한다 — UIKit
-전용으로 쓰일 때 블록 수식 raster는 아무도 읽지 않는 낭비다. worker에서 실행되고
-게시 계약을 건드리지 않아 지금은 방치한다. 없애려면 model이 렌더러별로 필요한
-segment 집합을 구분해야 하고, 그건 두 렌더러가 공유하는 게시 계약을 바꾸는 일이다.
+렌더러별 raster 범위는 `Request.rastersDisplayMath`(기본 true)가 정한다 (2026-08-21).
+UIKit 뷰는 false를 보내 display segment를 raster 대상에서 제외한다 — 블록 수식
+raster를 아무도 읽지 않는 낭비가 없다. SwiftUI 렌더러는 기본값이라 무변경.
+블록 수식만 있는 문서는 기다릴 raster가 없어 단일 게시(publishComplete)로 끝난다.
 
 ---
 
