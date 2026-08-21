@@ -125,7 +125,10 @@ struct UIKitChatList: UIViewControllerRepresentable {
 // MARK: - Collection view
 
 final class UIKitChatViewController: UICollectionViewController {
-    private let assistantMessageViewCache = AssistantMessageViewCache()
+    /// 화면 재진입에도 렌더된 메시지 뷰를 유지한다 (SwiftUI 화면과 같은 즉시 진입).
+    /// fixture 고정 데모라 상한 없음 — 실제 피드에는 eviction 정책이 필요하다.
+    private static let sharedMessageViewCache = AssistantMessageViewCache()
+    private let assistantMessageViewCache = UIKitChatViewController.sharedMessageViewCache
 
     var configuration: UIKitChatConfiguration {
         didSet {
@@ -149,6 +152,24 @@ final class UIKitChatViewController: UICollectionViewController {
         listConfiguration.showsSeparators = false
         listConfiguration.backgroundColor = .systemGroupedBackground
         super.init(collectionViewLayout: UICollectionViewCompositionalLayout.list(using: listConfiguration))
+        prewarmMessageViews()
+    }
+
+    /// push 전환이 시작되기 전에 전 답변의 parse·render 파이프라인을 미리 돌린다.
+    ///
+    /// 셀 configure 시점에 markdown을 처음 주입하면 async 렌더가 진입 애니메이션과
+    /// 겹쳐 빈 버블이 채워지는 과정이 보인다(alpha 게이팅). 컨트롤러 init은
+    /// 전환 시작 전이므로, 애니메이션(~0.35s) 동안 메시지당 수 ms 파이프라인이
+    /// 완료되어 SwiftUI 화면처럼 완성 상태로 진입한다. 재진입은 static 캐시가
+    /// 이미 렌더된 뷰를 그대로 돌려준다.
+    private func prewarmMessageViews() {
+        for message in ChatFixtures.conversation where message.role == .assistant {
+            let entry = assistantMessageViewCache.entry(for: message)
+            entry.view.theme = configuration.preset.theme
+            entry.view.parsesDollarMath = configuration.parsesDollarMath
+            entry.view.markdown = message.text
+            entry.beginObservingContentChanges()
+        }
     }
 
     @available(*, unavailable)
