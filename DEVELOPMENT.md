@@ -463,6 +463,16 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
     의도된 동작(최신 원문 fallback)이지만 셀 재사용에서는 남의 메시지가 보이는 셈이다.
     데모는 첫 `onContentSizeChange`까지 뷰를 감춘다.
   - 기준 구현: `Examples/SwiftLatexDemo/Sources/UIKitChatDemo.swift`.
+  - **메시지별 뷰를 캐시해 셀 간에 이동시키는 소비자는 늦은 `prepareForReuse`를
+    방어해야 한다** (2026-08-21 실측, 빠른 스크롤 왕복에서 빈 버블로 재현).
+    화면 밖으로 나간 셀은 `prepareForReuse` 없이 reuse pool에 머물다가 다음
+    dequeue 때에야 정리된다. 그 사이 같은 메시지가 다른 셀에 attach되어 뷰가
+    이사했다면, 늦은 정리가 무조건 `removeFromSuperview`할 경우 화면에 보이는
+    셀에서 뷰를 뜯어낸다. 뷰의 `superview`가 아직 자기 컨테이너일 때만 제거한다.
+  - **진입 시 완성 상태를 원하면 push 전환 전에 prewarm한다** (2026-08-21).
+    셀 configure에서 markdown을 처음 주입하면 async 렌더가 진입 애니메이션과
+    겹쳐 빈 버블이 채워지는 과정이 보인다. 데모는 컨트롤러 init에서 전 답변을
+    미리 주입하고 뷰 캐시를 static으로 유지해 재진입을 즉시 완성 상태로 만든다.
 - 리스트 마커는 `alignment = .top`으로 고정한다. 중첩 `UIStackView`의 first baseline은
   안정적으로 노출되지 않는다.
 - **`NSTextAttachment.bounds`에 넣은 값은 `UITextView`에 실린 뒤 `.zero`로 읽힌다**(실측).

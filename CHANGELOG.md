@@ -34,6 +34,16 @@ UIKit 렌더러(`LatexMarkdownUIView`)의 스크롤 버벅임 개선. 공개 API
 SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는다 — 블록 수식 raster를
 유지한다.
 
+### 수정 (데모)
+
+- **UIKit 챗 데모의 빈 버블 결함.** 빠른 스크롤 왕복 뒤 일부 셀이 캐시된 높이의
+  빈 버블로 남았다. 화면 밖 셀이 reuse pool에서 늦게 `prepareForReuse`를 받을 때,
+  이미 다른 셀로 이사한 메시지 뷰를 무조건 `removeFromSuperview`해 화면에 보이는
+  셀에서 뜯어내던 문제. 뷰가 아직 자기 버블에 있을 때만 제거한다.
+- **UIKit 챗 데모 진입 시 빈 버블이 채워지는 과정이 보이던 문제.** 컨트롤러
+  init(push 전환 전)에서 전 답변을 prewarm하고 메시지 뷰 캐시를 화면 수명보다
+  길게 유지해, SwiftUI 화면처럼 완성 상태로 진입한다.
+
 ## [0.2.0] - 2026-08-20
 
 ### 추가
