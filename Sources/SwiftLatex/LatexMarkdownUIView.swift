@@ -627,6 +627,13 @@ public final class LatexMarkdownUIView: UIView {
     private func copyButton(text: String, accessibilityLabel: String) -> UIButton {
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: "doc.on.doc"), for: .normal)
+        // SwiftUI 렌더러(`CopyButton`)의 `.imageScale(.small)`과 같은 글리프 크기.
+        // 없으면 기본 심볼 크기라 UIKit 쪽 아이콘이 더 크게 보인다.
+        // 히트 타깃은 아래 44×44 제약이 담당하므로 글리프만 줄어든다.
+        button.setPreferredSymbolConfiguration(
+            UIImage.SymbolConfiguration(textStyle: .body, scale: .small),
+            forImageIn: .normal
+        )
         // UIButton(type: .system)의 기본 tint는 시스템 파랑이다. SwiftUI 렌더러와
         // 같은 색 규칙을 쓰고 테마로 제어할 수 있게 textColor로 고정한다.
         button.tintColor = UIColor(theme.textColor)
