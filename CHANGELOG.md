@@ -5,6 +5,28 @@
 
 ## [Unreleased]
 
+### 성능
+
+UIKit 렌더러(`LatexMarkdownUIView`)의 스크롤 버벅임 개선. 공개 API 변화는 없다.
+근거와 측정 절차는 `Docs/RENDERING_PERFORMANCE_PLAN.md`에 있다.
+
+- **rebuild 증분화.** 게시마다 블록 뷰를 전부 파괴·재생성하지 않는다. `ParsedBlock`
+  값 비교로 앞쪽 블록의 뷰를 재사용하고 달라진 지점 뒤만 교체한다. 한 요청의 게시는
+  3회(원문 fallback → parsed → 수식 hydration)인데, 이제 수식이 없는 블록은
+  hydration 게시에서 `UITextView`를 다시 만들지 않는다. 폰트·색·displayScale·테마가
+  바뀌면(Dynamic Type, Bold Text, 다크 모드 포함) 전 블록을 새로 만든다.
+- **블록 수식 벡터 렌더.** 블록 수식을 raster `UIImageView` 대신 SwiftMath의 공개
+  벡터 뷰로 그린다. 크기가 rebuild 시점에 동기 확정되므로 원문 → 이미지 교체와
+  그에 따른 셀 self-sizing 재측정이 사라진다. latex parse 실패나 입력 상한 초과는
+  기존과 같이 원문 fallback이다. **인라인 수식은 raster를 유지한다**
+  (`NSTextAttachment`가 이미지를 요구하고 크기가 작아 비용이 낮다).
+- **`rebuild` signpost 추가** (`dev.swiftlatex` / `rebuild`). Instruments의
+  Time Profiler + Hitches에서 hitch 원인이 뷰 재생성·Auto Layout인지 수식 raster인지
+  갈라낼 수 있다.
+
+SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는다 — 블록 수식 raster를
+유지한다.
+
 ## [0.2.0] - 2026-08-20
 
 ### 추가

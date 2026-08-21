@@ -251,6 +251,14 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
 - stale이 된 하위 연산이 늦게 끝나도 결과를 UI나 cache에 넣지 않는다.
 - `RenderedDocument`는 게시 후 변경하지 않는 값이다.
 - 수식 렌더 실패 시 해당 노드만 원문 source를 유지한다.
+- **UIKit 렌더러의 블록 수식은 이 2단계 게시에 참여하지 않는다** (2026-08-21).
+  `LatexMarkdownUIView`는 블록 수식을 SwiftMath의 벡터 뷰로 그리며 크기가 rebuild
+  시점에 동기 확정된다. 위 파이프라인은 model 계약이라 그대로다 — 인라인 수식이
+  여전히 raster를 쓰고 게시 횟수·generation 규칙·idle 계약이 바뀌지 않는다.
+  SwiftUI 렌더러는 블록 수식도 raster를 유지한다.
+- 게시 경로에 **새 비동기 hop을 넣지 않는다.** 테스트의 idle 판정은
+  `hasPendingRebuild`/`hasOutstandingWork` 두 값에만 의존하므로 중간 단계를 늘리면
+  기존 테스트가 flaky해진다.
 
 `RenderService`와 `MathRenderService`의 isolation은 P0 spike로 컴파일·실행 검증한다.
 특히 SwiftMath가 반환하는 이미지 타입을 actor 밖으로 보낼 때 비검증
@@ -388,6 +396,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
 |---|---|---|
 | 블록 배치 | `VStack` + `ForEach` | `UIStackView`(`alignment = .fill`) |
 | 인라인 수식 | `Text(Image)` + `baselineOffset(-descent)` | `MathTextAttachment.attachmentBounds(...)`가 `-descent` 반환 |
+| 블록 수식 | raster `Image` | **SwiftMath 벡터 뷰** (`BlockMathVectorView.make`) |
 | 텍스트 | `Text` + `AttributedString` | `UITextView`(`isScrollEnabled = false`) + `NSAttributedString` |
 | 폰트·색 출처 | `LatexTheme`의 `LatexFont` → `resolvedFont` | 같은 값 → `resolvedUIFont(compatibleWith:)` |
 | Dynamic Type | `@ScaledMetric` 배율 × `LatexFont.unscaledSize` | `UIFontMetrics(compatibleWith: traitCollection)` |
@@ -397,6 +406,39 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
 
 - 한 요청의 게시는 3회(document, mathImages 초기화, hydration)다. `objectWillChange`를
   다음 MainActor hop으로 미뤄 rebuild를 1회로 합친다.
+- **rebuild는 증분이다** (2026-08-21, `Docs/RENDERING_PERFORMANCE_PLAN.md` §8.2).
+  게시가 와도 블록 뷰를 전부 파괴하지 않는다.
+  - 재사용 조건은 셋이다: ① 같은 index의 `ParsedBlock` 값이 같다 ② 그 블록이 이미지
+    사전에서 찾아 쓴 수식 개수가 같다 ③ `AppearanceKey`(theme, 해석된 body/code
+    `UIFont`, resolved 텍스트 RGBA, `displayScale`)가 같다. ③이 다르면 전량 재생성이다.
+  - `AppearanceKey`에 `theme` 자체를 담는다. 인용 바 색처럼 Request에 실리지 않는
+    필드는 파생 폰트·색만으로 구별되지 않는다.
+  - **suffix 교체다.** 값이 처음 달라지는 index부터 뒤쪽 전부를 새로 만든다. 스트리밍은
+    append 중심이라 앞쪽이 안정적이므로 중간 삽입 diff(LCS)는 구현하지 않는다.
+  - **`document == nil` 게시(원문 fallback)에서 `renderedBlocks`를 비우지 않는다.**
+    markdown이 바뀌면 model이 항상 `document = nil`을 먼저 게시하므로 스트리밍 append는
+    매 갱신이 이 단계를 거친다. 여기서 비우면 재사용이 0이 된다. 뷰 인스턴스를 살려 두고
+    계층에서만 떼어 다음 게시에서 앞쪽 블록을 그대로 되돌린다.
+  - `addArrangedSubview`는 **계층에서 떼어낸 뷰에만** 호출한다. 이미 arranged인 뷰에
+    다시 호출하면 순서가 바뀔 수 있다. 제거는 `removeArrangedSubview` +
+    `removeFromSuperview` 짝으로 한다.
+- **블록 수식은 벡터 뷰다** (2026-08-21, 같은 문서 §8.3). `BlockMathVectorView.make`가
+  SwiftMath `MTMathUILabel`을 만들어 `UIView?`로 반환한다.
+  - 반환 타입을 `UIView`로 둬서 SwiftMath 타입이 뷰 계층으로 새지 않는다 (§5 통제권:
+    SwiftMath 호출은 `MathRenderService.swift` 한 파일에 가둔다).
+  - 크기는 `intrinsicContentSize`로 **동기 확정**된다. 내부에서 typeset하므로 원문 →
+    이미지 교체와 그에 따른 셀 self-sizing 재측정이 없다.
+  - UIView다 — actor/worker에서 만들지 말 것. 생성·설정·측정 전부 main thread 전용이다.
+  - 폰트는 `MathFont.mtfont(size:)`(`MTFontV2`)로 만든다. `MTFontManager`의
+    `font(withName:size:)`는 legacy `MTFont(fontWithName:)` 경로로 `.otf`와 math table
+    `.plist`를 직접 읽고 size가 캐시된 값과 다르면 매번 math table을 재구성한다(실측).
+    raster 경로(`MathImage`)도 `mtfont(size:)`를 쓰므로, 같은 구현을 써야 인라인과
+    블록의 글리프 메트릭이 어긋나지 않는다.
+  - `label.fontSize`도 함께 맞춘다. 내부 세로 정렬(`_layoutSubviews`)이 쓰는 별도 저장
+    값이고 기본값 20이 남으면 raster와 정렬 기준이 갈린다.
+  - `displayErrorInline = false`는 `latex` 대입 **전에** 건다. 대입 시점에 내부
+    errorLabel 표시 여부가 이 값으로 정해진다.
+  - 실패(latex parse 오류·preflight 초과)는 기존과 같은 원문 fallback이다.
 - 수식 attachment는 본문 텍스트로 읽히지 않는다. 수식이 있고 링크가 없는 문단은
   `LatexTextView.spokenOverride`로 합성 label을 주고, 이중 낭독을 막기 위해
   `accessibilityValue`를 비운다.
@@ -462,6 +504,23 @@ cache key에는 다음 값을 포함한다.
 이미지 pixel byte를 cost로 사용해 `totalCostLimit`과 항목 수를 제한하고 memory warning에서
 비운다. cache의 reference box는 actor 내부 전용 `final` class와 `let` 필드만 사용한다.
 actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반환한다.
+
+**cache 소비자 (2026-08-21)** — key 구성은 그대로지만 조회하는 쪽이 갈렸다.
+
+| 렌더러 | 인라인 수식 | 블록 수식 |
+|---|---|---|
+| SwiftUI (`LatexMarkdownView`) | raster cache | raster cache |
+| UIKit (`LatexMarkdownUIView`) | raster cache | **벡터 뷰 — cache 미사용** |
+
+`MathRenderKey`는 벡터 경로에서도 그대로 쓴다. 이미지를 찾기 위해서가 아니라
+**같은 preflight 상한과 같은 폰트·색·mode 해석을 공유**하기 위해서다
+(`MathRenderService.preflightAllows(_:)`). 동기 typeset도 병리적 입력에서는 main을
+오래 잡으므로 raster와 상한을 나누지 않는다.
+
+미해결: `LatexRenderModel`은 여전히 `allMathSegments` 전체를 raster한다 — UIKit
+전용으로 쓰일 때 블록 수식 raster는 아무도 읽지 않는 낭비다. worker에서 실행되고
+게시 계약을 건드리지 않아 지금은 방치한다. 없애려면 model이 렌더러별로 필요한
+segment 집합을 구분해야 하고, 그건 두 렌더러가 공유하는 게시 계약을 바꾸는 일이다.
 
 ---
 
