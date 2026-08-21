@@ -469,10 +469,14 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
     dequeue 때에야 정리된다. 그 사이 같은 메시지가 다른 셀에 attach되어 뷰가
     이사했다면, 늦은 정리가 무조건 `removeFromSuperview`할 경우 화면에 보이는
     셀에서 뷰를 뜯어낸다. 뷰의 `superview`가 아직 자기 컨테이너일 때만 제거한다.
-  - **진입 시 완성 상태를 원하면 push 전환 전에 prewarm한다** (2026-08-21).
-    셀 configure에서 markdown을 처음 주입하면 async 렌더가 진입 애니메이션과
-    겹쳐 빈 버블이 채워지는 과정이 보인다. 데모는 컨트롤러 init에서 전 답변을
-    미리 주입하고 뷰 캐시를 static으로 유지해 재진입을 즉시 완성 상태로 만든다.
+  - **진입 시 완성 상태를 원하면 push 전환보다 충분히 일찍 prewarm한다**
+    (2026-08-21). 셀 configure에서 markdown을 처음 주입하면 async 렌더가 진입
+    애니메이션과 겹쳐 fallback 원문이 이미지로 바뀌며 버블이 커지는 과정이
+    보인다. 컨트롤러 init(전환 직전) prewarm은 콜드 스타트에서 부족했다 —
+    SwiftMath 폰트 등록 + 12개 메시지 raster가 전환 0.35s를 넘긴다(영상 실측).
+    데모는 루트 화면 `.task`(앱 시작 직후)에서 prewarm하고 뷰 캐시를 static으로
+    유지한다. detached 뷰도 predicted trait으로 기기 displayScale을 받으므로
+    (lldb 실측: DisplayScale = 3) attach 후 재렌더가 없다.
 - 리스트 마커는 `alignment = .top`으로 고정한다. 중첩 `UIStackView`의 first baseline은
   안정적으로 노출되지 않는다.
 - **`NSTextAttachment.bounds`에 넣은 값은 `UITextView`에 실린 뒤 `.zero`로 읽힌다**(실측).

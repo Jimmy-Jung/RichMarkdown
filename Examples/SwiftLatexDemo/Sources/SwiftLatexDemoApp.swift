@@ -38,6 +38,16 @@ struct ContentView: View {
             }
             .navigationTitle("SwiftLatex Demo")
         }
+        // 앱 시작 직후 UIKit 챗 메시지 뷰를 미리 렌더한다. 콜드 스타트에서는
+        // 컨트롤러 init(전환 직전) prewarm만으로 파이프라인이 전환 안에 못 끝나
+        // fallback 원문 → 이미지 교체와 버블 높이 점프가 보인다.
+        .task {
+            UIKitChatViewController.prewarmSharedMessageViews(
+                configuration: UIKitChatConfiguration(
+                    preset: LatexThemePreset.fromLaunchArguments()
+                )
+            )
+        }
     }
 }
 

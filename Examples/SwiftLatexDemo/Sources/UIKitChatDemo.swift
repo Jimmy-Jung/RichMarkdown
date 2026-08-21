@@ -152,19 +152,23 @@ final class UIKitChatViewController: UICollectionViewController {
         listConfiguration.showsSeparators = false
         listConfiguration.backgroundColor = .systemGroupedBackground
         super.init(collectionViewLayout: UICollectionViewCompositionalLayout.list(using: listConfiguration))
-        prewarmMessageViews()
+        Self.prewarmSharedMessageViews(configuration: configuration)
     }
 
-    /// push 전환이 시작되기 전에 전 답변의 parse·render 파이프라인을 미리 돌린다.
+    /// 전 답변의 parse·render 파이프라인을 미리 돌려 완성 상태로 진입하게 한다.
     ///
     /// 셀 configure 시점에 markdown을 처음 주입하면 async 렌더가 진입 애니메이션과
-    /// 겹쳐 빈 버블이 채워지는 과정이 보인다(alpha 게이팅). 컨트롤러 init은
-    /// 전환 시작 전이므로, 애니메이션(~0.35s) 동안 메시지당 수 ms 파이프라인이
-    /// 완료되어 SwiftUI 화면처럼 완성 상태로 진입한다. 재진입은 static 캐시가
-    /// 이미 렌더된 뷰를 그대로 돌려준다.
-    private func prewarmMessageViews() {
+    /// 겹쳐 fallback 원문이 이미지로 바뀌며 버블이 커지는 과정이 보인다.
+    /// 컨트롤러 init(전환 시작 전)만으로는 콜드 스타트에서 부족하다 — SwiftMath
+    /// 폰트 등록 + 12개 메시지 raster가 전환 0.35s를 넘긴다(영상 실측). 그래서
+    /// 루트 화면(`ContentView`)이 앱 시작 직후에도 호출한다. 사용자가 메뉴를 탭하기
+    /// 전에 파이프라인이 끝나 첫 진입도 SwiftUI 화면처럼 완성 상태다.
+    /// 이미 주입된 값은 dedupe로 걸러지므로 재호출은 no-op다.
+    /// detached 뷰도 predicted trait으로 기기 displayScale을 받는다(lldb 실측:
+    /// DisplayScale = 3) — attach 후 재렌더가 없다.
+    static func prewarmSharedMessageViews(configuration: UIKitChatConfiguration) {
         for message in ChatFixtures.conversation where message.role == .assistant {
-            let entry = assistantMessageViewCache.entry(for: message)
+            let entry = sharedMessageViewCache.entry(for: message)
             entry.view.theme = configuration.preset.theme
             entry.view.parsesDollarMath = configuration.parsesDollarMath
             entry.view.markdown = message.text
