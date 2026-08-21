@@ -375,4 +375,63 @@ import UIKit
         try await waitForRender(view)
         #expect(view.blockStack.arrangedSubviews.count == 2, "parse 후에는 블록 뷰로 교체된다")
     }
+
+    /// 데모(UIKitChatDemo)의 뷰 캐시 안무 재현 — 버그 리포트: 화면 재진입 후 스크롤
+    /// 왕복 중 "실패 시 원문 표시 (fail-open)" 버블이 비어 보인다.
+    ///
+    /// Entry처럼 detached + 빈 markdown으로 생성 → Auto Layout으로 셀 버블에 부착 →
+    /// markdown 주입 → 렌더 → 셀 재사용으로 detach → 다른 버블에 재부착 + 같은 값
+    /// 재대입(dedupe) → 내용이 계속 보여야 한다.
+    @Test func demoLikeWindowCyclesKeepFailOpenContent() async throws {
+        let failOpen = #"""
+        미완성: \(x + y 는 닫히지 않았습니다.
+
+        빈 수식: \(\) 도 원문 그대로입니다.
+
+        중첩: \(a \(b\) c\)
+
+        렌더 불가한 LaTeX: \(\frac{\) 와 \(\unknowncommand{x}\)
+
+        문단 전체가 아닌 위치의 display 구분자: 이건 \[x+y\] 인라인 위치입니다.
+        """#
+
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.isHidden = false
+        // 데모 Entry와 동일: detached + 빈 markdown으로 생성.
+        let view = LatexMarkdownUIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+
+        for cycle in 0..<3 {
+            let bubble = UIView()
+            bubble.translatesAutoresizingMaskIntoConstraints = false
+            window.addSubview(bubble)
+            bubble.addSubview(view)
+            NSLayoutConstraint.activate([
+                bubble.topAnchor.constraint(equalTo: window.topAnchor, constant: 8),
+                bubble.leadingAnchor.constraint(equalTo: window.leadingAnchor, constant: 16),
+                bubble.widthAnchor.constraint(equalToConstant: 320),
+                view.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 14),
+                view.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: 14),
+                view.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -14),
+                view.bottomAnchor.constraint(equalTo: bubble.bottomAnchor, constant: -14),
+            ])
+
+            // 데모 configure 순서: attach → apply(theme/parsesDollarMath 재대입) → markdown.
+            view.theme = .default
+            view.parsesDollarMath = false
+            view.markdown = failOpen
+            window.layoutIfNeeded()
+            try await waitForRender(view)
+
+            let text = renderedText(in: view)
+            #expect(text.contains("미완성"), "cycle \(cycle): fail-open 원문이 보여야 한다")
+            #expect(text.contains(#"\(\frac{\)"#), "cycle \(cycle): 실패 수식 원문 유지")
+            #expect(view.blockStack.arrangedSubviews.count == 5, "cycle \(cycle): 문단 5개")
+            #expect(view.bounds.height > 0, "cycle \(cycle): Auto Layout 높이가 0이면 안 된다")
+
+            // 셀 재사용: prepareForReuse → detachMessageView와 동일.
+            view.removeFromSuperview()
+            bubble.removeFromSuperview()
+        }
+    }
 }

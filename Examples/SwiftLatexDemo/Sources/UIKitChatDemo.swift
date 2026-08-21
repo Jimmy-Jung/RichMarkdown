@@ -197,8 +197,9 @@ final class UIKitChatViewController: UICollectionViewController {
 
 /// 고정 fixture 데모용 캐시다. 셀 재사용과 별개로 메시지 identity가 뷰 identity를 결정한다.
 /// 실제 무한 피드에는 메모리 비용을 측정한 뒤 상한과 eviction 정책을 추가해야 한다.
+/// internal: 셀 수명(늦은 prepareForReuse) 회귀 테스트가 직접 구성한다.
 @MainActor
-private final class AssistantMessageViewCache {
+final class AssistantMessageViewCache {
     final class Entry {
         let view = LatexMarkdownUIView()
         private(set) var hasRenderedContent = false
@@ -312,7 +313,8 @@ final class AssistantMessageCell: UICollectionViewCell {
         detachMessageView()
     }
 
-    fileprivate func configure(
+    /// internal: 셀 수명 회귀 테스트가 collection view 없이 직접 호출한다.
+    func configure(
         _ message: ChatMessage,
         configuration: UIKitChatConfiguration,
         entry: AssistantMessageViewCache.Entry
@@ -362,7 +364,15 @@ final class AssistantMessageCell: UICollectionViewCell {
         entry.detach(from: self)
         NSLayoutConstraint.deactivate(latexViewConstraints)
         latexViewConstraints.removeAll()
-        entry.view.removeFromSuperview()
+        // 뷰가 아직 이 셀에 붙어 있을 때만 제거한다 (실측 결함).
+        // 화면 밖으로 나간 셀은 prepareForReuse 없이 reuse pool에 머물다가 다음
+        // dequeue 때에야 이 메서드를 탄다. 그 사이 같은 메시지가 다른 셀에 붙으면
+        // `attachMessageView`의 addSubview가 뷰를 이미 이사시킨 상태다 — 여기서
+        // 무조건 removeFromSuperview하면 화면에 보이는 셀에서 뷰를 뜯어내
+        // 빈 버블이 남는다 (빠른 스크롤 왕복에서 재현).
+        if entry.view.superview === bubble {
+            entry.view.removeFromSuperview()
+        }
         self.entry = nil
     }
 }

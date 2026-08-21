@@ -743,3 +743,53 @@ struct BlockEditorModelTests {
         #expect(model.currentDocumentSelection == NSRange(location: 1, length: 0))
     }
 }
+
+/// UIKit 챗 데모의 셀 수명 회귀 (빠른 스크롤 왕복에서 빈 버블).
+///
+/// 화면 밖으로 나간 셀은 `prepareForReuse` 없이 reuse pool에 머물다가 다음 dequeue
+/// 때에야 정리된다. 그 사이 같은 메시지가 다른 셀에 attach되면 캐시된 뷰가 새 셀로
+/// 이사하는데, 이후 pooled 셀의 늦은 `prepareForReuse`가 뷰를 무조건
+/// `removeFromSuperview`하면 화면에 보이는 셀에서 뷰를 뜯어내 빈 버블이 남는다.
+@MainActor
+@Suite struct UIKitChatCellReuseTests {
+
+    @Test func stalePrepareForReuseDoesNotStealMovedMessageView() {
+        let message = ChatMessage.answer("케이스", "재사용 검증 본문")
+        let cache = AssistantMessageViewCache()
+        let entry = cache.entry(for: message)
+        let configuration = UIKitChatConfiguration()
+
+        let frame = CGRect(x: 0, y: 0, width: 390, height: 300)
+        let cellX = AssistantMessageCell(frame: frame)
+        cellX.configure(message, configuration: configuration, entry: entry)
+        #expect(entry.view.isDescendant(of: cellX), "첫 셀에 뷰가 붙는다")
+
+        // cellX가 화면 밖(reuse pool)에 있는 동안 같은 메시지가 다른 셀에 붙는다.
+        let cellY = AssistantMessageCell(frame: frame)
+        cellY.configure(message, configuration: configuration, entry: entry)
+        #expect(entry.view.isDescendant(of: cellY), "뷰는 최신 셀로 이사한다")
+
+        // pooled cellX가 다른 메시지용으로 재-dequeue될 때의 늦은 정리.
+        cellX.prepareForReuse()
+
+        #expect(
+            entry.view.isDescendant(of: cellY),
+            "늦은 prepareForReuse가 이사한 뷰를 화면의 셀에서 뜯어내면 안 된다"
+        )
+        #expect(entry.view.superview != nil)
+    }
+
+    /// 뷰가 아직 자기 셀에 있을 때의 prepareForReuse는 기존대로 뷰를 떼어낸다.
+    @Test func prepareForReuseDetachesOwnedView() {
+        let message = ChatMessage.answer("케이스", "정상 detach 본문")
+        let cache = AssistantMessageViewCache()
+        let entry = cache.entry(for: message)
+
+        let cell = AssistantMessageCell(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        cell.configure(message, configuration: UIKitChatConfiguration(), entry: entry)
+        #expect(entry.view.isDescendant(of: cell))
+
+        cell.prepareForReuse()
+        #expect(entry.view.superview == nil, "자기 셀의 뷰는 정상적으로 떼어낸다")
+    }
+}
