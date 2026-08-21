@@ -13,6 +13,13 @@
     {
       "target": {
         "containerPath": "container:SwiftLatexDemo.xcodeproj",
+        "identifier": "SwiftLatexDemoTests",
+        "name": "SwiftLatexDemoTests"
+      }
+    },
+    {
+      "target": {
+        "containerPath": "container:SwiftLatexDemo.xcodeproj",
         "identifier": "SwiftLatexDemoUITests",
         "name": "SwiftLatexDemoUITests"
       }

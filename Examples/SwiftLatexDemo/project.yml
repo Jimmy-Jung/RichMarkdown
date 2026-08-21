@@ -19,12 +19,22 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: "1.0"
+        MARKETING_VERSION: "0.2.0"
         CODE_SIGN_STYLE: Automatic
   SwiftLatexDemoUITests:
     type: bundle.ui-testing
     platform: iOS
     sources: [UITests]
+    dependencies:
+      - target: SwiftLatexDemo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+  SwiftLatexDemoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
     dependencies:
       - target: SwiftLatexDemo
     settings:

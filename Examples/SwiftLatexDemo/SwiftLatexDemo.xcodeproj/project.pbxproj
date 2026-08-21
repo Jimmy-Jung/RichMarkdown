@@ -8,13 +8,17 @@
 
 /* Begin PBXBuildFile section */
 		065B0E2D6BDF2954E89322DE /* SwiftLatexDemoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3720B48E616842162C068B /* SwiftLatexDemoUITests.swift */; };
+		4A2039419321386C586EAA3A /* BlockEditorTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51203B7D7AB3A49A83480B38 /* BlockEditorTextView.swift */; };
 		59D049FCCED9008404DC5230 /* SwiftLatexDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */; };
 		68F8D704B08AC84E451F568C /* UIKitChatDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */; };
-		4D7E2A91C3B5F60812DAE401 /* EditorDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7E2A91C3B5F60812DAE402 /* EditorDemo.swift */; };
-		4D7E2A91C3B5F60812DAE403 /* BlockEditorDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7E2A91C3B5F60812DAE404 /* BlockEditorDemo.swift */; };
+		6FF977324FE3FCDAC9388B88 /* BlockEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA85BB59AF42A0105A941060 /* BlockEditorModel.swift */; };
 		95F76104E6870628CB8221D5 /* ChatDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */; };
+		9B28B0DBB6F029EE6716444C /* EditorDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E3BDC6D6F8B7C2FB873532 /* EditorDemo.swift */; };
 		A93EAE4434196878D450B538 /* SwiftLatex in Frameworks */ = {isa = PBXBuildFile; productRef = AB53BA8DC0BF944EF3DFBA76 /* SwiftLatex */; };
+		B9C683D314576E84788DEAE2 /* BlockEditorDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9145D73BDFC28CEDB818B5F /* BlockEditorDemo.swift */; };
 		C48157A3BC3618C2401F84D3 /* SwiftLatexDemoP2UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41D5AF6071E562518FEB6202 /* SwiftLatexDemoP2UITests.swift */; };
+		CFDCAA5F405A887FE288011A /* BlockEditorDemoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0482252967BC6CF6284E112B /* BlockEditorDemoUITests.swift */; };
+		E749F73DD6B3D662F61630F5 /* BlockEditorModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F6192F624C465D5DB35BE7 /* BlockEditorModelTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,19 +29,31 @@
 			remoteGlobalIDString = F265E7D43E3E0C2F1BEB42E9;
 			remoteInfo = SwiftLatexDemo;
 		};
+		C3877E620271B2A4B3A46795 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B9A920F5A35E3BA89DB0C880 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F265E7D43E3E0C2F1BEB42E9;
+			remoteInfo = SwiftLatexDemo;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0482252967BC6CF6284E112B /* BlockEditorDemoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorDemoUITests.swift; sourceTree = "<group>"; };
 		3A3720B48E616842162C068B /* SwiftLatexDemoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftLatexDemoUITests.swift; sourceTree = "<group>"; };
 		41D5AF6071E562518FEB6202 /* SwiftLatexDemoP2UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftLatexDemoP2UITests.swift; sourceTree = "<group>"; };
+		44F6192F624C465D5DB35BE7 /* BlockEditorModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorModelTests.swift; sourceTree = "<group>"; };
+		51203B7D7AB3A49A83480B38 /* BlockEditorTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorTextView.swift; sourceTree = "<group>"; };
 		6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftLatexDemoApp.swift; sourceTree = "<group>"; };
+		9B28460BB08ECBE436D57FAA /* SwiftLatexDemoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SwiftLatexDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FEA2AD826F43FCBB2F26ADB /* SwiftLatex */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftLatex; path = ../..; sourceTree = SOURCE_ROOT; };
 		A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDemo.swift; sourceTree = "<group>"; };
+		A8E3BDC6D6F8B7C2FB873532 /* EditorDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorDemo.swift; sourceTree = "<group>"; };
 		C13AFE67B49B50CF73B5F7FD /* SwiftLatexDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SwiftLatexDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIKitChatDemo.swift; sourceTree = "<group>"; };
-		4D7E2A91C3B5F60812DAE402 /* EditorDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorDemo.swift; sourceTree = "<group>"; };
-		4D7E2A91C3B5F60812DAE404 /* BlockEditorDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorDemo.swift; sourceTree = "<group>"; };
+		EA85BB59AF42A0105A941060 /* BlockEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorModel.swift; sourceTree = "<group>"; };
 		F16177F9302D6C96C203536C /* SwiftLatexDemoUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SwiftLatexDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F9145D73BDFC28CEDB818B5F /* BlockEditorDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorDemo.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +71,7 @@
 		00FB5C5296EAE81FB21CE5A7 /* UITests */ = {
 			isa = PBXGroup;
 			children = (
+				0482252967BC6CF6284E112B /* BlockEditorDemoUITests.swift */,
 				41D5AF6071E562518FEB6202 /* SwiftLatexDemoP2UITests.swift */,
 				3A3720B48E616842162C068B /* SwiftLatexDemoUITests.swift */,
 			);
@@ -66,6 +83,7 @@
 			children = (
 				559E17CD23FAF864B8CFBAA2 /* Packages */,
 				BFC6A883FB5EFEA333E4A4A9 /* Sources */,
+				D2DA29405FA650DC6F446950 /* Tests */,
 				00FB5C5296EAE81FB21CE5A7 /* UITests */,
 				A178176562575663A5B71AD6 /* Products */,
 			);
@@ -83,6 +101,7 @@
 			isa = PBXGroup;
 			children = (
 				C13AFE67B49B50CF73B5F7FD /* SwiftLatexDemo.app */,
+				9B28460BB08ECBE436D57FAA /* SwiftLatexDemoTests.xctest */,
 				F16177F9302D6C96C203536C /* SwiftLatexDemoUITests.xctest */,
 			);
 			name = Products;
@@ -91,18 +110,46 @@
 		BFC6A883FB5EFEA333E4A4A9 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				F9145D73BDFC28CEDB818B5F /* BlockEditorDemo.swift */,
+				EA85BB59AF42A0105A941060 /* BlockEditorModel.swift */,
+				51203B7D7AB3A49A83480B38 /* BlockEditorTextView.swift */,
 				A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */,
+				A8E3BDC6D6F8B7C2FB873532 /* EditorDemo.swift */,
 				6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */,
 				C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */,
-				4D7E2A91C3B5F60812DAE402 /* EditorDemo.swift */,
-				4D7E2A91C3B5F60812DAE404 /* BlockEditorDemo.swift */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		D2DA29405FA650DC6F446950 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				44F6192F624C465D5DB35BE7 /* BlockEditorModelTests.swift */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		19853392A5BE927E40CD8199 /* SwiftLatexDemoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FEEA92D99EDA3C937B7DCCCC /* Build configuration list for PBXNativeTarget "SwiftLatexDemoTests" */;
+			buildPhases = (
+				D3CA7D19C143F87B5A1E532C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A405334784580DFFABDC955B /* PBXTargetDependency */,
+			);
+			name = SwiftLatexDemoTests;
+			packageProductDependencies = (
+			);
+			productName = SwiftLatexDemoTests;
+			productReference = 9B28460BB08ECBE436D57FAA /* SwiftLatexDemoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		C796ABA950CB3576DC6DE5E6 /* SwiftLatexDemoUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A72905D5A992C3DDF89E9C75 /* Build configuration list for PBXNativeTarget "SwiftLatexDemoUITests" */;
@@ -149,6 +196,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					19853392A5BE927E40CD8199 = {
+						ProvisioningStyle = Automatic;
+					};
 					C796ABA950CB3576DC6DE5E6 = {
 						ProvisioningStyle = Automatic;
 						TestTargetID = F265E7D43E3E0C2F1BEB42E9;
@@ -176,6 +226,7 @@
 			projectRoot = "";
 			targets = (
 				F265E7D43E3E0C2F1BEB42E9 /* SwiftLatexDemo */,
+				19853392A5BE927E40CD8199 /* SwiftLatexDemoTests */,
 				C796ABA950CB3576DC6DE5E6 /* SwiftLatexDemoUITests */,
 			);
 		};
@@ -186,11 +237,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B9C683D314576E84788DEAE2 /* BlockEditorDemo.swift in Sources */,
+				6FF977324FE3FCDAC9388B88 /* BlockEditorModel.swift in Sources */,
+				4A2039419321386C586EAA3A /* BlockEditorTextView.swift in Sources */,
 				95F76104E6870628CB8221D5 /* ChatDemo.swift in Sources */,
+				9B28B0DBB6F029EE6716444C /* EditorDemo.swift in Sources */,
 				59D049FCCED9008404DC5230 /* SwiftLatexDemoApp.swift in Sources */,
 				68F8D704B08AC84E451F568C /* UIKitChatDemo.swift in Sources */,
-				4D7E2A91C3B5F60812DAE401 /* EditorDemo.swift in Sources */,
-		4D7E2A91C3B5F60812DAE403 /* BlockEditorDemo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,8 +251,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CFDCAA5F405A887FE288011A /* BlockEditorDemoUITests.swift in Sources */,
 				C48157A3BC3618C2401F84D3 /* SwiftLatexDemoP2UITests.swift in Sources */,
 				065B0E2D6BDF2954E89322DE /* SwiftLatexDemoUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D3CA7D19C143F87B5A1E532C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E749F73DD6B3D662F61630F5 /* BlockEditorModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -210,6 +272,11 @@
 			isa = PBXTargetDependency;
 			target = F265E7D43E3E0C2F1BEB42E9 /* SwiftLatexDemo */;
 			targetProxy = 95CFD3D323C129C853A8C9EF /* PBXContainerItemProxy */;
+		};
+		A405334784580DFFABDC955B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F265E7D43E3E0C2F1BEB42E9 /* SwiftLatexDemo */;
+			targetProxy = C3877E620271B2A4B3A46795 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -335,6 +402,24 @@
 			};
 			name = Debug;
 		};
+		A39E0419A9EE1F931A03AD5F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.swiftlatex.SwiftLatexDemoTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftLatexDemo.app/SwiftLatexDemo";
+			};
+			name = Debug;
+		};
 		B722361EB2FE5BD26F11CA46 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -350,6 +435,24 @@
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = SwiftLatexDemo;
+			};
+			name = Release;
+		};
+		D846608BA176DF71F501A565 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.swiftlatex.SwiftLatexDemoTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftLatexDemo.app/SwiftLatexDemo";
 			};
 			name = Release;
 		};
@@ -435,6 +538,15 @@
 			buildConfigurations = (
 				25657634D6FCB3AE441EAC2F /* Debug */,
 				B722361EB2FE5BD26F11CA46 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FEEA92D99EDA3C937B7DCCCC /* Build configuration list for PBXNativeTarget "SwiftLatexDemoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A39E0419A9EE1F931A03AD5F /* Debug */,
+				D846608BA176DF71F501A565 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
