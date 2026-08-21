@@ -275,4 +275,63 @@ import UIKit
         )
         #expect(view.blockStack.arrangedSubviews[1] !== mathBefore, "수식이 바뀐 블록은 새로 만든다")
     }
+
+    // MARK: - 블록 수식 벡터 렌더
+
+    /// 블록 수식의 벡터 뷰. SwiftMath 타입을 테스트 타깃으로 끌어오지 않기 위해 구조로
+    /// 판정한다 — 수식 접근성 label을 갖고, 원문 fallback(`UITextView`)도
+    /// raster(`UIImageView`)도 아닌 뷰.
+    private func blockMathVectorViews(in view: UIView) -> [UIView] {
+        var found: [UIView] = []
+        if view.isAccessibilityElement,
+           view.accessibilityLabel?.hasPrefix("수식: ") == true,
+           !(view is UITextView),
+           !(view is UIImageView) {
+            found.append(view)
+        }
+        for subview in view.subviews { found.append(contentsOf: blockMathVectorViews(in: subview)) }
+        return found
+    }
+
+    @Test func rendersBlockMathAsVectorViewWithSynchronousSize() async throws {
+        let view = LatexMarkdownUIView(markdown: #"본문\#n\#n\[E = mc^2\]\#n\#n다음"#)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let vectors = blockMathVectorViews(in: view)
+        #expect(vectors.count == 1, "블록 수식은 벡터 뷰 하나로 렌더된다")
+        let vector = try #require(vectors.first)
+        #expect(vector.intrinsicContentSize.width > 0)
+        #expect(vector.intrinsicContentSize.height > 0, "동기 typeset으로 크기가 확정돼야 한다")
+        #expect(vector.accessibilityLabel == "수식: E = mc^2")
+        #expect(attachmentCount(in: view) == 0, "블록 수식은 text attachment를 쓰지 않는다")
+        #expect(
+            !renderedText(in: view).contains(#"\[E = mc^2\]"#),
+            "벡터 렌더가 성공하면 원문 fallback을 보이지 않는다"
+        )
+    }
+
+    @Test func keepsBlockMathSourceWhenLatexIsInvalid() async throws {
+        let view = LatexMarkdownUIView(markdown: #"\[\frac{\]"#)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        #expect(blockMathVectorViews(in: view).isEmpty, "parse 실패 수식은 벡터 뷰를 만들지 않는다")
+        #expect(
+            renderedText(in: view).contains(#"\[\frac{\]"#),
+            "실패 노드는 원래 구분자를 포함한 원문을 유지한다"
+        )
+    }
+
+    /// preflight 상한을 넘는 수식은 동기 typeset을 시작하지도 않는다.
+    /// raster와 같은 상한(`MathRenderService.preflightAllows`)을 지난다.
+    @Test func keepsBlockMathSourceWhenPreflightRejects() async throws {
+        let latex = String(repeating: "x+", count: 300) + "1"
+        let view = LatexMarkdownUIView(markdown: #"\["# + latex + #"\]"#)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        #expect(blockMathVectorViews(in: view).isEmpty, "상한 초과 수식은 벡터 뷰를 만들지 않는다")
+        #expect(renderedText(in: view).contains(latex), "상한 초과 수식은 원문으로 남는다")
+    }
 }

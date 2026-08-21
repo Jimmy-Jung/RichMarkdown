@@ -308,8 +308,10 @@ public final class LatexMarkdownUIView: UIView {
                 guard case .math(let segment) = run.content, images[segment] != nil else { return count }
                 return count + 1
             }
-        case .blockMath(let segment):
-            return images[segment] == nil ? 0 : 1
+        case .blockMath:
+            // 블록 수식은 벡터 뷰로 그려 이미지 사전을 쓰지 않는다. 값이 같으면
+            // hydration 게시에서도 무조건 재사용이다.
+            return 0
         case .blockQuote(let children):
             return children.reduce(0) { $0 + mathImageCount($1, images: images) }
         case .unorderedList(let items), .orderedList(_, let items):
@@ -349,7 +351,7 @@ public final class LatexMarkdownUIView: UIView {
             return codeBlockView(language: language, code: code)
 
         case .blockMath(let segment):
-            return blockMathView(segment: segment, rendered: images[segment])
+            return blockMathView(segment: segment)
 
         case .blockQuote(let children):
             let bar = UIView()
@@ -446,17 +448,20 @@ public final class LatexMarkdownUIView: UIView {
         return container
     }
 
-    private func blockMathView(segment: MathSegment, rendered: RenderedMath?) -> UIView {
+    /// 블록 수식은 raster가 아니라 SwiftMath의 공개 벡터 뷰로 그린다.
+    ///
+    /// `MTMathUILabel`은 내부에서 동기 typeset하고 CoreText로 직접 드로잉하므로
+    /// 이미지 중간 단계가 없다. 그래서 크기가 이 시점에 확정되고, 이미지 도착을 기다리는
+    /// 원문 → 이미지 교체와 그에 따른 셀 리사이즈가 사라진다.
+    /// 인라인 수식은 `NSTextAttachment`가 이미지를 요구하므로 raster를 유지한다.
+    private func blockMathView(segment: MathSegment) -> UIView {
         let content: UIView
         let contentSize: CGSize
-        if let rendered {
-            let imageView = UIImageView(image: rendered.image)
-            imageView.isAccessibilityElement = true
-            imageView.accessibilityLabel = "수식: \(segment.latex)"
-            content = imageView
-            contentSize = rendered.image.size
+        if let vector = vectorMathView(for: segment) {
+            content = vector
+            contentSize = vector.intrinsicContentSize
         } else {
-            // 렌더 전/실패 시 원래 구분자를 포함한 source를 표시한다.
+            // preflight 초과·latex parse 실패 시 원래 구분자를 포함한 source를 표시한다.
             let view = textView(NSAttributedString(string: segment.source, attributes: [
                 .font: codeUIFont,
                 .foregroundColor: UIColor(theme.textColor),
@@ -474,6 +479,28 @@ public final class LatexMarkdownUIView: UIView {
         row.spacing = 8
         row.alignment = .top
         return row
+    }
+
+    /// 블록 수식의 벡터 뷰. 실패(preflight 초과·latex parse 오류)는 nil이다.
+    ///
+    /// 요청 재료는 raster와 동일한 `MathRenderKey`다 — 같은 preflight 상한을 지나고
+    /// 인라인 수식과 폰트·색·mode 해석이 갈리지 않는다.
+    private func vectorMathView(for segment: MathSegment) -> UIView? {
+        let textColor = UIColor(theme.textColor).resolvedColor(with: traitCollection)
+        let key = MathRenderKey(
+            latex: segment.latex,
+            mathFont: theme.mathFont,
+            pointSize: bodyUIFont.pointSize,
+            colorRGBA: textColor.rgbaValue,
+            isDisplay: segment.kind.isDisplay,
+            displayScale: displayScale
+        )
+        guard let view = BlockMathVectorView.make(key: key, textColor: textColor) else { return nil }
+
+        // 벡터 드로잉은 텍스트로 읽히지 않는다. raster `UIImageView`와 같은 표현을 준다.
+        view.isAccessibilityElement = true
+        view.accessibilityLabel = "수식: \(segment.latex)"
+        return view
     }
 
     // MARK: - Inline runs

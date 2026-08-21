@@ -125,6 +125,15 @@ package actor MathRenderService {
         cache.object(forKey: KeyBox(key: key))?.value
     }
 
+    /// 벡터 경로(`MTMathUILabel`)가 raster와 같은 작업 상한을 공유하기 위한 통로다.
+    ///
+    /// `MTMathUILabel.intrinsicContentSize`는 main thread에서 동기 typeset하므로,
+    /// bitmap을 만들지 않아도 병리적 입력에서는 main을 오래 잡는다. raster와 상한을
+    /// 나누지 않고 같은 판정을 쓴다.
+    package static func preflightAllows(_ key: MathRenderKey) -> Bool {
+        RasterInputLimits.allows(key, sourceRendererScale: sourceRendererScale)
+    }
+
     package func removeAll() {
         cache.removeAllObjects()
     }
@@ -161,6 +170,44 @@ package actor MathRenderService {
         let rendered = RenderedMath(image: scaledImage, descent: layout.descent, ascent: layout.ascent)
         cache.setObject(Entry(value: rendered), forKey: KeyBox(key: key), cost: pixelCost)
         return rendered
+    }
+}
+
+/// 블록 수식의 벡터 뷰 팩토리.
+///
+/// `MTMathUILabel`은 SwiftMath의 공개 뷰로, 내부에서 동기 typeset하고 CoreText로 직접
+/// 드로잉한다. 이미지 중간 단계가 없어 크기가 생성 시점에 확정되고, 원문 → 이미지 교체와
+/// 그에 따른 셀 리사이즈가 사라진다.
+///
+/// 반환 타입을 `UIView`로 두어 SwiftMath 타입이 뷰 계층으로 새지 않게 한다
+/// (DEVELOPMENT.md §5: SwiftMath 호출은 이 파일에 가둬 교체 비용을 한 파일로 유지한다).
+@MainActor
+package enum BlockMathVectorView {
+    /// 실패(preflight 초과·latex parse 오류)는 nil이다. 호출자는 원문 source를 표시한다.
+    ///
+    /// `MTMathUILabel`은 UIView다 — actor/worker에서 만들지 말 것. 동기 typeset 비용의
+    /// 상한은 raster와 같은 `MathRenderService.preflightAllows`가 잡는다.
+    package static func make(key: MathRenderKey, textColor: UIColor) -> UIView? {
+        guard MathRenderService.preflightAllows(key) else { return nil }
+
+        let label = MTMathUILabel()
+        // 오류는 호출자의 원문 fallback으로 표시한다. `latex` 대입이 내부 errorLabel의
+        // 표시 여부를 이 값으로 정하므로 대입보다 먼저 꺼야 한다.
+        label.displayErrorInline = false
+        // raster 경로(`MathImage`)와 같은 `MTFontV2`를 쓴다. `MTFontManager`의
+        // `font(withName:size:)`는 legacy `MTFont(fontWithName:)`로 .otf와 math table
+        // .plist를 직접 읽고, size가 캐시된 값과 다르면 매번 math table을 재구성한다.
+        // 두 경로가 같은 폰트 구현을 써야 인라인(raster)과 블록(vector)의 글리프 메트릭이
+        // 어긋나지 않는다.
+        label.font = key.mathFont.swiftMathFont.mtfont(size: key.pointSize)
+        // `fontSize`는 내부 세로 정렬(`_layoutSubviews`)이 쓰는 별도 저장 값이다.
+        // 기본값 20이 남으면 raster와 정렬 기준이 갈린다.
+        label.fontSize = key.pointSize
+        label.labelMode = key.isDisplay ? .display : .text
+        label.textColor = textColor
+        label.latex = key.latex
+        guard label.error == nil else { return nil }
+        return label
     }
 }
 
