@@ -232,6 +232,68 @@ import Testing
         #expect(ParseCache.shared.document(for: staleKey) == nil)
     }
 
+    /// UIKit 렌더러 요청(`rastersDisplayMath: false`)은 블록 수식을 raster하지 않는다
+    /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.4 부채 해소). 인라인 raster는 유지된다.
+    @Test func skipsDisplayMathRasterWhenRequestOptsOut() async throws {
+        let model = LatexRenderModel()
+        // 처음 보는 latex — raster 캐시가 비어 있어, "raster가 실행되지 않았다"를
+        // idle 후에도 캐시가 차지 않았다는 사실로 판정할 수 있다.
+        let inlineLatex = "x_{\(UUID().uuidString.prefix(8))}+1"
+        let blockLatex = "y_{\(UUID().uuidString.prefix(8))}+2"
+        let submitted = LatexRenderModel.Request(
+            markdown: "본문 \\(\(inlineLatex)\\) 수식\n\n\\[\(blockLatex)\\]",
+            parsesDollarMath: false,
+            pointSize: 17,
+            colorRGBA: 0x000000FF,
+            displayScale: 3,
+            rastersDisplayMath: false
+        )
+        model.submit(submitted)
+        try await waitForIdle(model)
+
+        let document = try #require(model.document)
+        #expect(model.imageRequest == submitted, "hydration 게시 계약은 그대로다")
+
+        let segments = document.allMathSegments
+        let inline = try #require(segments.first { !$0.kind.isDisplay })
+        let block = try #require(segments.first { $0.kind.isDisplay })
+        #expect(model.mathImages[inline] != nil, "인라인 수식 raster는 유지된다")
+        #expect(model.mathImages[block] == nil, "블록 수식 이미지는 게시되지 않는다")
+
+        let blockKey = MathRenderKey(
+            latex: block.latex,
+            mathFont: submitted.mathFont,
+            pointSize: submitted.pointSize,
+            colorRGBA: submitted.colorRGBA,
+            isDisplay: true,
+            displayScale: submitted.displayScale
+        )
+        #expect(
+            MathRenderService.shared.cachedImage(for: blockKey) == nil,
+            "블록 수식 raster 자체가 실행되지 않아야 한다 — 캐시가 계속 비어 있다"
+        )
+    }
+
+    /// 블록 수식만 있는 문서는 기다릴 raster가 없다 — 원문 fallback 단계 없이
+    /// 단일 게시(publishComplete)로 끝난다.
+    @Test func blockMathOnlyDocumentCompletesWithoutRasterWhenOptedOut() async throws {
+        let model = LatexRenderModel()
+        let submitted = LatexRenderModel.Request(
+            markdown: "\\[z_{\(UUID().uuidString.prefix(8))}+3\\]",
+            parsesDollarMath: false,
+            pointSize: 17,
+            colorRGBA: 0x000000FF,
+            displayScale: 3,
+            rastersDisplayMath: false
+        )
+        model.submit(submitted)
+        try await waitForIdle(model)
+
+        #expect(model.document != nil)
+        #expect(model.mathImages.isEmpty, "필요한 raster가 없으므로 이미지 사전은 빈 채로 완결된다")
+        #expect(model.imageRequest == submitted, "빈 사전으로도 완결 게시가 와야 한다")
+    }
+
     private func flatText(_ document: ParsedDocument) -> String {
         document.blocks.map { block -> String in
             if case .paragraph(let runs) = block {

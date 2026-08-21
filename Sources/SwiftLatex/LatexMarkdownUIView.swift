@@ -168,7 +168,9 @@ public final class LatexMarkdownUIView: UIView {
             pointSize: bodyUIFont.pointSize,
             colorRGBA: UIColor(theme.textColor).resolvedColor(with: traitCollection).rgbaValue,
             displayScale: displayScale,
-            mathFont: theme.mathFont
+            mathFont: theme.mathFont,
+            // 블록 수식은 벡터 뷰(BlockMathVectorView)로 그린다 — raster를 요청하지 않는다.
+            rastersDisplayMath: false
         )
     }
 
@@ -221,6 +223,7 @@ public final class LatexMarkdownUIView: UIView {
             // `document = nil`을 먼저 게시하므로 스트리밍 append는 매 갱신이 이 단계를
             // 거친다. 여기서 비우면 재사용이 0이 된다. 뷰 인스턴스를 살려 두고 계층에서만
             // 떼어, parse가 끝난 다음 게시에서 앞쪽 블록을 그대로 되돌린다.
+            //
             setBlockViews(
                 [
                     textView(NSAttributedString(string: model.fallbackMarkdown, attributes: [

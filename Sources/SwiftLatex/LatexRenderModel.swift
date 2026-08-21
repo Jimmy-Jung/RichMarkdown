@@ -24,6 +24,10 @@ package final class LatexRenderModel: ObservableObject {
         package let colorRGBA: UInt32
         package let displayScale: CGFloat
         package let mathFont: LatexMathFont
+        /// 블록(display) 수식 raster가 필요한가. UIKit 렌더러는 블록 수식을 벡터 뷰로
+        /// 그리므로 false를 보낸다 — 아무도 읽지 않는 raster를 만들지 않는다
+        /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.4). 인라인 수식 raster에는 영향이 없다.
+        package let rastersDisplayMath: Bool
         package var wasTruncated: Bool { boundedInput.wasTruncated }
 
         package var parseIdentity: ParseIdentity {
@@ -40,7 +44,8 @@ package final class LatexRenderModel: ObservableObject {
             pointSize: CGFloat,
             colorRGBA: UInt32,
             displayScale: CGFloat,
-            mathFont: LatexMathFont = .latinModern
+            mathFont: LatexMathFont = .latinModern,
+            rastersDisplayMath: Bool = true
         ) {
             self.init(
                 boundedInput: InputLimits.bound(markdown),
@@ -48,7 +53,8 @@ package final class LatexRenderModel: ObservableObject {
                 pointSize: pointSize,
                 colorRGBA: colorRGBA,
                 displayScale: displayScale,
-                mathFont: mathFont
+                mathFont: mathFont,
+                rastersDisplayMath: rastersDisplayMath
             )
         }
 
@@ -60,7 +66,8 @@ package final class LatexRenderModel: ObservableObject {
             pointSize: CGFloat,
             colorRGBA: UInt32,
             displayScale: CGFloat,
-            mathFont: LatexMathFont = .latinModern
+            mathFont: LatexMathFont = .latinModern,
+            rastersDisplayMath: Bool = true
         ) {
             self.boundedInput = boundedInput
             self.parsesDollarMath = parsesDollarMath
@@ -68,6 +75,7 @@ package final class LatexRenderModel: ObservableObject {
             self.colorRGBA = colorRGBA
             self.displayScale = displayScale
             self.mathFont = mathFont
+            self.rastersDisplayMath = rastersDisplayMath
         }
     }
 
@@ -200,13 +208,28 @@ package final class LatexRenderModel: ObservableObject {
         imageRequest = request
     }
 
-    /// 전 수식 raster가 캐시에 있을 때만 그 사전을 반환한다. 하나라도 없으면 nil.
+    /// 이 요청이 raster해야 하는 수식 segment (문서 순서, 중복 제거).
+    ///
+    /// display segment는 `blockMath` 블록과 1:1이다 — display delimiter는 공백 제외
+    /// paragraph 전체일 때만 인정되고(§3), 그렇지 않으면 diagnostic과 함께 plain text로
+    /// 남아 segment 자체가 만들어지지 않는다. 따라서 `kind.isDisplay` 필터가 곧
+    /// "블록 수식 제외"다.
+    private nonisolated static func rasterSegments(
+        for parsed: ParsedDocument,
+        request: Request
+    ) -> [MathSegment] {
+        let all = parsed.allMathSegments
+        return request.rastersDisplayMath ? all : all.filter { !$0.kind.isDisplay }
+    }
+
+    /// 필요한 수식 raster가 전부 캐시에 있을 때만 그 사전을 반환한다. 하나라도 없으면 nil.
+    /// 필요한 수식이 없으면(블록 수식 제외 후 잔여 0) 빈 사전 — 단일 게시로 이어진다.
     private nonisolated static func cachedImages(
         for parsed: ParsedDocument,
         request: Request
     ) -> [MathSegment: RenderedMath]? {
         var images: [MathSegment: RenderedMath] = [:]
-        for segment in parsed.allMathSegments {
+        for segment in rasterSegments(for: parsed, request: request) {
             guard let rendered = MathRenderService.shared.cachedImage(
                 for: renderKey(segment, request)
             ) else { return nil }
@@ -284,7 +307,7 @@ package final class LatexRenderModel: ObservableObject {
         )
 
         var images: [MathSegment: RenderedMath] = [:]
-        for segment in parsed.allMathSegments {
+        for segment in rasterSegments(for: parsed, request: job.request) {
             // 각 수식 block 사이에 generation 확인. stale이면 이후 raster·cache 삽입이 없다.
             guard await model.isCurrent(job.generation) else { return }
             if let rendered = await MathRenderService.shared.render(

@@ -334,4 +334,17 @@ import UIKit
         #expect(blockMathVectorViews(in: view).isEmpty, "상한 초과 수식은 벡터 뷰를 만들지 않는다")
         #expect(renderedText(in: view).contains(latex), "상한 초과 수식은 원문으로 남는다")
     }
+
+    /// UIKit 렌더러는 블록 수식 raster를 요청하지 않는다
+    /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.4 부채 해소).
+    @Test func doesNotRasterBlockMath() async throws {
+        let unique = UUID().uuidString.prefix(8)
+        let view = LatexMarkdownUIView(markdown: #"\[w_{\#(unique)}+9\]"#)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        #expect(blockMathVectorViews(in: view).count == 1, "블록 수식은 벡터 뷰로 렌더된다")
+        #expect(view.model.mathImages.isEmpty, "블록 수식만 있는 문서는 raster 이미지가 없어야 한다")
+        #expect(view.model.imageRequest != nil, "빈 이미지 사전으로도 완결 게시가 온다")
+    }
 }
