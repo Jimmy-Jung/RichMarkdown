@@ -3,7 +3,6 @@ import SwiftUI
 /// 논리 블록은 유지하면서 화면에는 하나의 연속 문서만 노출한다.
 struct BlockEditorDemoView: View {
     @State private var model: BlockEditorModel
-    @State private var parsesDollarMath = true
 
     init() {
         _model = State(initialValue: BlockEditorModel(markdown: EditorDemoView.seedDocument))
@@ -12,7 +11,6 @@ struct BlockEditorDemoView: View {
     var body: some View {
         BlockDocumentTextEditor(
             blocks: model.blocks,
-            parsesDollarMath: parsesDollarMath,
             selection: model.currentDocumentSelection,
             canUndo: model.canUndo,
             canRedo: model.canRedo,
@@ -24,16 +22,6 @@ struct BlockEditorDemoView: View {
         .background(Color(.systemBackground))
         .navigationTitle("블록 편집")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Toggle("$ 수식 파싱 (opt-in)", isOn: $parsesDollarMath)
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                }
-                .accessibilityLabel("렌더 옵션")
-            }
-        }
     }
 
     private func replaceDocumentText(

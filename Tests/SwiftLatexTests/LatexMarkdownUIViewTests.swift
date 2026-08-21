@@ -278,6 +278,20 @@ import UIKit
 
     // MARK: - 블록 수식 벡터 렌더
 
+    @Test func standaloneEquationViewRendersAndFallsBackWithoutMarkdownChrome() {
+        let rendered = LatexEquationUIView(latex: "E = mc^2")
+        #expect(rendered.intrinsicContentSize.width > 0)
+        #expect(rendered.intrinsicContentSize.height > 0)
+        #expect(rendered.accessibilityLabel == "수식: E = mc^2")
+        #expect(!(rendered.subviews.first is UILabel))
+        #expect(rendered.subviews.contains { $0 is UIButton } == false)
+
+        let fallback = LatexEquationUIView(latex: #"\frac{"#)
+        let label = fallback.subviews.first as? UILabel
+        #expect(label?.text == #"\frac{"#)
+        #expect(fallback.intrinsicContentSize.height > 0)
+    }
+
     /// 블록 수식의 벡터 뷰. SwiftMath 타입을 테스트 타깃으로 끌어오지 않기 위해 구조로
     /// 판정한다 — 수식 접근성 label을 갖고, 원문 fallback(`UITextView`)도
     /// raster(`UIImageView`)도 아닌 뷰.

@@ -1,6 +1,7 @@
 // Created by JunyoungJung on 2026-08-21.
 
 import Foundation
+import SwiftLatex
 import Testing
 import UIKit
 @testable import SwiftLatexDemo
@@ -210,8 +211,11 @@ struct BlockEditorModelTests {
 
         let formatted = model.applyInlineFormat(.bold, id: id, range: NSRange(location: 0, length: 2))
         let formatSelection = try #require(formatted)
-        #expect(model.blocks[0].text == "**본문**")
-        #expect(formatSelection.range == NSRange(location: 2, length: 2))
+        #expect(model.blocks[0].text == "본문")
+        #expect(model.blocks[0].inlineMarks == [
+            InlineMark(format: .bold, range: NSRange(location: 0, length: 2)),
+        ])
+        #expect(formatSelection.range == NSRange(location: 0, length: 2))
 
         model.updateText(id: id, text: "- 본문")
         let shortcut = model.applyShortcut(id: id, kind: .bulletedList, prefixUTF16Length: 2)
@@ -225,6 +229,32 @@ struct BlockEditorModelTests {
         let outdented = model.outdent(id: id)
         #expect(outdented)
         #expect(model.blocks[0].indentLevel == 0)
+    }
+
+    @Test("인라인 서식 토글은 선택한 하위 범위만 해제한다")
+    func inlineFormatToggleSubtractsSelectedRange() throws {
+        let id = UUID()
+        var model = BlockEditorModel(blocks: [
+            EditorBlock(
+                id: id,
+                kind: .paragraph,
+                text: "가나다라",
+                inlineMarks: [InlineMark(format: .bold, range: NSRange(location: 0, length: 4))]
+            ),
+        ])
+
+        let result = model.applyInlineFormat(
+            .bold,
+            id: id,
+            range: NSRange(location: 1, length: 2)
+        )
+        let selection = try #require(result)
+
+        #expect(selection.range == NSRange(location: 1, length: 2))
+        #expect(model.blocks[0].inlineMarks == [
+            InlineMark(format: .bold, range: NSRange(location: 0, length: 1)),
+            InlineMark(format: .bold, range: NSRange(location: 3, length: 1)),
+        ])
     }
 
     @Test("잘못된 UTF-16 범위는 문서를 바꾸지 않는다")
@@ -369,7 +399,7 @@ struct BlockEditorModelTests {
             EditorBlock(kind: .code(language: "swift"), text: "let\nx"),
         ])
 
-        let styled = MarkdownStyler.styledDocument(model.blocks, dollarMath: true)
+        let styled = MarkdownStyler.styledDocument(model.blocks)
 
         #expect(styled.string == model.documentText)
         #expect(styled.length == model.documentText.utf16.count)
@@ -391,38 +421,109 @@ struct BlockEditorModelTests {
         #expect(try paragraphStyle(for: checked.id).textLists.last?.markerFormat == .check)
     }
 
-    @Test("코드와 수식 블록은 Markdown 문법을 리터럴로 표시한다")
-    func codeAndEquationKeepMarkdownLiteralAttributes() {
+    @Test("의미 기반 인라인 마크를 plain text의 정확한 범위에 표시한다")
+    func semanticInlineMarksDriveAttributes() throws {
+        let block = EditorBlock(markdown: "**굵게** *기울임* ~~취소~~ `코드`")
+        let styled = MarkdownStyler.styledDocument([block])
+
+        #expect(styled.string == "굵게 기울임 취소 코드")
+        let bold = try #require(styled.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        let italic = try #require(styled.attribute(.font, at: 3, effectiveRange: nil) as? UIFont)
+        #expect(bold.fontDescriptor.symbolicTraits.contains(.traitBold))
+        #expect(italic.fontDescriptor.symbolicTraits.contains(.traitItalic))
+        #expect(styled.attribute(.strikethroughStyle, at: 7, effectiveRange: nil) != nil)
+        #expect(styled.attribute(.backgroundColor, at: 10, effectiveRange: nil) != nil)
+    }
+
+    @Test("비활성 수식 attachment는 TextKit 2에서 실제 수식 뷰를 만든다")
+    @MainActor
+    func equationAttachmentMaterializesInTextKit2() throws {
+        let textView = UITextView(usingTextLayoutManager: true)
+        textView.frame = CGRect(x: 0, y: 0, width: 320, height: 160)
+        textView.attributedText = MarkdownStyler.styledDocument([
+            EditorBlock(kind: .equation, text: "E = mc^2"),
+        ])
+
+        let window = UIWindow(frame: textView.frame)
+        window.addSubview(textView)
+        window.isHidden = false
+        let manager = try #require(textView.textLayoutManager)
+        let contentManager = try #require(manager.textContentManager)
+        manager.ensureLayout(for: contentManager.documentRange)
+        window.layoutIfNeeded()
+
+        func equationView(in view: UIView) -> LatexEquationUIView? {
+            if let equation = view as? LatexEquationUIView { return equation }
+            return view.subviews.lazy.compactMap(equationView).first
+        }
+        let equation = try #require(equationView(in: textView))
+        #expect(equation.accessibilityLabel == "수식: E = mc^2")
+        window.isHidden = true
+    }
+
+    @Test("수식 원문 전환은 surrogate 중간 caret을 유효한 UTF-16 경계로 맞춘다")
+    @MainActor
+    func equationSourceTransitionAlignsUnicodeCaret() {
+        let block = EditorBlock(kind: .equation, text: "😀x")
+        var reportedSelection: NSRange?
+        let editor = BlockDocumentTextEditor(
+            blocks: [block],
+            selection: nil,
+            canUndo: false,
+            canRedo: false,
+            onReplaceText: { _, _ in nil },
+            onSelectionChange: { reportedSelection = $0 },
+            onToolbarAction: { _, _ in }
+        )
+        let coordinator = editor.makeCoordinator()
+        let view = UITextView(usingTextLayoutManager: true)
+        view.attributedText = MarkdownStyler.styledDocument([block])
+        view.delegate = coordinator
+        coordinator.editingView = view
+        coordinator.baselineText = view.text
+        coordinator.lastBlocks = [block]
+        coordinator.lastEditingEquationIDs = []
+
+        view.selectedRange = NSRange(location: 1, length: 0)
+        coordinator.textViewDidChangeSelection(view)
+
+        #expect(view.text == block.text)
+        #expect(view.selectedRange == NSRange(location: 0, length: 0))
+        #expect(reportedSelection == NSRange(location: 0, length: 0))
+    }
+
+    @Test("코드 블록은 리터럴이고 비활성 수식 블록은 attachment로 표시한다")
+    func codeStaysLiteralAndEquationUsesAttachment() {
         let code = EditorBlock(
             kind: .code(language: "swift"),
             text: #"let value = "**literal** `code` $x$""#
         )
         let equation = EditorBlock(kind: .equation, text: #"**literal** + $x$"#)
 
-        for block in [code, equation] {
-            let styled = MarkdownStyler.styledDocument([block], dollarMath: true)
-            let fullRange = NSRange(location: 0, length: styled.length)
+        let styledCode = MarkdownStyler.styledDocument([code])
+        let codeFont = styledCode.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
+        #expect(styledCode.string == code.text)
+        #expect(codeFont?.pointSize ?? 0 > 1)
+        #expect(codeFont?.fontDescriptor.symbolicTraits.contains(.traitBold) == false)
+        #expect(styledCode.attribute(.backgroundColor, at: 0, effectiveRange: nil) == nil)
 
-            styled.enumerateAttributes(in: fullRange) { attributes, _, _ in
-                let font = attributes[.font] as? UIFont
-                let color = attributes[.foregroundColor] as? UIColor
-                #expect(font != nil)
-                #expect(color != nil)
-                guard let font, let color else { return }
-                #expect(font.pointSize > 1)
-                #expect(!font.fontDescriptor.symbolicTraits.contains(.traitBold))
-                #expect(!color.isEqual(UIColor.clear))
-                #expect(attributes[.backgroundColor] == nil)
-                #expect(attributes[.strikethroughStyle] == nil)
-            }
-        }
+        let styledEquation = MarkdownStyler.styledDocument([equation])
+        #expect(styledEquation.length == equation.text.utf16.count)
+        #expect(styledEquation.attribute(.attachment, at: 0, effectiveRange: nil) != nil)
+
+        let editingEquation = MarkdownStyler.styledDocument(
+            [equation],
+            editingEquationIDs: [equation.id]
+        )
+        #expect(editingEquation.string == equation.text)
+        #expect(editingEquation.attribute(.attachment, at: 0, effectiveRange: nil) == nil)
     }
 
     @Test("접근성 Dynamic Type은 코드·수식·인라인 코드 글꼴을 확대한다")
     func dynamicTypeScalesMonospacedFonts() throws {
         let code = EditorBlock(kind: .code(language: "swift"), text: "let x = 1")
         let equation = EditorBlock(kind: .equation, text: "x + y")
-        let paragraph = EditorBlock(kind: .paragraph, text: "`inline`")
+        let paragraph = EditorBlock(markdown: "`inline`")
         let model = BlockEditorModel(blocks: [code, equation, paragraph])
         let normalTraits = UITraitCollection(preferredContentSizeCategory: .large)
         let accessibilityTraits = UITraitCollection(
@@ -430,12 +531,12 @@ struct BlockEditorModelTests {
         )
         let normal = MarkdownStyler.styledDocument(
             model.blocks,
-            dollarMath: true,
+            editingEquationIDs: [equation.id],
             traitCollection: normalTraits
         )
         let accessibility = MarkdownStyler.styledDocument(
             model.blocks,
-            dollarMath: true,
+            editingEquationIDs: [equation.id],
             traitCollection: accessibilityTraits
         )
 
@@ -469,7 +570,6 @@ struct BlockEditorModelTests {
         var replacements: [(range: NSRange, text: String)] = []
         let editor = BlockDocumentTextEditor(
             blocks: [block],
-            parsesDollarMath: true,
             selection: NSRange(location: 1, length: 0),
             canUndo: false,
             canRedo: false,
@@ -515,7 +615,6 @@ struct BlockEditorModelTests {
         var replacement: (range: NSRange, text: String)?
         let editor = BlockDocumentTextEditor(
             blocks: [block],
-            parsesDollarMath: true,
             selection: NSRange(location: 0, length: 0),
             canUndo: false,
             canRedo: false,
@@ -557,7 +656,6 @@ struct BlockEditorModelTests {
         var replacementRange: NSRange?
         let editor = BlockDocumentTextEditor(
             blocks: model.blocks,
-            parsesDollarMath: true,
             selection: NSRange(location: 0, length: 0),
             canUndo: false,
             canRedo: false,
@@ -741,6 +839,146 @@ struct BlockEditorModelTests {
         #expect(didRedo)
         #expect(model.documentText == "새\n")
         #expect(model.currentDocumentSelection == NSRange(location: 1, length: 0))
+    }
+
+    @Test("Markdown 인라인 마커는 plain text와 의미 범위로 파싱된다")
+    func parsesMarkdownInlineMarkersIntoSemanticRanges() {
+        let source = #"**굵게** *기울임* ~~취소~~ `코드`"#
+
+        let block = EditorBlock(markdown: source)
+        let model = BlockEditorModel(markdown: source)
+
+        #expect(block.kind == .paragraph)
+        #expect(block.text == "굵게 기울임 취소 코드")
+        #expect(!block.text.contains("**"))
+        #expect(block.inlineMarks.map(\.format) == [.bold, .italic, .strikethrough, .code])
+        #expect(block.inlineMarks.map(\.range) == [
+            NSRange(location: 0, length: 2),
+            NSRange(location: 3, length: 3),
+            NSRange(location: 7, length: 2),
+            NSRange(location: 10, length: 2),
+        ])
+        #expect(model.documentText == "굵게 기울임 취소 코드\n")
+    }
+
+    @Test("인라인 마크 범위는 Character가 아닌 UTF-16 offset을 사용한다")
+    func storesInlineMarkRangesAsUTF16Offsets() {
+        let block = EditorBlock(markdown: #"😀 **굵게**"#)
+
+        #expect(block.text == "😀 굵게")
+        #expect(block.inlineMarks.map(\.range) == [NSRange(location: 3, length: 2)])
+    }
+
+    @Test("의미 인라인 마크는 canonical Markdown으로 재직렬화된다")
+    func reserializesSemanticInlineMarksToMarkdown() {
+        let source = #"**굵게** *기울임* ~~취소~~ `코드`"#
+
+        let block = EditorBlock(markdown: source)
+
+        #expect(block.markdown == #"**굵게** <em>기울임</em> ~~취소~~ `코드`"#)
+    }
+
+    @Test("교차 인라인 마크도 Markdown 왕복 시 의미 범위를 보존한다")
+    func crossingInlineMarksRoundTrip() {
+        let original = EditorBlock(
+            text: "abcd",
+            inlineMarks: [
+                InlineMark(format: .bold, range: NSRange(location: 0, length: 3)),
+                InlineMark(format: .italic, range: NSRange(location: 1, length: 3)),
+            ]
+        )
+
+        let reparsed = EditorBlock(markdown: original.markdown)
+
+        #expect(reparsed.text == original.text)
+        #expect(reparsed.inlineMarks == original.inlineMarks)
+    }
+
+    @Test("인라인 코드는 겹친 일반 서식보다 우선한다")
+    func inlineCodeClipsOverlappingMarks() {
+        let block = EditorBlock(
+            text: "abcd",
+            inlineMarks: [
+                InlineMark(format: .bold, range: NSRange(location: 0, length: 4)),
+                InlineMark(format: .code, range: NSRange(location: 1, length: 2)),
+            ]
+        )
+
+        #expect(block.inlineMarks == [
+            InlineMark(format: .bold, range: NSRange(location: 0, length: 1)),
+            InlineMark(format: .code, range: NSRange(location: 1, length: 2)),
+            InlineMark(format: .bold, range: NSRange(location: 3, length: 1)),
+        ])
+        #expect(EditorBlock(markdown: block.markdown).inlineMarks == block.inlineMarks)
+    }
+
+    @Test("plain Markdown delimiter와 인라인 LaTeX underscore를 리터럴로 보존한다")
+    func literalDelimitersRoundTrip() {
+        let plain = EditorBlock(text: #"a_b_c **literal** ~~literal~~ `literal` <em>literal</em>"#)
+        let plainRoundTrip = EditorBlock(markdown: plain.markdown)
+        #expect(plainRoundTrip.text == plain.text)
+        #expect(plainRoundTrip.inlineMarks.isEmpty)
+
+        let latex = #"앞 $x_{i} + y_{j}$, $a*b + c*d$ 뒤 \(a_b * c_d\)"#
+        let latexBlock = EditorBlock(markdown: latex)
+        #expect(latexBlock.text == latex)
+        #expect(latexBlock.inlineMarks.isEmpty)
+        #expect(EditorBlock(markdown: latexBlock.markdown).text == latex)
+
+        let markedLatex = EditorBlock(
+            text: "앞 $x_i$ 뒤",
+            inlineMarks: [
+                InlineMark(format: .bold, range: NSRange(location: 3, length: 3)),
+            ]
+        )
+        #expect(markedLatex.inlineMarks.isEmpty)
+        #expect(EditorBlock(markdown: markedLatex.markdown).text == markedLatex.text)
+    }
+
+    @Test("인라인 코드 안의 backtick을 escape해 왕복한다")
+    func inlineCodeBacktickRoundTrip() {
+        let block = EditorBlock(
+            text: "a`b",
+            inlineMarks: [
+                InlineMark(format: .code, range: NSRange(location: 0, length: 3)),
+            ]
+        )
+        let reparsed = EditorBlock(markdown: block.markdown)
+        #expect(reparsed.text == block.text)
+        #expect(reparsed.inlineMarks == block.inlineMarks)
+
+        let literalLatexCode = EditorBlock(markdown: #"`$x_i$`"#)
+        #expect(literalLatexCode.text == "$x_i$")
+        #expect(literalLatexCode.inlineMarks == [
+            InlineMark(format: .code, range: NSRange(location: 0, length: 5)),
+        ])
+        let reparsedLatexCode = EditorBlock(markdown: literalLatexCode.markdown)
+        #expect(reparsedLatexCode.kind == literalLatexCode.kind)
+        #expect(reparsedLatexCode.text == literalLatexCode.text)
+        #expect(reparsedLatexCode.inlineMarks == literalLatexCode.inlineMarks)
+    }
+
+    @Test("인라인 LaTeX는 수식 노드가 아닌 일반 텍스트로 보존된다")
+    func keepsInlineLatexAsPlainText() {
+        let source = #"앞 $x^2$ 뒤 \(\alpha + \beta\)"#
+
+        let block = EditorBlock(markdown: source)
+
+        #expect(block.kind == .paragraph)
+        #expect(block.text == source)
+        #expect(block.inlineMarks.isEmpty)
+        #expect(block.markdown == source)
+    }
+
+    @Test("수식 블록은 구분자 안의 source를 손실 없이 보존한다")
+    func preservesEquationBlockSource() {
+        let source = "\\[\n  x^2 + y^2  \n\\]"
+
+        let block = EditorBlock(markdown: source)
+
+        #expect(block.kind == .equation)
+        #expect(block.text == "\n  x^2 + y^2  \n")
+        #expect(block.markdown == source)
     }
 }
 

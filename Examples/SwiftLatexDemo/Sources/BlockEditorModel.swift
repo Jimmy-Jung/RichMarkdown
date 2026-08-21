@@ -79,17 +79,20 @@ struct EditorBlock: Identifiable, Equatable {
     let id: UUID
     var kind: EditorBlockKind
     var text: String
+    var inlineMarks: [InlineMark]
     var indentLevel: Int
 
     init(
         id: UUID = UUID(),
         kind: EditorBlockKind = .paragraph,
         text: String,
+        inlineMarks: [InlineMark] = [],
         indentLevel: Int = 0
     ) {
         self.id = id
         self.kind = kind
         self.text = text
+        self.inlineMarks = InlineMarkdownCodec.normalized(inlineMarks, text: text)
         self.indentLevel = indentLevel
     }
 
@@ -112,46 +115,49 @@ struct EditorBlock: Identifiable, Equatable {
             let language = String(first.dropFirst(3)).trimmingCharacters(in: .whitespaces)
             kind = .code(language: language.isEmpty ? nil : language)
             text = lines.dropFirst().dropLast().joined(separator: "\n")
+            inlineMarks = []
             return
         }
 
         if source.hasPrefix("\\["), source.hasSuffix("\\]"), source.count >= 4 {
             kind = .equation
             text = String(source.dropFirst(2).dropLast(2))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            inlineMarks = []
             return
         }
 
         let markerCount = source.prefix { $0 == "#" }.count
         if (1...3).contains(markerCount), source.dropFirst(markerCount).hasPrefix(" ") {
             kind = .heading(level: markerCount)
-            text = String(source.dropFirst(markerCount + 1))
+            (text, inlineMarks) = InlineMarkdownCodec.parse(
+                String(source.dropFirst(markerCount + 1))
+            )
             return
         }
 
         if source.hasPrefix("- [ ] ") || source.hasPrefix("- [x] ") {
             kind = .toDo(isChecked: source.hasPrefix("- [x] "))
-            text = String(source.dropFirst(6))
+            (text, inlineMarks) = InlineMarkdownCodec.parse(String(source.dropFirst(6)))
             return
         }
         if source.hasPrefix("- ") || source.hasPrefix("* ") || source.hasPrefix("+ ") {
             kind = .bulletedList
-            text = String(source.dropFirst(2))
+            (text, inlineMarks) = InlineMarkdownCodec.parse(String(source.dropFirst(2)))
             return
         }
         if let match = source.range(of: #"^\d+\. "#, options: .regularExpression) {
             kind = .numberedList
-            text = String(source[match.upperBound...])
+            (text, inlineMarks) = InlineMarkdownCodec.parse(String(source[match.upperBound...]))
             return
         }
         if source.hasPrefix("> ") {
             kind = .quote
-            text = String(source.dropFirst(2))
+            (text, inlineMarks) = InlineMarkdownCodec.parse(String(source.dropFirst(2)))
             return
         }
 
         kind = .paragraph
-        text = source
+        (text, inlineMarks) = InlineMarkdownCodec.parse(source)
     }
 
     var markdown: String {
@@ -160,19 +166,20 @@ struct EditorBlock: Identifiable, Equatable {
 
     func markdown(numberedListOrdinal: Int) -> String {
         let indent = String(repeating: "  ", count: indentLevel)
+        let inlineMarkdown = InlineMarkdownCodec.serialize(text: text, marks: inlineMarks)
         return switch kind {
         case .paragraph:
-            text
+            inlineMarkdown
         case let .heading(level):
-            String(repeating: "#", count: min(max(level, 1), 3)) + " " + text
+            String(repeating: "#", count: min(max(level, 1), 3)) + " " + inlineMarkdown
         case .bulletedList:
-            indent + "- " + text
+            indent + "- " + inlineMarkdown
         case .numberedList:
-            indent + "\(max(numberedListOrdinal, 1)). " + text
+            indent + "\(max(numberedListOrdinal, 1)). " + inlineMarkdown
         case let .toDo(isChecked):
-            indent + (isChecked ? "- [x] " : "- [ ] ") + text
+            indent + (isChecked ? "- [x] " : "- [ ] ") + inlineMarkdown
         case .quote:
-            "> " + text
+            "> " + inlineMarkdown
         case let .code(language):
             "```\(language ?? "")\n\(text)\n```"
         case .equation:
@@ -193,19 +200,570 @@ struct BlockSelection: Equatable {
     let range: NSRange
 }
 
-enum InlineFormat {
+enum InlineFormat: Int, CaseIterable, Hashable {
     case bold
     case italic
     case strikethrough
     case code
 
-    fileprivate var delimiters: (opening: String, closing: String) {
+    var delimiters: (opening: String, closing: String) {
         switch self {
         case .bold: ("**", "**")
-        case .italic: ("*", "*")
+        case .italic: ("<em>", "</em>")
         case .strikethrough: ("~~", "~~")
         case .code: ("`", "`")
         }
+    }
+}
+
+struct InlineMark: Equatable {
+    let format: InlineFormat
+    var range: NSRange
+}
+
+private enum InlineMarkdownCodec {
+    private struct ParseResult {
+        var text = ""
+        var marks: [InlineMark] = []
+        var closed = false
+    }
+
+    static func parse(_ source: String) -> (text: String, marks: [InlineMark]) {
+        var index = source.startIndex
+        let result = parse(source, index: &index, closing: nil)
+        return (result.text, normalized(result.marks, text: result.text))
+    }
+
+    static func serialize(text: String, marks: [InlineMark]) -> String {
+        let marks = normalized(marks, text: text).filter { $0.range.length > 0 }
+        guard !marks.isEmpty else { return escaped(text, insideCode: false) }
+
+        var boundaries: Set<Int> = [0, text.utf16.count]
+        for mark in marks {
+            boundaries.insert(mark.range.location)
+            boundaries.insert(NSMaxRange(mark.range))
+        }
+
+        let offsets = boundaries.sorted()
+        var result = ""
+        var active: [InlineFormat] = []
+        for (start, end) in zip(offsets, offsets.dropFirst()) {
+            let desired = activeFormats(at: start, marks: marks)
+            transition(from: &active, to: desired, result: &result)
+            guard let range = Range(NSRange(location: start, length: end - start), in: text) else {
+                continue
+            }
+            result += escaped(String(text[range]), insideCode: active.contains(.code))
+        }
+        transition(from: &active, to: [], result: &result)
+        return result
+    }
+
+    static func normalized(_ marks: [InlineMark], text: String) -> [InlineMark] {
+        let latexRanges = inlineLatexRanges(in: text)
+        let valid = marks
+            .filter {
+                $0.range.location >= 0
+                    && $0.range.length > 0
+                    && NSMaxRange($0.range) <= text.utf16.count
+                    && Range($0.range, in: text) != nil
+            }
+            .flatMap { mark in
+                if mark.format == .code { return [mark] }
+                return subtract(latexRanges, from: mark.range).map {
+                    InlineMark(format: mark.format, range: $0)
+                }
+            }
+            .sorted {
+                if $0.range.location != $1.range.location {
+                    return $0.range.location < $1.range.location
+                }
+                if $0.range.length != $1.range.length {
+                    return $0.range.length > $1.range.length
+                }
+                return $0.format.rawValue < $1.format.rawValue
+            }
+
+        var merged: [InlineMark] = []
+        for format in InlineFormat.allCases {
+            for mark in valid.filter({ $0.format == format }) {
+                if let lastIndex = merged.indices.last,
+                   merged[lastIndex].format == format,
+                   mark.range.location <= NSMaxRange(merged[lastIndex].range) {
+                    merged[lastIndex].range = NSUnionRange(merged[lastIndex].range, mark.range)
+                } else {
+                    merged.append(mark)
+                }
+            }
+        }
+        let codeRanges = merged.filter { $0.format == .code }.map(\.range)
+        let effective = merged.flatMap { mark -> [InlineMark] in
+            guard mark.format != .code else { return [mark] }
+            return subtract(codeRanges, from: mark.range).map {
+                InlineMark(format: mark.format, range: $0)
+            }
+        }
+        return effective.sorted {
+            if $0.range.location != $1.range.location {
+                return $0.range.location < $1.range.location
+            }
+            if $0.range.length != $1.range.length {
+                return $0.range.length > $1.range.length
+            }
+            return $0.format.rawValue < $1.format.rawValue
+        }
+    }
+
+    private static func inlineLatexRanges(in text: String) -> [NSRange] {
+        var ranges: [NSRange] = []
+        var index = text.startIndex
+        while index < text.endIndex {
+            if let range = inlineLatexRange(in: text, at: index) {
+                ranges.append(NSRange(range, in: text))
+                index = range.upperBound
+            } else {
+                index = text.index(after: index)
+            }
+        }
+        return ranges
+    }
+
+    private static func subtract(_ exclusions: [NSRange], from source: NSRange) -> [NSRange] {
+        var segments = [source]
+        for exclusion in exclusions {
+            segments = segments.flatMap { segment in
+                let intersection = NSIntersectionRange(segment, exclusion)
+                guard intersection.length > 0 else { return [segment] }
+                var result: [NSRange] = []
+                if segment.location < intersection.location {
+                    result.append(NSRange(
+                        location: segment.location,
+                        length: intersection.location - segment.location
+                    ))
+                }
+                if NSMaxRange(intersection) < NSMaxRange(segment) {
+                    result.append(NSRange(
+                        location: NSMaxRange(intersection),
+                        length: NSMaxRange(segment) - NSMaxRange(intersection)
+                    ))
+                }
+                return result
+            }
+        }
+        return segments
+    }
+
+    private static func parse(
+        _ source: String,
+        index: inout String.Index,
+        closing: String?
+    ) -> ParseResult {
+        var result = ParseResult()
+        while index < source.endIndex {
+            if let latexRange = inlineLatexRange(in: source, at: index) {
+                result.text += source[latexRange]
+                index = latexRange.upperBound
+                continue
+            }
+            if source[index] == "\\",
+               let escapedIndex = source.index(index, offsetBy: 1, limitedBy: source.endIndex),
+               escapedIndex < source.endIndex,
+               isEscapable(source[escapedIndex]) {
+                result.text.append(source[escapedIndex])
+                index = source.index(after: escapedIndex)
+                continue
+            }
+            if let closing, source[index...].hasPrefix(closing) {
+                index = source.index(index, offsetBy: closing.count)
+                result.closed = true
+                return result
+            }
+
+            if let token = openingToken(in: source, at: index) {
+                let format = token.format
+                let delimiterEnd = source.index(
+                    index,
+                    offsetBy: token.opening.count
+                )
+                guard closingRange(
+                    token.closing,
+                    in: source,
+                    from: delimiterEnd
+                ) != nil else {
+                    let next = source.index(after: index)
+                    result.text += source[index..<next]
+                    index = next
+                    continue
+                }
+                index = delimiterEnd
+                let start = result.text.utf16.count
+                if format == .code,
+                   let end = closingRange(token.closing, in: source, from: index) {
+                    let content = decodedCodeEscapes(String(source[index..<end.lowerBound]))
+                    result.text += content
+                    index = end.upperBound
+                } else {
+                    let nested = parse(source, index: &index, closing: token.closing)
+                    guard nested.closed else {
+                        result.text += token.opening + nested.text
+                        result.marks += shifted(
+                            nested.marks,
+                            by: start + token.opening.utf16.count
+                        )
+                        continue
+                    }
+                    result.text += nested.text
+                    result.marks += shifted(nested.marks, by: start)
+                }
+                let length = result.text.utf16.count - start
+                result.marks.append(InlineMark(
+                    format: format,
+                    range: NSRange(location: start, length: length)
+                ))
+                continue
+            }
+
+            let next = source.index(after: index)
+            result.text += source[index..<next]
+            index = next
+        }
+        return result
+    }
+
+    private static func closingRange(
+        _ delimiter: String,
+        in source: String,
+        from start: String.Index
+    ) -> Range<String.Index>? {
+        var cursor = start
+        while cursor < source.endIndex {
+            if source[cursor] == "\\" {
+                let next = source.index(after: cursor)
+                if next < source.endIndex, isEscapable(source[next]) {
+                    cursor = source.index(after: next)
+                    continue
+                }
+            }
+            if source[cursor...].hasPrefix(delimiter) {
+                return cursor..<source.index(cursor, offsetBy: delimiter.count)
+            }
+            cursor = source.index(after: cursor)
+        }
+        return nil
+    }
+
+    private static func escaped(_ source: String, insideCode: Bool) -> String {
+        let targets: Set<Character> = insideCode ? ["`"] : ["*", "_", "~", "`", "<"]
+        var result = ""
+        var index = source.startIndex
+        while index < source.endIndex {
+            if !insideCode, let latexRange = inlineLatexRange(in: source, at: index) {
+                result += source[latexRange]
+                index = latexRange.upperBound
+                continue
+            }
+            let character = source[index]
+            let next = source.index(after: index)
+            if character == "\\",
+               next < source.endIndex,
+               (targets.contains(source[next]) || source[next] == "\\") {
+                result += "\\\\"
+            } else {
+                if targets.contains(character) { result += "\\" }
+                result.append(character)
+            }
+            index = next
+        }
+        return result
+    }
+
+    private static func inlineLatexRange(
+        in source: String,
+        at index: String.Index
+    ) -> Range<String.Index>? {
+        let delimiter: (opening: String, closing: String)
+        if source[index...].hasPrefix("\\(") {
+            delimiter = ("\\(", "\\)")
+        } else if source[index...].hasPrefix("$$") {
+            delimiter = ("$$", "$$")
+        } else if source[index...].hasPrefix("$") {
+            delimiter = ("$", "$")
+        } else {
+            return nil
+        }
+
+        let contentStart = source.index(index, offsetBy: delimiter.opening.count)
+        guard let closingRange = source.range(
+            of: delimiter.closing,
+            range: contentStart..<source.endIndex
+        ) else { return nil }
+        if source[index..<closingRange.upperBound].contains(where: \.isNewline) {
+            return nil
+        }
+        return index..<closingRange.upperBound
+    }
+
+    private static func decodedCodeEscapes(_ source: String) -> String {
+        var result = ""
+        var index = source.startIndex
+        while index < source.endIndex {
+            if source[index] == "\\" {
+                let next = source.index(after: index)
+                if next < source.endIndex,
+                   (source[next] == "`" || source[next] == "\\") {
+                    result.append(source[next])
+                    index = source.index(after: next)
+                    continue
+                }
+            }
+            result.append(source[index])
+            index = source.index(after: index)
+        }
+        return result
+    }
+
+    private static func isEscapable(_ character: Character) -> Bool {
+        character == "\\" || character == "*" || character == "_"
+            || character == "~" || character == "`" || character == "<"
+    }
+
+    private static func isWord(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber
+    }
+
+    private static func openingToken(
+        in source: String,
+        at index: String.Index
+    ) -> (format: InlineFormat, opening: String, closing: String)? {
+        for format in [InlineFormat.code, .bold, .strikethrough]
+        where source[index...].hasPrefix(format.delimiters.opening) {
+            return (format, format.delimiters.opening, format.delimiters.closing)
+        }
+        let italic = InlineFormat.italic.delimiters
+        if source[index...].hasPrefix(italic.opening) {
+            return (.italic, italic.opening, italic.closing)
+        }
+        if source[index...].hasPrefix("_") {
+            let next = source.index(after: index)
+            guard next < source.endIndex, !source[next].isWhitespace else { return nil }
+            if index > source.startIndex {
+                let previous = source[source.index(before: index)]
+                if isWord(previous), isWord(source[next]) { return nil }
+            }
+            return (.italic, "_", "_")
+        }
+        if source[index...].hasPrefix("*") { return (.italic, "*", "*") }
+        return nil
+    }
+
+    private static func shifted(_ marks: [InlineMark], by offset: Int) -> [InlineMark] {
+        marks.map {
+            InlineMark(
+                format: $0.format,
+                range: NSRange(location: $0.range.location + offset, length: $0.range.length)
+            )
+        }
+    }
+
+    private static func activeFormats(at offset: Int, marks: [InlineMark]) -> [InlineFormat] {
+        let active = Set(marks.compactMap { mark in
+            mark.range.location <= offset && offset < NSMaxRange(mark.range)
+                ? mark.format
+                : nil
+        })
+        if active.contains(.code) { return [.code] }
+        return [InlineFormat.bold, .italic, .strikethrough].filter(active.contains)
+    }
+
+    private static func transition(
+        from active: inout [InlineFormat],
+        to desired: [InlineFormat],
+        result: inout String
+    ) {
+        let commonCount = zip(active, desired).prefix { pair in
+            pair.0 == pair.1
+        }.count
+        for format in active.dropFirst(commonCount).reversed() {
+            result += format.delimiters.closing
+        }
+        for format in desired.dropFirst(commonCount) {
+            result += format.delimiters.opening
+        }
+        active = desired
+    }
+}
+
+private extension EditorBlock {
+    func replacingText(in range: NSRange, with replacement: String) -> EditorBlock? {
+        guard range.location >= 0,
+              range.length >= 0,
+              NSMaxRange(range) <= text.utf16.count,
+              let sourceRange = Range(range, in: text)
+        else { return nil }
+
+        let updatedText = text.replacingCharacters(in: sourceRange, with: replacement)
+        let replacementLength = replacement.utf16.count
+        let updatedMarks = inlineMarks.compactMap {
+            Self.transformed($0, replacing: range, replacementLength: replacementLength)
+        }
+        return EditorBlock(
+            id: id,
+            kind: kind,
+            text: updatedText,
+            inlineMarks: updatedMarks,
+            indentLevel: indentLevel
+        )
+    }
+
+    func split(atUTF16Offset offset: Int) -> (left: EditorBlock, right: EditorBlock)? {
+        guard let index = Self.stringIndex(in: text, utf16Offset: offset) else { return nil }
+        let leftText = String(text[..<index])
+        let rightText = String(text[index...])
+        var leftMarks: [InlineMark] = []
+        var rightMarks: [InlineMark] = []
+
+        for mark in inlineMarks {
+            let start = mark.range.location
+            let end = NSMaxRange(mark.range)
+            let leftLength = max(0, min(end, offset) - start)
+            if leftLength > 0 || mark.range.length == 0 && start < offset {
+                leftMarks.append(InlineMark(
+                    format: mark.format,
+                    range: NSRange(location: start, length: leftLength)
+                ))
+            }
+
+            let rightStart = max(start, offset)
+            let rightLength = max(0, end - rightStart)
+            if rightLength > 0 || mark.range.length == 0 && start >= offset {
+                rightMarks.append(InlineMark(
+                    format: mark.format,
+                    range: NSRange(location: rightStart - offset, length: rightLength)
+                ))
+            }
+        }
+
+        let continuation = kind.continuationKind
+        return (
+            EditorBlock(
+                id: id,
+                kind: kind,
+                text: leftText,
+                inlineMarks: leftMarks,
+                indentLevel: indentLevel
+            ),
+            EditorBlock(
+                kind: continuation,
+                text: rightText,
+                inlineMarks: rightMarks,
+                indentLevel: continuation.supportsIndentation ? indentLevel : 0
+            )
+        )
+    }
+
+    func merged(with following: EditorBlock) -> EditorBlock {
+        let offset = text.utf16.count
+        let shifted = following.inlineMarks.map {
+            InlineMark(
+                format: $0.format,
+                range: NSRange(location: $0.range.location + offset, length: $0.range.length)
+            )
+        }
+        return EditorBlock(
+            id: id,
+            kind: kind,
+            text: text + following.text,
+            inlineMarks: inlineMarks + shifted,
+            indentLevel: indentLevel
+        )
+    }
+
+    func changingKind(to kind: EditorBlockKind, indentLevel: Int? = nil) -> EditorBlock {
+        EditorBlock(
+            id: id,
+            kind: kind,
+            text: text,
+            inlineMarks: kind.preservesLineBreaks ? [] : inlineMarks,
+            indentLevel: indentLevel ?? (kind.supportsIndentation ? self.indentLevel : 0)
+        )
+    }
+
+    func subblock(
+        in range: NSRange,
+        id: UUID,
+        kind: EditorBlockKind,
+        indentLevel: Int
+    ) -> EditorBlock? {
+        guard let sourceRange = Range(range, in: text) else { return nil }
+        let subtext = String(text[sourceRange])
+        let marks = inlineMarks.compactMap { mark -> InlineMark? in
+            let start = max(mark.range.location, range.location)
+            let end = min(NSMaxRange(mark.range), NSMaxRange(range))
+            guard end > start else { return nil }
+            return InlineMark(
+                format: mark.format,
+                range: NSRange(location: start - range.location, length: end - start)
+            )
+        }
+        return EditorBlock(
+            id: id,
+            kind: kind,
+            text: subtext,
+            inlineMarks: marks,
+            indentLevel: indentLevel
+        )
+    }
+
+    private static func transformed(
+        _ mark: InlineMark,
+        replacing range: NSRange,
+        replacementLength: Int
+    ) -> InlineMark? {
+        let markStart = mark.range.location
+        let markEnd = NSMaxRange(mark.range)
+        let changeStart = range.location
+        let changeEnd = NSMaxRange(range)
+        let delta = replacementLength - range.length
+
+        if range.length == 0 {
+            if changeStart < markStart {
+                return InlineMark(
+                    format: mark.format,
+                    range: NSRange(location: markStart + delta, length: mark.range.length)
+                )
+            }
+            if changeStart > markEnd { return mark }
+            return InlineMark(
+                format: mark.format,
+                range: NSRange(location: markStart, length: mark.range.length + replacementLength)
+            )
+        }
+
+        if markEnd <= changeStart { return mark }
+        if markStart >= changeEnd {
+            return InlineMark(
+                format: mark.format,
+                range: NSRange(location: markStart + delta, length: mark.range.length)
+            )
+        }
+
+        let prefixLength = max(0, changeStart - markStart)
+        let suffixLength = max(0, markEnd - changeEnd)
+        let updatedLength = prefixLength + replacementLength + suffixLength
+        guard updatedLength > 0 else { return nil }
+        return InlineMark(
+            format: mark.format,
+            range: NSRange(
+                location: min(markStart, changeStart),
+                length: updatedLength
+            )
+        )
+    }
+
+    private static func stringIndex(in text: String, utf16Offset: Int) -> String.Index? {
+        guard utf16Offset >= 0, utf16Offset <= text.utf16.count else { return nil }
+        let utf16Index = text.utf16.index(text.utf16.startIndex, offsetBy: utf16Offset)
+        return String.Index(utf16Index, within: text)
     }
 }
 
@@ -319,12 +877,10 @@ struct BlockEditorModel {
     mutating func updateText(id: UUID, text: String, selection: BlockSelection?) {
         let updated = blocks.map { block in
             guard block.id == id else { return block }
-            return EditorBlock(
-                id: block.id,
-                kind: block.kind,
-                text: text,
-                indentLevel: block.indentLevel
-            )
+            return block.replacingText(
+                in: NSRange(location: 0, length: block.text.utf16.count),
+                with: text
+            ) ?? block
         }
         apply(updated)
         updateSelection(selection)
@@ -384,48 +940,54 @@ struct BlockEditorModel {
         }
 
         if start.index == end.index, startBlock.kind.preservesLineBreaks {
-            guard let sourceRange = Range(
-                NSRange(location: start.offset, length: end.offset - start.offset),
-                in: startBlock.text
+            guard let edited = startBlock.replacingText(
+                in: NSRange(location: start.offset, length: end.offset - start.offset),
+                with: replacement
             ) else { return nil }
-            let text = startBlock.text.replacingCharacters(in: sourceRange, with: replacement)
             let updated = blocks.enumerated().map { index, block in
-                guard index == start.index else { return block }
-                return EditorBlock(
-                    id: block.id,
-                    kind: block.kind,
-                    text: text,
-                    indentLevel: block.indentLevel
-                )
+                index == start.index ? edited : block
             }
             apply(updated)
             updateDocumentSelection(nextSelection)
             return currentDocumentSelection
         }
 
-        guard let prefixEnd = Self.stringIndex(in: startBlock.text, utf16Offset: start.offset),
-              let suffixStart = Self.stringIndex(in: endBlock.text, utf16Offset: end.offset)
-        else { return nil }
-        let prefix = String(startBlock.text[..<prefixEnd])
-        let suffix = String(endBlock.text[suffixStart...])
         let parts = replacement.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
         let replacementBlocks: [EditorBlock]
         if parts.count == 1 {
-            replacementBlocks = [EditorBlock(
-                id: startBlock.id,
-                kind: startBlock.kind,
-                text: prefix + parts[0] + suffix,
-                indentLevel: startBlock.indentLevel
-            )]
+            if start.index == end.index {
+                guard let edited = startBlock.replacingText(
+                    in: NSRange(location: start.offset, length: end.offset - start.offset),
+                    with: parts[0]
+                ) else { return nil }
+                replacementBlocks = [edited]
+            } else {
+                guard let first = startBlock.replacingText(
+                    in: NSRange(
+                        location: start.offset,
+                        length: startBlock.text.utf16.count - start.offset
+                    ),
+                    with: parts[0]
+                ), let last = endBlock.replacingText(
+                    in: NSRange(location: 0, length: end.offset),
+                    with: ""
+                ) else { return nil }
+                replacementBlocks = [first.merged(with: last)]
+            }
         } else {
             let continuationKind = startBlock.kind.continuationKind
-            var splitBlocks = [EditorBlock(
-                id: startBlock.id,
-                kind: startBlock.kind,
-                text: prefix + parts[0],
-                indentLevel: startBlock.indentLevel
-            )]
+            guard let first = startBlock.replacingText(
+                in: NSRange(
+                    location: start.offset,
+                    length: startBlock.text.utf16.count - start.offset
+                ),
+                with: parts[0]
+            ), let lastSource = endBlock.replacingText(
+                in: NSRange(location: 0, length: end.offset),
+                with: parts[parts.count - 1]
+            ) else { return nil }
+            var splitBlocks = [first]
             if parts.count > 2 {
                 splitBlocks += parts[1..<(parts.count - 1)].map {
                     EditorBlock(
@@ -439,7 +1001,8 @@ struct BlockEditorModel {
             splitBlocks.append(EditorBlock(
                 id: preservesEndBlock ? endBlock.id : UUID(),
                 kind: preservesEndBlock ? endBlock.kind : continuationKind,
-                text: parts[parts.count - 1] + suffix,
+                text: lastSource.text,
+                inlineMarks: lastSource.inlineMarks,
                 indentLevel: preservesEndBlock
                     ? endBlock.indentLevel
                     : (continuationKind.supportsIndentation ? startBlock.indentLevel : 0)
@@ -460,35 +1023,20 @@ struct BlockEditorModel {
     }
 
     mutating func splitBlock(id: UUID, replacing range: NSRange) -> BlockSelection? {
-        guard let index = blocks.firstIndex(where: { $0.id == id }),
-              range.location >= 0,
-              range.length >= 0,
-              NSMaxRange(range) <= blocks[index].text.utf16.count,
-              let sourceRange = Range(range, in: blocks[index].text)
-        else { return nil }
+        guard let index = blocks.firstIndex(where: { $0.id == id }) else { return nil }
 
         let current = blocks[index]
-        let text = current.text.replacingCharacters(in: sourceRange, with: "")
-        guard let parts = Self.split(text, atUTF16Offset: range.location) else { return nil }
-        if text.isEmpty, current.kind.supportsIndentation {
+        guard let edited = current.replacingText(in: range, with: ""),
+              let parts = edited.split(atUTF16Offset: range.location)
+        else { return nil }
+        if edited.text.isEmpty, current.kind.supportsIndentation {
             transform(id: id, to: .paragraph)
             return BlockSelection(blockID: id, range: NSRange(location: 0, length: 0))
         }
 
-        let left = EditorBlock(
-            id: current.id,
-            kind: current.kind,
-            text: parts.left,
-            indentLevel: current.indentLevel
-        )
-        let right = EditorBlock(
-            kind: current.kind.continuationKind,
-            text: parts.right,
-            indentLevel: current.kind.supportsIndentation ? current.indentLevel : 0
-        )
-        let updated = Array(blocks[..<index]) + [left, right] + Array(blocks[(index + 1)...])
+        let updated = Array(blocks[..<index]) + [parts.left, parts.right] + Array(blocks[(index + 1)...])
         apply(updated)
-        return BlockSelection(blockID: right.id, range: NSRange(location: 0, length: 0))
+        return BlockSelection(blockID: parts.right.id, range: NSRange(location: 0, length: 0))
     }
 
     mutating func insertSoftBreak(id: UUID, atUTF16Offset offset: Int) -> BlockSelection? {
@@ -526,12 +1074,7 @@ struct BlockEditorModel {
         }
 
         let boundary = previous.text.utf16.count
-        let merged = EditorBlock(
-            id: previous.id,
-            kind: previous.kind,
-            text: previous.text + current.text,
-            indentLevel: previous.indentLevel
-        )
+        let merged = previous.merged(with: current)
         let updated = Array(blocks[..<(index - 1)]) + [merged] + Array(blocks[(index + 1)...])
         apply(updated)
         return BlockSelection(
@@ -558,7 +1101,12 @@ struct BlockEditorModel {
     mutating func duplicate(id: UUID) -> BlockSelection? {
         guard let index = blocks.firstIndex(where: { $0.id == id }) else { return nil }
         let source = blocks[index]
-        let copy = EditorBlock(kind: source.kind, text: source.text, indentLevel: source.indentLevel)
+        let copy = EditorBlock(
+            kind: source.kind,
+            text: source.text,
+            inlineMarks: source.inlineMarks,
+            indentLevel: source.indentLevel
+        )
         let insertion = index + 1
         let updated = Array(blocks[..<insertion]) + [copy] + Array(blocks[insertion...])
         apply(updated)
@@ -587,12 +1135,7 @@ struct BlockEditorModel {
         guard let current = block(id: id), current.kind != kind else { return }
         let updated = blocks.map { block in
             guard block.id == id else { return block }
-            return EditorBlock(
-                id: block.id,
-                kind: kind,
-                text: block.text,
-                indentLevel: kind.supportsIndentation ? block.indentLevel : 0
-            )
+            return block.changingKind(to: kind)
         }
         apply(updated)
     }
@@ -633,21 +1176,10 @@ struct BlockEditorModel {
         with replacement: String
     ) -> BlockSelection? {
         guard let current = block(id: id),
-              range.location >= 0,
-              range.length >= 0,
-              NSMaxRange(range) <= current.text.utf16.count,
-              let sourceRange = Range(range, in: current.text)
+              let edited = current.replacingText(in: range, with: replacement)
         else { return nil }
-
-        let updatedText = current.text.replacingCharacters(in: sourceRange, with: replacement)
         let updated = blocks.map { block in
-            guard block.id == id else { return block }
-            return EditorBlock(
-                id: block.id,
-                kind: block.kind,
-                text: updatedText,
-                indentLevel: block.indentLevel
-            )
+            block.id == id ? edited : block
         }
         apply(updated)
         return BlockSelection(
@@ -662,34 +1194,79 @@ struct BlockEditorModel {
         range: NSRange
     ) -> BlockSelection? {
         guard let current = block(id: id),
+              !current.kind.preservesLineBreaks,
               range.location >= 0,
-              range.length >= 0,
+              range.length > 0,
               NSMaxRange(range) <= current.text.utf16.count,
-              let sourceRange = Range(range, in: current.text)
+              Range(range, in: current.text) != nil
         else {
             return nil
         }
-        let delimiters = format.delimiters
-        let selected = String(current.text[sourceRange])
-        let replacement = delimiters.opening + selected + delimiters.closing
-        guard replaceText(id: id, range: range, with: replacement) != nil else { return nil }
-        let location = range.location + delimiters.opening.utf16.count
+        var marks = current.inlineMarks.filter { $0.format != format }
+        let formatMarks = current.inlineMarks.filter { $0.format == format }
+        if Self.covers(range, with: formatMarks.map(\.range)) {
+            for mark in formatMarks {
+                let leftLength = max(
+                    min(range.location, NSMaxRange(mark.range)) - mark.range.location,
+                    0
+                )
+                if leftLength > 0 {
+                    marks.append(InlineMark(
+                        format: format,
+                        range: NSRange(location: mark.range.location, length: leftLength)
+                    ))
+                }
+                let rightStart = max(NSMaxRange(range), mark.range.location)
+                let rightLength = max(NSMaxRange(mark.range) - rightStart, 0)
+                if rightLength > 0 {
+                    marks.append(InlineMark(
+                        format: format,
+                        range: NSRange(location: rightStart, length: rightLength)
+                    ))
+                }
+            }
+        } else {
+            marks.append(contentsOf: formatMarks)
+            marks.append(InlineMark(format: format, range: range))
+        }
+        let edited = EditorBlock(
+            id: current.id,
+            kind: current.kind,
+            text: current.text,
+            inlineMarks: marks,
+            indentLevel: current.indentLevel
+        )
+        apply(blocks.map { $0.id == id ? edited : $0 })
         return BlockSelection(
             blockID: id,
-            range: NSRange(location: location, length: selected.utf16.count)
+            range: range
         )
+    }
+
+    private static func covers(_ target: NSRange, with ranges: [NSRange]) -> Bool {
+        var cursor = target.location
+        for range in ranges.sorted(by: { $0.location < $1.location }) {
+            if NSMaxRange(range) <= cursor { continue }
+            if range.location > cursor { return false }
+            cursor = max(cursor, NSMaxRange(range))
+            if cursor >= NSMaxRange(target) { return true }
+        }
+        return false
     }
 
     mutating func applyShortcut(id: UUID, kind: EditorBlockKind, prefixUTF16Length: Int) -> BlockSelection? {
         guard let current = block(id: id),
               prefixUTF16Length >= 0,
               prefixUTF16Length <= current.text.utf16.count,
-              let contentStart = Self.stringIndex(in: current.text, utf16Offset: prefixUTF16Length)
+              Self.stringIndex(in: current.text, utf16Offset: prefixUTF16Length) != nil
         else { return nil }
-        let updatedText = String(current.text[contentStart...])
+        guard let withoutPrefix = current.replacingText(
+            in: NSRange(location: 0, length: prefixUTF16Length),
+            with: ""
+        ) else { return nil }
         let updated = blocks.map { block in
             guard block.id == id else { return block }
-            return EditorBlock(id: block.id, kind: kind, text: updatedText, indentLevel: 0)
+            return withoutPrefix.changingKind(to: kind, indentLevel: 0)
         }
         apply(updated)
         return BlockSelection(blockID: id, range: NSRange(location: 0, length: 0))
@@ -749,6 +1326,7 @@ struct BlockEditorModel {
                 id: block.id,
                 kind: block.kind,
                 text: block.text,
+                inlineMarks: block.inlineMarks,
                 indentLevel: nextLevel
             )
         }
@@ -835,15 +1413,18 @@ struct BlockEditorModel {
     private static func normalized(_ source: [EditorBlock]) -> [EditorBlock] {
         let expanded = source.flatMap { block -> [EditorBlock] in
             guard !block.kind.preservesLineBreaks, block.text.contains("\n") else { return [block] }
+            var location = 0
             return block.text
                 .split(separator: "\n", omittingEmptySubsequences: false)
                 .enumerated()
-                .map { index, text in
+                .compactMap { index, text in
                     let kind = index == 0 ? block.kind : block.kind.continuationKind
-                    return EditorBlock(
+                    let length = text.utf16.count
+                    defer { location += length + 1 }
+                    return block.subblock(
+                        in: NSRange(location: location, length: length),
                         id: index == 0 ? block.id : UUID(),
                         kind: kind,
-                        text: String(text),
                         indentLevel: kind.supportsIndentation ? block.indentLevel : 0
                     )
                 }

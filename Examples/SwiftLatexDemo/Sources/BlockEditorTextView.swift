@@ -1,6 +1,7 @@
 // Created by JunyoungJung on 2026-08-21.
 
 import SwiftUI
+import SwiftLatex
 import UIKit
 
 enum EditorToolbarAction {
@@ -24,7 +25,6 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
     @Environment(\.sizeCategory) private var sizeCategory
 
     let blocks: [EditorBlock]
-    let parsesDollarMath: Bool
     let selection: NSRange?
     let canUndo: Bool
     let canRedo: Bool
@@ -46,9 +46,12 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityIdentifier = "blockDocumentTextView"
         view.accessibilityLabel = "문서 편집기"
+        let editingEquationIDs = selection.map {
+            Self.equationBlockIDs(in: blocks, selection: $0)
+        } ?? []
         view.attributedText = MarkdownStyler.styledDocument(
             blocks,
-            dollarMath: parsesDollarMath,
+            editingEquationIDs: editingEquationIDs,
             traitCollection: view.traitCollection
         )
         if let selection {
@@ -60,7 +63,7 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         coordinator.editingView = view
         coordinator.baselineText = view.text
         coordinator.lastBlocks = blocks
-        coordinator.lastParsesDollarMath = parsesDollarMath
+        coordinator.lastEditingEquationIDs = editingEquationIDs
         coordinator.lastContentSizeCategory = sizeCategory
         let block = activeBlock
         let kind = block?.kind ?? .paragraph
@@ -85,21 +88,26 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) {
         let coordinator = context.coordinator
         coordinator.parent = self
+        let nextSelection = Self.clamped(
+            selection ?? view.selectedRange,
+            length: blocks.map(\.text).joined(separator: "\n").utf16.count
+        )
+        let editingEquationIDs = selection.map { _ in
+            Self.equationBlockIDs(in: blocks, selection: nextSelection)
+        } ?? coordinator.lastEditingEquationIDs
         let block = activeBlock
         let kind = block?.kind ?? .paragraph
         coordinator.accessory?.update(kind: kind, canUndo: canUndo, canRedo: canRedo)
 
         guard view.markedTextRange == nil else { return }
-        let documentText = blocks.map(\.text).joined(separator: "\n")
         if coordinator.lastBlocks != blocks
-            || coordinator.lastParsesDollarMath != parsesDollarMath
+            || coordinator.lastEditingEquationIDs != editingEquationIDs
             || coordinator.lastContentSizeCategory != sizeCategory
-            || view.text != documentText {
-            coordinator.applyDocumentStyle(to: view)
+        {
+            coordinator.applyDocumentStyle(to: view, selection: nextSelection)
         }
-        if let selection {
-            let next = Self.clamped(selection, length: view.text.utf16.count)
-            if view.selectedRange != next { coordinator.applySelection(next, to: view) }
+        if view.selectedRange != nextSelection {
+            coordinator.applySelection(nextSelection, to: view)
         }
         coordinator.applyTypingAttributes(
             MarkdownStyler.typingAttributes(
@@ -123,7 +131,7 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         var isApplyingUpdate = false
         var baselineText = ""
         var lastBlocks: [EditorBlock] = []
-        var lastParsesDollarMath = true
+        var lastEditingEquationIDs: Set<UUID> = []
         var lastContentSizeCategory: ContentSizeCategory?
         private var pendingTextChange: (range: NSRange, replacement: String)?
         private var compositionRange: NSRange?
@@ -150,6 +158,13 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         func textViewDidChangeSelection(_ textView: UITextView) {
             guard !isApplyingUpdate, textView.markedTextRange == nil else { return }
             reconcileTextChange(in: textView)
+            let editingEquationIDs = BlockDocumentTextEditor.equationBlockIDs(
+                in: parent.blocks,
+                selection: textView.selectedRange
+            )
+            if editingEquationIDs != lastEditingEquationIDs {
+                applyDocumentStyle(to: textView, selection: textView.selectedRange)
+            }
             lastCommittedSelection = textView.selectedRange
             parent.onSelectionChange(textView.selectedRange)
         }
@@ -169,13 +184,22 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
             parent.onToolbarAction(action, range)
         }
 
-        func applyDocumentStyle(to view: UITextView) {
+        func applyDocumentStyle(to view: UITextView, selection: NSRange? = nil) {
+            let requestedSelection = selection ?? view.selectedRange
+            let editingEquationIDs = BlockDocumentTextEditor.equationBlockIDs(
+                in: parent.blocks,
+                selection: requestedSelection
+            )
+            let selection = BlockDocumentTextEditor.sourceAlignedSelection(
+                requestedSelection,
+                in: parent.blocks,
+                editingEquationIDs: editingEquationIDs
+            )
             let styled = MarkdownStyler.styledDocument(
                 parent.blocks,
-                dollarMath: parent.parsesDollarMath,
+                editingEquationIDs: editingEquationIDs,
                 traitCollection: view.traitCollection
             )
-            let selection = view.selectedRange
             isApplyingUpdate = true
             if view.text == styled.string {
                 Self.applyAttributes(from: styled, to: view.textStorage)
@@ -189,7 +213,7 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
             lastCommittedSelection = view.selectedRange
             baselineText = styled.string
             lastBlocks = parent.blocks
-            lastParsesDollarMath = parent.parsesDollarMath
+            lastEditingEquationIDs = editingEquationIDs
             lastContentSizeCategory = parent.sizeCategory
             isApplyingUpdate = false
         }
@@ -330,6 +354,74 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
             if index < blocks.count - 1 { location += 1 }
         }
         return blocks.last
+    }
+
+    private static func equationBlockIDs(
+        in blocks: [EditorBlock],
+        selection: NSRange
+    ) -> Set<UUID> {
+        var location = 0
+        var result: Set<UUID> = []
+        for (index, block) in blocks.enumerated() {
+            let range = NSRange(location: location, length: block.text.utf16.count)
+            let intersects = selection.length == 0
+                ? selection.location >= range.location && selection.location <= NSMaxRange(range)
+                : NSIntersectionRange(selection, range).length > 0
+            if block.kind == .equation, intersects { result.insert(block.id) }
+            location = NSMaxRange(range)
+            if index < blocks.count - 1 { location += 1 }
+        }
+        return result
+    }
+
+    private static func sourceAlignedSelection(
+        _ selection: NSRange,
+        in blocks: [EditorBlock],
+        editingEquationIDs: Set<UUID>
+    ) -> NSRange {
+        let start = sourceAlignedOffset(
+            selection.location,
+            in: blocks,
+            editingEquationIDs: editingEquationIDs,
+            preferUpperBoundary: false
+        )
+        let end = sourceAlignedOffset(
+            NSMaxRange(selection),
+            in: blocks,
+            editingEquationIDs: editingEquationIDs,
+            preferUpperBoundary: selection.length > 0
+        )
+        return NSRange(location: start, length: max(end - start, 0))
+    }
+
+    private static func sourceAlignedOffset(
+        _ offset: Int,
+        in blocks: [EditorBlock],
+        editingEquationIDs: Set<UUID>,
+        preferUpperBoundary: Bool
+    ) -> Int {
+        var blockStart = 0
+        for (index, block) in blocks.enumerated() {
+            let blockEnd = blockStart + block.text.utf16.count
+            if editingEquationIDs.contains(block.id),
+               offset >= blockStart,
+               offset <= blockEnd {
+                var localOffset = offset - blockStart
+                while !isCharacterBoundary(localOffset, in: block.text) {
+                    localOffset += preferUpperBoundary ? 1 : -1
+                }
+                return blockStart + localOffset
+            }
+            blockStart = blockEnd
+            if index < blocks.count - 1 { blockStart += 1 }
+        }
+        return offset
+    }
+
+    private static func isCharacterBoundary(_ offset: Int, in text: String) -> Bool {
+        guard offset >= 0, offset <= text.utf16.count else { return false }
+        let index = text.utf16.index(text.utf16.startIndex, offsetBy: offset)
+        return String.Index(index, within: text) != nil
     }
 
     private static func clamped(_ range: NSRange, length: Int) -> NSRange {
@@ -519,6 +611,74 @@ fileprivate final class BlockKeyboardToolbar: UIView {
     }
 }
 
+private final class EquationTextAttachment: NSTextAttachment {
+    let latex: String
+
+    init(latex: String) {
+        self.latex = latex
+        super.init(data: nil, ofType: nil)
+        allowsTextAttachmentView = true
+        lineLayoutPadding = 0
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("EquationTextAttachment는 코드로만 생성합니다")
+    }
+
+    override func viewProvider(
+        for parentView: UIView?,
+        location: any NSTextLocation,
+        textContainer: NSTextContainer?
+    ) -> NSTextAttachmentViewProvider? {
+        EquationAttachmentViewProvider(
+            textAttachment: self,
+            parentView: parentView,
+            textLayoutManager: textContainer?.textLayoutManager,
+            location: location
+        )
+    }
+}
+
+private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider {
+    override func loadView() {
+        super.loadView()
+        guard let attachment = textAttachment as? EquationTextAttachment else { return }
+        let equationView = LatexEquationUIView(latex: attachment.latex)
+        equationView.isUserInteractionEnabled = false
+        view = equationView
+        tracksTextAttachmentViewBounds = true
+    }
+
+    override func attachmentBounds(
+        for attributes: [NSAttributedString.Key: Any],
+        location: any NSTextLocation,
+        textContainer: NSTextContainer?,
+        proposedLineFragment: CGRect,
+        position: CGPoint
+    ) -> CGRect {
+        guard let equationView = view as? LatexEquationUIView else {
+            return super.attachmentBounds(
+                for: attributes,
+                location: location,
+                textContainer: textContainer,
+                proposedLineFragment: proposedLineFragment,
+                position: position
+            )
+        }
+        let intrinsic = equationView.intrinsicContentSize
+        let availableWidth = max(proposedLineFragment.width - position.x, 1)
+        let width = min(max(intrinsic.width, 1), availableWidth)
+        let font = attributes[.font] as? UIFont
+        return CGRect(
+            x: 0,
+            y: font?.descender ?? 0,
+            width: width,
+            height: max(intrinsic.height, font?.lineHeight ?? 1)
+        )
+    }
+}
+
 /// 블록 마커는 모델로 분리하고, 인라인 Markdown만 라이브 스타일링한다.
 enum MarkdownStyler {
     static func baseAttributes(
@@ -546,7 +706,7 @@ enum MarkdownStyler {
 
     static func styledDocument(
         _ blocks: [EditorBlock],
-        dollarMath: Bool,
+        editingEquationIDs: Set<UUID> = [],
         traitCollection: UITraitCollection? = nil
     ) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -571,12 +731,13 @@ enum MarkdownStyler {
             previousKinds[depth] = block.kind
 
             let start = result.length
-            result.append(styled(
-                block.text,
-                dollarMath: dollarMath,
-                kind: block.kind,
-                traitCollection: traitCollection
-            ))
+            if block.kind == .equation,
+               !editingEquationIDs.contains(block.id),
+               !block.text.isEmpty {
+                result.append(equationAttachment(for: block, traitCollection: traitCollection))
+            } else {
+                result.append(styled(block, traitCollection: traitCollection))
+            }
             if index < blocks.count - 1 {
                 result.append(NSAttributedString(
                     string: "\n",
@@ -596,71 +757,69 @@ enum MarkdownStyler {
             }
         }
 
-        assert(result.string == blocks.map(\.text).joined(separator: "\n"))
+        assert(result.length == blocks.map(\.text).joined(separator: "\n").utf16.count)
         return result
     }
 
     static func styled(
-        _ source: String,
-        dollarMath: Bool,
-        kind: EditorBlockKind,
+        _ block: EditorBlock,
         traitCollection: UITraitCollection? = nil
     ) -> NSAttributedString {
-        let body = font(for: kind, traitCollection: traitCollection)
         let text = NSMutableAttributedString(
-            string: source,
-            attributes: baseAttributes(for: kind, traitCollection: traitCollection)
+            string: block.text,
+            attributes: baseAttributes(for: block.kind, traitCollection: traitCollection)
         )
-        guard !kind.preservesLineBreaks else { return text }
+        guard !block.kind.preservesLineBreaks else { return text }
         let mono = scaledMonospacedFont(
             forTextStyle: .body,
             pointSizeAdjustment: -2,
             traitCollection: traitCollection
         )
 
-        // 굵게 / 기울임 / 취소선 / 인라인 코드. 내용에 스타일, 마커는 흐리게.
-        enumerate(#"\*\*([^\n]+?)\*\*"#, source) { match in
-            text.addAttribute(
-                .font,
-                value: withTraits(.traitBold, font: body),
-                range: match.range(at: 1)
-            )
-            hideDelimiters(of: match, in: text)
-        }
-        enumerate(#"(?<![\*\w])\*([^\*\n]+)\*(?!\*)"#, source) { match in
-            text.addAttribute(
-                .font,
-                value: withTraits(.traitItalic, font: body),
-                range: match.range(at: 1)
-            )
-            hideDelimiters(of: match, in: text)
-        }
-        enumerate(#"~~([^\n]+?)~~"#, source) { match in
-            text.addAttribute(
-                .strikethroughStyle,
-                value: NSUnderlineStyle.single.rawValue,
-                range: match.range(at: 1)
-            )
-            hideDelimiters(of: match, in: text)
-        }
-        enumerate(#"`([^`\n]+)`"#, source) { match in
-            text.addAttribute(.font, value: mono, range: match.range(at: 1))
-            text.addAttribute(.backgroundColor, value: UIColor.secondarySystemFill, range: match.range(at: 1))
-            hideDelimiters(of: match, in: text)
-        }
-
-        // 수식: 편집 중에는 흐린 monospace 소스로 표시. 렌더는 커밋 시.
-        var mathPatterns = [#"\\\[[\s\S]+?\\\]"#, #"\\\([\s\S]+?\\\)"#]
-        if dollarMath {
-            mathPatterns += [#"\$\$[\s\S]+?\$\$"#, #"\$[^\$\n]+\$"#]
-        }
-        for pattern in mathPatterns {
-            enumerate(pattern, source) { match in
-                text.addAttribute(.font, value: mono, range: match.range)
-                text.addAttribute(.foregroundColor, value: UIColor.secondaryLabel, range: match.range)
+        for format in InlineFormat.allCases {
+            for mark in block.inlineMarks where mark.format == format && mark.range.length > 0 {
+                guard mark.range.location >= 0, NSMaxRange(mark.range) <= text.length else { continue }
+                switch mark.format {
+                case .bold:
+                    applyFontTraits(.traitBold, range: mark.range, to: text)
+                case .italic:
+                    applyFontTraits(.traitItalic, range: mark.range, to: text)
+                case .strikethrough:
+                    text.addAttribute(
+                        .strikethroughStyle,
+                        value: NSUnderlineStyle.single.rawValue,
+                        range: mark.range
+                    )
+                case .code:
+                    text.addAttribute(.font, value: mono, range: mark.range)
+                    text.addAttribute(
+                        .backgroundColor,
+                        value: UIColor.secondarySystemFill,
+                        range: mark.range
+                    )
+                }
             }
         }
         return text
+    }
+
+    private static func equationAttachment(
+        for block: EditorBlock,
+        traitCollection: UITraitCollection?
+    ) -> NSAttributedString {
+        let length = block.text.utf16.count
+        let attachment = EquationTextAttachment(latex: block.text)
+        let result = NSMutableAttributedString(attachment: attachment)
+        if length > 1 {
+            result.append(NSAttributedString(
+                string: String(repeating: "\u{2063}", count: length - 1)
+            ))
+        }
+        result.addAttributes(
+            baseAttributes(for: block.kind, traitCollection: traitCollection),
+            range: NSRange(location: 0, length: result.length)
+        )
+        return result
     }
 
     private static func paragraphStyle(
@@ -780,30 +939,17 @@ enum MarkdownStyler {
         return UIFont(descriptor: descriptor, size: font.pointSize)
     }
 
-    /// 소스의 UTF-16 위치는 유지하되 문법 마커는 화면에서 접어 WYSIWYG로 보인다.
-    private static func hideDelimiters(of match: NSTextCheckingResult, in text: NSMutableAttributedString) {
-        let whole = match.range
-        let content = match.range(at: 1)
-        let leading = NSRange(location: whole.location, length: content.location - whole.location)
-        let trailingStart = content.location + content.length
-        let trailing = NSRange(location: trailingStart, length: whole.location + whole.length - trailingStart)
-        let hidden: [NSAttributedString.Key: Any] = [
-            .foregroundColor: UIColor.clear,
-            .font: UIFont.systemFont(ofSize: 0.1),
-        ]
-        text.addAttributes(hidden, range: leading)
-        text.addAttributes(hidden, range: trailing)
-    }
-
-    private static func enumerate(
-        _ pattern: String,
-        _ source: String,
-        _ options: NSRegularExpression.Options = [],
-        _ handler: (NSTextCheckingResult) -> Void
+    private static func applyFontTraits(
+        _ traits: UIFontDescriptor.SymbolicTraits,
+        range: NSRange,
+        to text: NSMutableAttributedString
     ) {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
-        regex.enumerateMatches(in: source, range: NSRange(source.startIndex..., in: source)) { match, _, _ in
-            if let match { handler(match) }
+        var runs: [(UIFont, NSRange)] = []
+        text.enumerateAttribute(.font, in: range) { value, runRange, _ in
+            if let font = value as? UIFont { runs.append((font, runRange)) }
+        }
+        for (font, runRange) in runs {
+            text.addAttribute(.font, value: withTraits(traits, font: font), range: runRange)
         }
     }
 }
