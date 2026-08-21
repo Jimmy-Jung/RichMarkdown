@@ -192,4 +192,87 @@ import UIKit
         let text = renderedText(in: view)
         #expect(text.contains(#"\(\frac{\)"#), "실패 노드는 원래 구분자를 포함한 원문을 유지한다")
     }
+
+    // MARK: - 블록 뷰 증분 재사용
+
+    @Test func reusesBlockViewsWhenResubmittingSameValues() async throws {
+        let view = LatexMarkdownUIView(markdown: "첫 문단\n\n둘째 문단")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let before = view.blockStack.arrangedSubviews
+        #expect(before.count == 2)
+
+        view.markdown = "첫 문단\n\n둘째 문단"
+        view.theme = .default
+        try await waitForRender(view)
+
+        let after = view.blockStack.arrangedSubviews
+        #expect(after.count == 2)
+        #expect(zip(after, before).allSatisfy { $0 === $1 }, "값이 그대로면 블록 뷰도 그대로여야 한다")
+    }
+
+    /// 스트리밍 append 경로. markdown이 바뀌면 model이 `document = nil`을 먼저 게시하므로
+    /// 원문 fallback 단계를 반드시 거친다. 그 단계에서 뷰 인스턴스를 버리면 재사용이 없다.
+    @Test func keepsLeadingBlockViewsWhenAppendingParagraph() async throws {
+        let view = LatexMarkdownUIView(markdown: "첫 문단\n\n둘째 문단")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let before = view.blockStack.arrangedSubviews
+        #expect(before.count == 2)
+
+        view.markdown = "첫 문단\n\n둘째 문단\n\n셋째 문단"
+        try await waitForRender(view)
+
+        let after = view.blockStack.arrangedSubviews
+        #expect(after.count == 3, "새 블록만 늘어야 한다")
+        #expect(after[0] === before[0], "앞 블록은 뷰를 재사용해야 한다")
+        #expect(after[1] === before[1], "앞 블록은 뷰를 재사용해야 한다")
+    }
+
+    @Test func rebuildsEveryBlockWhenAppearanceChanges() async throws {
+        let view = LatexMarkdownUIView(markdown: "첫 문단\n\n둘째 문단")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let before = view.blockStack.arrangedSubviews
+        #expect(before.count == 2)
+
+        var theme = LatexTheme.default
+        theme.textColor = .red
+        view.theme = theme
+        try await waitForRender(view)
+
+        let after = view.blockStack.arrangedSubviews
+        #expect(after.count == before.count)
+        #expect(zip(after, before).allSatisfy { $0 !== $1 }, "겉모습이 바뀌면 전 블록을 새로 만든다")
+    }
+
+    /// 수식 이미지 hydration은 같은 문서를 두 번 게시한다(원문 → 이미지).
+    /// 수식이 없는 블록은 그 두 게시 모두에서 뷰를 다시 만들지 않아야 한다.
+    @Test func keepsPlainBlockViewAcrossMathHydration() async throws {
+        let view = LatexMarkdownUIView(markdown: #"안정 문단\#n\#n수식 \(x_{4517}+1\) 끝"#)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        #expect(view.blockStack.arrangedSubviews.count == 2)
+        #expect(attachmentCount(in: view) == 1)
+        let plainBefore = view.blockStack.arrangedSubviews[0]
+        let mathBefore = view.blockStack.arrangedSubviews[1]
+
+        // 처음 보는 latex라 raster 캐시가 비어 있다 — 2단계 게시를 결정적으로 강제한다.
+        view.markdown = #"안정 문단\#n\#n수식 \(x_{4519}+1\) 끝"#
+        try await waitFor(view) {
+            !$0.model.hasOutstandingWork
+                && !$0.hasPendingRebuild
+                && attachmentCount(in: $0) == 1
+        }
+
+        #expect(
+            view.blockStack.arrangedSubviews[0] === plainBefore,
+            "수식 없는 블록은 fallback·parse·hydration 게시에서 모두 재사용된다"
+        )
+        #expect(view.blockStack.arrangedSubviews[1] !== mathBefore, "수식이 바뀐 블록은 새로 만든다")
+    }
 }

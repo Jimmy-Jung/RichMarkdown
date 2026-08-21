@@ -65,6 +65,32 @@ public final class LatexMarkdownUIView: UIView {
     private var rebuildScheduled = false
     private var contentSizeChangeScheduled = false
 
+    /// 마지막 rebuild가 만든 블록별 뷰. 같은 값으로 다시 게시되면 재사용한다.
+    private struct RenderedBlock {
+        let block: ParsedBlock
+        let view: UIView
+        /// 이 블록이 수식 이미지 사전에서 찾아 쓴 개수. hydration 게시로 이 수가 바뀌면
+        /// attributed string이 달라지므로 뷰를 다시 만들어야 한다.
+        let mathImageCount: Int
+    }
+
+    /// 블록 뷰 재사용 판정용 겉모습 식별자.
+    ///
+    /// 해석된 `UIFont`를 그대로 담아 Dynamic Type·Bold Text 같은 trait 변화를 값 비교로
+    /// 잡는다. 텍스트 색은 resolved RGBA다 — 다크 모드 전환이 여기서 잡힌다.
+    /// `theme` 자체도 담는다: 인용 바 색처럼 Request에 실리지 않는 필드가 바뀌면
+    /// 파생 폰트·색만으로는 구별되지 않는다.
+    private struct AppearanceKey: Equatable {
+        let theme: LatexTheme
+        let bodyFont: UIFont
+        let codeFont: UIFont
+        let textColorRGBA: UInt32
+        let displayScale: CGFloat
+    }
+
+    private var renderedBlocks: [RenderedBlock] = []
+    private var renderedAppearance: AppearanceKey?
+
     /// 테스트의 조건 기반 idle 대기용 상태다. 외부 API 계약은 아니다.
     var hasPendingRebuild: Bool { rebuildScheduled || contentSizeChangeScheduled }
 
@@ -183,30 +209,114 @@ public final class LatexMarkdownUIView: UIView {
         let signpostState = SwiftLatexSignposts.rebuild.beginInterval("rebuild")
         defer { SwiftLatexSignposts.rebuild.endInterval("rebuild", signpostState) }
 
-        for view in blockStack.arrangedSubviews {
-            blockStack.removeArrangedSubview(view)
-            view.removeFromSuperview()
-        }
-
         if let document = model.document {
             // 문서는 같아도 theme/color/scale 요청이 바뀌면 새 raster가 필요하다.
             // `imageRequest`가 일치할 때만 이전 bitmap을 쓴다.
             let images = model.imageRequest == currentRequest ? model.mathImages : [:]
-            for block in document.blocks {
-                blockStack.addArrangedSubview(blockView(block, images: images))
-            }
+            rebuildBlocks(document.blocks, images: images)
         } else {
             // 최신 원문 fallback 즉시 표시 (DEVELOPMENT.md §4).
-            blockStack.addArrangedSubview(
-                textView(NSAttributedString(string: model.fallbackMarkdown, attributes: [
-                    .font: bodyUIFont,
-                    .foregroundColor: UIColor(theme.textColor),
-                ]))
+            //
+            // `renderedBlocks`는 비우지 않는다. markdown이 바뀌면 model이 항상
+            // `document = nil`을 먼저 게시하므로 스트리밍 append는 매 갱신이 이 단계를
+            // 거친다. 여기서 비우면 재사용이 0이 된다. 뷰 인스턴스를 살려 두고 계층에서만
+            // 떼어, parse가 끝난 다음 게시에서 앞쪽 블록을 그대로 되돌린다.
+            setBlockViews(
+                [
+                    textView(NSAttributedString(string: model.fallbackMarkdown, attributes: [
+                        .font: bodyUIFont,
+                        .foregroundColor: UIColor(theme.textColor),
+                    ])),
+                ],
+                reusedCount: 0
             )
         }
 
         invalidateIntrinsicContentSize()
         scheduleContentSizeChange()
+    }
+
+    /// 블록 단위 재사용. `ParsedBlock`이 `Hashable`이라 값 비교로 판단한다.
+    ///
+    /// 스트리밍 입력은 append 중심이라 앞쪽 블록이 안정적이다. 값이 처음 달라지는
+    /// index부터 뒤쪽 전부를 새로 만든다(suffix 교체). 중간 삽입 diff(LCS)는 복잡도
+    /// 대비 이득이 없어 구현하지 않는다.
+    private func rebuildBlocks(_ blocks: [ParsedBlock], images: [MathSegment: RenderedMath]) {
+        let appearance = currentAppearance
+        // 폰트·색·scale이 바뀌면 모든 블록의 attributed string이 달라진다.
+        let reusable = appearance == renderedAppearance ? renderedBlocks : []
+
+        var reusedCount = 0
+        while reusedCount < min(blocks.count, reusable.count) {
+            let block = blocks[reusedCount]
+            guard reusable[reusedCount].block == block,
+                  reusable[reusedCount].mathImageCount == mathImageCount(block, images: images)
+            else { break }
+            reusedCount += 1
+        }
+
+        let fresh = blocks.dropFirst(reusedCount).map { block in
+            RenderedBlock(
+                block: block,
+                view: blockView(block, images: images),
+                mathImageCount: mathImageCount(block, images: images)
+            )
+        }
+        let rendered = Array(reusable.prefix(reusedCount)) + fresh
+
+        setBlockViews(rendered.map(\.view), reusedCount: reusedCount)
+        renderedBlocks = rendered
+        renderedAppearance = appearance
+    }
+
+    /// 목표 배열로 `blockStack`을 맞춘다.
+    ///
+    /// 재사용 prefix가 이미 같은 순서로 실려 있으면 뒤쪽만 교체한다. fallback 뷰가
+    /// 실려 있는 등 prefix가 계층과 다르면 전량 재배치하되 뷰 인스턴스는 유지한다.
+    /// `addArrangedSubview`는 계층에서 떼어낸 뷰에만 호출한다 — 이미 arranged인 뷰에
+    /// 다시 호출하면 순서가 바뀔 수 있다.
+    private func setBlockViews(_ views: [UIView], reusedCount: Int) {
+        let attached = blockStack.arrangedSubviews
+        let prefixIsAttached = attached.count >= reusedCount
+            && zip(attached, views).prefix(reusedCount).allSatisfy { $0 === $1 }
+        let keptCount = prefixIsAttached ? reusedCount : 0
+
+        for view in attached.dropFirst(keptCount) {
+            blockStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        for view in views.dropFirst(keptCount) {
+            blockStack.addArrangedSubview(view)
+        }
+    }
+
+    private var currentAppearance: AppearanceKey {
+        AppearanceKey(
+            theme: theme,
+            bodyFont: bodyUIFont,
+            codeFont: codeUIFont,
+            textColorRGBA: UIColor(theme.textColor).resolvedColor(with: traitCollection).rgbaValue,
+            displayScale: displayScale
+        )
+    }
+
+    /// 이 블록이 수식 이미지 사전에서 실제로 찾아 쓰는 수식 중 준비된 개수.
+    private func mathImageCount(_ block: ParsedBlock, images: [MathSegment: RenderedMath]) -> Int {
+        switch block {
+        case .paragraph(let runs), .heading(_, let runs):
+            return runs.reduce(0) { count, run in
+                guard case .math(let segment) = run.content, images[segment] != nil else { return count }
+                return count + 1
+            }
+        case .blockMath(let segment):
+            return images[segment] == nil ? 0 : 1
+        case .blockQuote(let children):
+            return children.reduce(0) { $0 + mathImageCount($1, images: images) }
+        case .unorderedList(let items), .orderedList(_, let items):
+            return items.joined().reduce(0) { $0 + mathImageCount($1, images: images) }
+        case .codeBlock, .thematicBreak:
+            return 0
+        }
     }
 
     private func scheduleContentSizeChange() {
