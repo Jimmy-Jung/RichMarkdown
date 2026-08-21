@@ -91,6 +91,14 @@ public final class LatexMarkdownUIView: UIView {
     private var renderedBlocks: [RenderedBlock] = []
     private var renderedAppearance: AppearanceKey?
 
+    /// 원문 fallback 전용 재사용 뷰.
+    ///
+    /// 스트리밍은 markdown 갱신마다 fallback 게시(`document == nil`)를 거치므로, 매 tick
+    /// `UITextView`(TextKit 스택 통째)를 만들고 버리지 않도록 인스턴스 하나를 유지하고
+    /// attributed string만 바꾼다 (Docs/RENDERING_PERFORMANCE_PLAN.md §9.5).
+    /// 텍스트 레이아웃 비용 자체는 남는다 — 내용이 실제로 바뀌므로 피할 수 없다.
+    private lazy var fallbackTextView: LatexTextView = textView(NSAttributedString())
+
     /// 테스트의 조건 기반 idle 대기용 상태다. 외부 API 계약은 아니다.
     var hasPendingRebuild: Bool { rebuildScheduled || contentSizeChangeScheduled }
 
@@ -224,15 +232,17 @@ public final class LatexMarkdownUIView: UIView {
             // 거친다. 여기서 비우면 재사용이 0이 된다. 뷰 인스턴스를 살려 두고 계층에서만
             // 떼어, parse가 끝난 다음 게시에서 앞쪽 블록을 그대로 되돌린다.
             //
-            setBlockViews(
-                [
-                    textView(NSAttributedString(string: model.fallbackMarkdown, attributes: [
-                        .font: bodyUIFont,
-                        .foregroundColor: UIColor(theme.textColor),
-                    ])),
-                ],
-                reusedCount: 0
+            // 폰트·색은 매번 현재 값으로 다시 만든다 — fallback 표시 중의 테마·trait
+            // 변경도 이 대입이 흡수한다.
+            fallbackTextView.attributedText = NSAttributedString(
+                string: model.fallbackMarkdown,
+                attributes: [
+                    .font: bodyUIFont,
+                    .foregroundColor: UIColor(theme.textColor),
+                ]
             )
+            // reusedCount 1: 직전 프레임도 fallback이었다면(연속 스트리밍) 계층 조작이 없다.
+            setBlockViews([fallbackTextView], reusedCount: 1)
         }
 
         invalidateIntrinsicContentSize()

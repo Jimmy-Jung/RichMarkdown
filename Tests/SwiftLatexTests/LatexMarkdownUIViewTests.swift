@@ -347,4 +347,32 @@ import UIKit
         #expect(view.model.mathImages.isEmpty, "블록 수식만 있는 문서는 raster 이미지가 없어야 한다")
         #expect(view.model.imageRequest != nil, "빈 이미지 사전으로도 완결 게시가 온다")
     }
+
+    /// 스트리밍 fallback 프레임은 `UITextView`를 새로 만들지 않는다
+    /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.5 부채 해소).
+    ///
+    /// 타이밍 근거: markdown setter 안에서 `model.submit`이 `objectWillChange`를 동기로
+    /// 발화하므로 coalesced rebuild Task가 worker kick Task보다 먼저 MainActor 큐에
+    /// 들어간다. 한 번의 yield 뒤에는 fallback 프레임이 이미 렌더되어 있고, 그 프레임을
+    /// 덮을 parse 게시의 rebuild는 아직 실행될 수 없다(추가 MainActor hop 필요).
+    @Test func reusesFallbackTextViewAcrossStreamingUpdates() async throws {
+        let view = LatexMarkdownUIView(markdown: "첫 원문")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
+        // init은 fallback을 동기로 그린다 — 이 인스턴스가 재사용 대상이다.
+        let initialFallback = try #require(view.blockStack.arrangedSubviews.first)
+        try await waitForRender(view)
+
+        view.markdown = "첫 원문\n\n둘째 문단"
+        await Task.yield()
+
+        #expect(view.blockStack.arrangedSubviews.count == 1, "fallback은 원문 전체를 한 뷰로 보인다")
+        #expect(
+            view.blockStack.arrangedSubviews.first === initialFallback,
+            "fallback 뷰 인스턴스를 재사용한다 — TextKit 스택을 다시 만들지 않는다"
+        )
+        #expect(renderedText(in: view).contains("둘째 문단"), "fallback 내용은 최신 원문이다")
+
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 2, "parse 후에는 블록 뷰로 교체된다")
+    }
 }
