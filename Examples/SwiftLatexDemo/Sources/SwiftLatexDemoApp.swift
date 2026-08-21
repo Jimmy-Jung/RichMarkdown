@@ -24,6 +24,12 @@ struct ContentView: View {
                 NavigationLink("AI 챗봇 (UIKit)") {
                     UIKitChatDemoView()
                 }
+                NavigationLink("라이브 편집 (분할 미리보기)") {
+                    EditorDemoView()
+                }
+                NavigationLink("블록 편집 (Notion 스타일)") {
+                    BlockEditorDemoView()
+                }
                 NavigationLink("UIKit UIHostingConfiguration") {
                     HostingConfigurationDemo()
                         .ignoresSafeArea()
