@@ -3,13 +3,14 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.2.0 beta** — SwiftUI와 UIKit이 같은 parse·raster·theme 경로를 공유한다.
+> **0.3.0 beta** — GFM 표, Notion 스타일 인라인 코드 칩, 연속 문서형 블록 편집
+> 데모를 추가하고 UIKit 렌더링 경로를 최적화했다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
-LLM 채팅 메시지를 네이티브로 렌더하는 Swift Package. Markdown, 인라인/블록
+LLM 채팅 메시지를 네이티브로 렌더하는 Swift Package. Markdown, GFM 표, 인라인/블록
 LaTeX 수식, 코드 블록을 하나의 뷰로 표시한다. SwiftUI는 `LatexMarkdownView`,
 UIKit은 네이티브 `LatexMarkdownUIView`를 쓴다 — 두 뷰는 같은 파서·수식 raster·
 generation 관리를 공유한다.
@@ -25,15 +26,16 @@ generation 관리를 공유한다.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
 
-## 0.2.0 베타 핵심
+## 0.3.0 베타 핵심
 
-- **두 renderer, 하나의 결과** — SwiftUI `LatexMarkdownView`와 네이티브 UIKit
-  `LatexMarkdownUIView`가 같은 parser, 수식 raster cache, theme, 입력 보호 규칙을 쓴다.
-- **UIKit self-sizing** — 수식 hydration으로 높이가 바뀌면 `onContentSizeChange`가 해당
-  셀만 다시 측정하게 한다. 데모는 한 번 완성된 메시지 뷰를 ID별로 다시 붙여 스크롤 중
-  뷰 계층 재구성을 피한다.
-- **안전한 스트리밍** — 최신 누적 원문만 처리하고, cache miss에서는 이전 메시지 대신
-  최신 bounded fallback을 즉시 표시한다. 입력 크기와 비정상적으로 깊은 인용도 제한한다.
+- **GFM 표** — 헤더, 테두리, 열 정렬과 셀 안의 강조·링크·인라인 코드·수식을
+  SwiftUI와 UIKit에서 같은 파싱 결과로 렌더한다. 좁은 화면에서는 가로 스크롤한다.
+- **Notion 스타일 인라인 코드** — 둥근 칩, 테두리, 대비를 확보한 강조색으로 렌더한다.
+  SwiftUI iOS 18+와 UIKit TextKit 2가 같은 테마 값을 사용한다.
+- **UIKit 렌더링 최적화** — 변경되지 않은 블록과 fallback 텍스트 뷰를 재사용하고,
+  블록 수식은 벡터로 렌더해 불필요한 raster와 self-sizing 갱신을 줄였다.
+- **연속 문서형 블록 편집 데모** — 논리 블록은 유지하면서 하나의 TextKit 2
+  `UITextView`에서 선택·입력·undo/redo·인라인 서식을 처리한다.
 
 설계 문서: [DEVELOPMENT.md](DEVELOPMENT.md)
 
@@ -41,18 +43,17 @@ generation 관리를 공유한다.
 
 ## 스크린샷
 
-`Examples/SwiftLatexDemo`의 챗봇 화면. iPhone 16 Pro / iOS 18.6 실제 렌더다.
-인라인 코드는 이후 둥근 칩으로 바뀌었다 — 아래 이미지는 사각 배경 시절이다.
+`Examples/SwiftLatexDemo`의 실제 화면. iPhone 16 Pro / iOS 18.6에서 촬영했다.
 
 | 인라인·블록 수식 | Markdown 요소 |
 |---|---|
 | ![인라인과 블록 수식](Docs/screenshots/01-math.png) | ![Markdown 블록과 인라인 강조](Docs/screenshots/02-markdown.png) |
-| 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 인라인 코드, 링크, 리스트, 인용, 구분선, GFM 표. `\*별표\*` 같은 escape 해제도 함께 |
+| 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 둥근 인라인 코드 칩, 링크, 리스트, 인용, 구분선. `\*별표\*` 같은 escape 해제도 함께 |
 
-| 달러 수식 opt-in · fail-open | 코드 블록 (dark) |
+| GFM 표 | Notion 스타일 블록 편집 |
 |---|---|
-| ![달러 수식과 실패 시 원문 표시](Docs/screenshots/03-dollar-fallback.png) | ![코드 블록 dark mode](Docs/screenshots/04-code-dark.png) |
-| `$` opt-in이 꺼지면 전부 텍스트. `$5`, `$5 and $10`은 켜도 수식이 아니다. 잘못된 LaTeX는 구분자를 포함한 원문 그대로 | 언어 라벨과 복사 버튼, 긴 줄 가로 스크롤. 색은 light/dark를 따라간다 |
+| ![정렬과 인라인 콘텐츠를 포함한 GFM 표](Docs/screenshots/03-table.png) | ![하나의 연속 문서에서 편집하는 Notion 스타일 블록 편집기](Docs/screenshots/04-block-editor.png) |
+| 좌·중앙·우 정렬과 셀 안의 강조·인라인 코드·수식을 지원하며 좁은 화면에서는 가로 스크롤 | 하나의 연속 `UITextView`에서 제목·목록·할 일·인용·코드·수식을 편집하고 키보드 툴바로 블록과 인라인 서식을 바꾼다 |
 
 ---
 
@@ -62,8 +63,8 @@ generation 관리를 공유한다.
 
 ```swift
 dependencies: [
-    // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.2 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.2.0")),
+    // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.3 minor로 고정한다.
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.3.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
@@ -236,6 +237,12 @@ LatexMarkdownView(markdown: message, parsesDollarMath: true)
 ```swift
 let view = LatexMarkdownUIView(markdown: message, parsesDollarMath: false)
 view.theme = .default
+```
+
+Markdown chrome 없이 수식 하나만 필요한 UIKit 화면은 `LatexEquationUIView`를 쓴다.
+
+```swift
+let equationView = LatexEquationUIView(latex: #"\int_0^1 x^2 \, dx"#)
 ```
 
 `markdown` setter는 입력 보호 상한을 적용한다. 따라서 getter는 원문이 아니라 실제로

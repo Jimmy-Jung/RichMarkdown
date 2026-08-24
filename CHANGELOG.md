@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-24
+
 ### 추가
 
 - **GFM 표.** `swift-markdown`의 Table AST를 보존해 SwiftUI는 `Grid`, UIKit은
@@ -12,8 +14,13 @@
   인라인 코드·수식을 지원하며 좁은 화면에서는 가로 스크롤한다. 32열 또는 512셀을
   넘는 표는 뷰 폭증을 막기 위해 읽을 수 있는 plain text로 낮춘다.
 
-Notion 스타일 인라인 코드 칩. 배경색만 바뀌던 인라인 코드가 둥근 모서리·테두리
-배경 + 강조색 텍스트로 렌더된다.
+- **Notion 스타일 인라인 코드 칩.** 배경색만 바뀌던 인라인 코드가 둥근 모서리·테두리
+  배경 + 강조색 텍스트로 렌더된다.
+
+- **단독 UIKit 수식 뷰.** Markdown chrome 없이 수식 하나만 필요한 attachment·편집기에서
+  `LatexEquationUIView`로 벡터 수식과 원문 fallback을 렌더한다.
+- **연속 문서형 편집 데모.** 논리 블록 상태를 유지하면서 하나의 TextKit 2
+  `UITextView`에서 선택·입력·undo/redo·블록 변환·인라인 서식을 처리한다.
 
 - **테마 확장.** `LatexTheme.inlineCodeForeground`(기본: light `#A93226`,
   dark `#FF7369` — 기본 칩 배경 대비 각각 약 5.5:1, 5.7:1로 WCAG AA 통과)와
@@ -174,6 +181,8 @@ SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는�
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
+[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.3.0
 [0.2.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.2.0
 [0.1.1]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.1
 [0.1.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.0
