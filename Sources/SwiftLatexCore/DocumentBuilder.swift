@@ -181,16 +181,22 @@ private struct ModelBuilder {
             return .orderedList(start: Int(list.startIndex), items: Array(items))
 
         case let table as Table:
-            let header = Array(table.head.cells.map { inlineRuns(of: $0) })
-            let rows = Array(table.body.rows.map { row in
-                Array(row.cells.map { inlineRuns(of: $0) })
-            })
-            let cellCount = header.count + rows.reduce(0) { $0 + $1.count }
-            guard table.maxColumnCount <= InputLimits.maxTableColumns,
+            let columnCount = table.body.rows.reduce(table.head.childCount) {
+                max($0, $1.childCount)
+            }
+            let cellCount = table.body.rows.reduce(table.head.childCount) {
+                $0 + $1.childCount
+            }
+            guard columnCount <= InputLimits.maxTableColumns,
                   cellCount <= InputLimits.maxTableCells
             else {
                 return fallbackBlock(block)
             }
+
+            let header = Array(table.head.cells.map { inlineRuns(of: $0) })
+            let rows = Array(table.body.rows.map { row in
+                Array(row.cells.map { inlineRuns(of: $0) })
+            })
             return .table(ParsedTable(
                 columnAlignments: table.columnAlignments.map { alignment in
                     switch alignment {
@@ -220,7 +226,13 @@ private struct ModelBuilder {
 
     /// 미지원 노드와 렌더 상한을 넘는 표는 조용히 삭제하지 않고 plain text로 낮춘다.
     private func fallbackBlock(_ block: BlockMarkup) -> ParsedBlock? {
-        let fallback = block.format().trimmingCharacters(in: .whitespacesAndNewlines)
+        let source: String
+        if let range = utf8Range(of: block, lineMap: lineMap) {
+            source = String(decoding: originalBytes[range], as: UTF8.self)
+        } else {
+            source = block.format()
+        }
+        let fallback = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !fallback.isEmpty else { return nil }
         return .paragraph([InlineRun(content: .text(fallback))])
     }

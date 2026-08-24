@@ -182,9 +182,9 @@ private struct TableBlockView: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-                tableRow(table.header, isHeader: true)
-                ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
-                    tableRow(row, isHeader: false)
+                tableRow(table.header, rowNumber: nil)
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { index, row in
+                    tableRow(row, rowNumber: index + 1)
                 }
             }
         }
@@ -192,14 +192,16 @@ private struct TableBlockView: View {
     }
 
     @ViewBuilder
-    private func tableRow(_ cells: [[InlineRun]], isHeader: Bool) -> some View {
+    private func tableRow(_ cells: [[InlineRun]], rowNumber: Int?) -> some View {
         GridRow {
             ForEach(Array(cells.enumerated()), id: \.offset) { column, runs in
                 TableCellView(
-                    runs: isHeader ? runs.map(\.boldened) : runs,
+                    runs: rowNumber == nil ? runs.map(\.boldened) : runs,
                     images: images,
                     alignment: alignment(at: column),
-                    isHeader: isHeader
+                    textAlignment: textAlignment(at: column),
+                    isHeader: rowNumber == nil,
+                    accessibilityHint: accessibilityHint(rowNumber: rowNumber, column: column)
                 )
             }
         }
@@ -213,24 +215,45 @@ private struct TableBlockView: View {
         case .left, .none: return .leading
         }
     }
+
+    private func textAlignment(at column: Int) -> TextAlignment {
+        guard table.columnAlignments.indices.contains(column) else { return .leading }
+        switch table.columnAlignments[column] {
+        case .center: return .center
+        case .right: return .trailing
+        case .left, .none: return .leading
+        }
+    }
+
+    private func accessibilityHint(rowNumber: Int?, column: Int) -> String {
+        guard let rowNumber else { return "열 \(column + 1), 헤더" }
+        let header = table.header.indices.contains(column)
+            ? accessibilityText(for: table.header[column]).trimmingCharacters(in: .whitespacesAndNewlines)
+            : ""
+        return "행 \(rowNumber), 열 \(column + 1), 헤더 \(header)"
+    }
 }
 
 private struct TableCellView: View {
     let runs: [InlineRun]
     let images: [MathSegment: RenderedMath]
     let alignment: Alignment
+    let textAlignment: TextAlignment
     let isHeader: Bool
+    let accessibilityHint: String
 
     @Environment(\.latexTheme) private var theme
 
     var body: some View {
         InlineRunsText(runs: runs, images: images, font: theme.bodyFont)
+            .multilineTextAlignment(textAlignment)
             .frame(minWidth: 96, maxWidth: 240, alignment: alignment)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(isHeader ? theme.codeHeaderBackground : Color.clear)
-            .overlay(Rectangle().stroke(Color(uiColor: .separator), lineWidth: 0.5))
+            .overlay(Rectangle().stroke(theme.textColor.opacity(0.2), lineWidth: 0.5))
             .accessibilityAddTraits(isHeader ? .isHeader : [])
+            .accessibilityHint(accessibilityHint)
     }
 }
 
@@ -393,16 +416,20 @@ private struct MathAccessibilityLabel: ViewModifier {
     }
 
     private var spokenText: String {
-        runs.map { run in
-            switch run.content {
-            case .text(let string): return string
-            case .code(let code): return code
-            case .math(let segment): return "수식: \(segment.latex)"
-            case .link(let label, _): return label
-            case .hardBreak, .softBreak: return " "
-            }
-        }.joined()
+        accessibilityText(for: runs)
     }
+}
+
+private func accessibilityText(for runs: [InlineRun]) -> String {
+    runs.map { run in
+        switch run.content {
+        case .text(let string): return string
+        case .code(let code): return code
+        case .math(let segment): return "수식: \(segment.latex)"
+        case .link(let label, _): return label
+        case .hardBreak, .softBreak: return " "
+        }
+    }.joined()
 }
 
 // MARK: - Block math

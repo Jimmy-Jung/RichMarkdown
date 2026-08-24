@@ -47,7 +47,7 @@ generation 관리를 공유한다.
 | 인라인·블록 수식 | Markdown 요소 |
 |---|---|
 | ![인라인과 블록 수식](Docs/screenshots/01-math.png) | ![Markdown 블록과 인라인 강조](Docs/screenshots/02-markdown.png) |
-| 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 인라인 코드, 링크, 리스트, 인용, 구분선. `\*별표\*` 같은 escape 해제도 함께 |
+| 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 인라인 코드, 링크, 리스트, 인용, 구분선, GFM 표. `\*별표\*` 같은 escape 해제도 함께 |
 
 | 달러 수식 opt-in · fail-open | 코드 블록 (dark) |
 |---|---|
@@ -306,8 +306,8 @@ cd Examples/SwiftLatexDemo && xcodegen generate && open SwiftLatexDemo.xcodeproj
 ```
 
 루트 목록의 **AI 챗봇 (SwiftUI)**와 **AI 챗봇 (UIKit)**에서 같은 fixture를 비교한다.
-인라인/블록 수식, 코드 블록, 리스트·인용, 링크 allowlist, 금지 문맥 보호, 실패 시
-원문 표시, 다국어·RTL, 미지원 노드 강등, 긴 답변을 한 화면에서 확인한다. 두 화면의
+인라인/블록 수식, 코드 블록, 리스트·인용, GFM 표, 링크 allowlist, 금지 문맥 보호,
+실패 시 원문 표시, 다국어·RTL, 미지원 노드 강등, 긴 답변을 한 화면에서 확인한다. 두 화면의
 우측 상단 `렌더 옵션` 메뉴는 `$` 수식 opt-in, 케이스 라벨, 테마 프리셋을 제공한다.
 
 UIKit 화면 2개가 함께 들어 있다.
@@ -401,6 +401,7 @@ inline/display mode, display scale이다. cost는 이미지 pixel byte(현재 �
 | 원문 UTF-8 byte | 256 KiB | 첫 파싱 전에 검사 |
 | 초과 시 표시 | 64 KiB | `Character` 경계로 자르고 `… [입력 제한 초과]` 추가 |
 | 수식 source byte | 4 KiB | `asImage()` 호출 전에 거부 |
+| 표 | 32열 / 512셀 | 초과하면 읽을 수 있는 plain text로 낮춤 |
 
 수치는 내부 구현이며 공개 설정으로 노출하지 않는다.
 UIKit의 `LatexMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스트를 반환한다.
@@ -413,9 +414,10 @@ UIKit의 `LatexMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스
 
 | 지원 | 내용 |
 |---|---|
-| 블록 | 문단, 헤딩, 순서/비순서 리스트, 인용, 구분선, 코드 블록 |
+| 블록 | 문단, 헤딩, 순서/비순서 리스트, 인용, 구분선, 코드 블록, GFM 표 |
 | 인라인 | 굵게, 기울임, 취소선, 코드(둥근 칩), 절대 URL 링크, 줄바꿈 |
 | 코드 블록 | 언어 라벨, 가로 스크롤, 복사 버튼, plain monospace |
+| GFM 표 | 헤더, 셀 테두리, 좌·중앙·우 정렬, 가로 스크롤, 셀 내부 인라인 콘텐츠 |
 
 ### 수식 문법
 
@@ -440,7 +442,7 @@ UIKit의 `LatexMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스
 
 - 잘못되거나 미완성인 LaTeX → 원래 구분자를 포함한 **원문**을 표시
 - 중첩 구분자 → 구간 전체를 원문으로 유지
-- 미지원 Markdown 노드(표 등) → 읽을 수 있는 plain text로 낮춤. 조용히 삭제하지 않음
+- 미지원 Markdown 노드 → 읽을 수 있는 plain text로 낮춤. 조용히 삭제하지 않음
 - 이미지 문법 → alt text만 표시
 - HTML → 실행하지 않고 문자 그대로 표시
 - 상한 초과 입력 → bounded prefix + 생략 marker
@@ -465,7 +467,7 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
 
 - **한글은 시스템 폰트에 italic 변형이 없어 `*기울임*`이 시각적으로 적용되지 않는다**
   (iOS 제약). 영문·숫자에는 적용된다. 파서는 두 경우 모두 italic 플래그를 싣는다.
-- 표, 원격 이미지, Mermaid, 신택스 하이라이팅, 편집, macOS UI는 v1 비목표다.
+- 원격 이미지, Mermaid, 신택스 하이라이팅, 편집, macOS UI는 v1 비목표다.
 - 여러 블록을 가로지르는 연속 범위 선택은 지원하지 않는다(블록 단위 시스템 선택).
 - 링크·이미지 Markdown 문법 **내부**의 LaTeX는 해석하지 않는다.
 - 공개 parser/AST는 없다. `SwiftLatexCore`는 내부 target이다.
