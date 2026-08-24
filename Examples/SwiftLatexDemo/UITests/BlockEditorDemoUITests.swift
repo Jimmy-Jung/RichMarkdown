@@ -62,7 +62,7 @@ final class BlockEditorDemoUITests: XCTestCase {
     }
 
     @MainActor
-    func testKeyboardToolbarAddsAndUndoesLogicalBlock() throws {
+    func testKeyboardToolbarAddOpensBlockMenuAndInsertsSelectedKind() throws {
         let app = launchBlockEditor()
         let document = app.textViews["blockDocumentTextView"]
         XCTAssertTrue(document.waitForExistence(timeout: 15))
@@ -72,6 +72,10 @@ final class BlockEditorDemoUITests: XCTestCase {
         let addButton = app.buttons["blockToolbar.add"]
         XCTAssertTrue(addButton.waitForExistence(timeout: 5))
         addButton.tap()
+
+        let bulletedList = app.buttons["글머리 기호 목록"]
+        XCTAssertTrue(bulletedList.waitForExistence(timeout: 5))
+        bulletedList.tap()
         XCTAssertTrue(waitForValueDifferent(from: original, in: document))
 
         let undoButton = app.buttons["blockToolbar.undo"]
@@ -79,6 +83,22 @@ final class BlockEditorDemoUITests: XCTestCase {
         XCTAssertTrue(undoButton.isEnabled)
         undoButton.tap()
         XCTAssertTrue(waitForValue(original, in: document))
+    }
+
+    @MainActor
+    func testTopBarMenuIncludesRenderOptions() {
+        let app = launchBlockEditor()
+        XCTAssertTrue(app.textViews["blockDocumentTextView"].waitForExistence(timeout: 15))
+
+        let optionsButton = app.buttons["blockEditor.options"]
+        XCTAssertTrue(optionsButton.waitForExistence(timeout: 5))
+        optionsButton.tap()
+
+        XCTAssertTrue(app.buttons["$ 수식 파싱 (opt-in)"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["기본"].exists)
+        XCTAssertTrue(app.buttons["큰 글자"].exists)
+        XCTAssertTrue(app.buttons["Serif"].exists)
+        XCTAssertTrue(app.buttons["색 강조"].exists)
     }
 
     @MainActor
@@ -98,15 +118,30 @@ final class BlockEditorDemoUITests: XCTestCase {
 
         assertToolbarButtons([
             "blockToolbar.add",
-            "blockToolbar.type",
+            "blockToolbar.format",
+            "blockToolbar.outdent",
+            "blockToolbar.indent",
+        ], in: app)
+
+        XCTAssertFalse(app.buttons["blockToolbar.bold"].exists)
+        app.buttons["blockToolbar.format"].tap()
+        assertToolbarButtons([
             "blockToolbar.bold",
             "blockToolbar.italic",
             "blockToolbar.strike",
             "blockToolbar.code",
-            "blockToolbar.outdent",
         ], in: app)
 
-        toolbar.swipeLeft()
+        let undoButton = app.buttons["blockToolbar.undo"]
+        XCTAssertFalse(undoButton.isEnabled)
+        let indentButton = app.buttons["blockToolbar.indent"]
+        XCTAssertTrue(indentButton.waitForExistence(timeout: 5))
+        indentButton.tap()
+        XCTAssertTrue(waitForEnabled(undoButton))
+
+        let toolbarScroll = app.scrollViews["blockKeyboardToolbarScroll"]
+        XCTAssertTrue(toolbarScroll.waitForExistence(timeout: 5))
+        toolbarScroll.swipeLeft()
         assertToolbarButtons([
             "blockToolbar.indent",
             "blockToolbar.undo",
@@ -195,8 +230,20 @@ final class BlockEditorDemoUITests: XCTestCase {
         return XCTWaiter.wait(for: [expectation], timeout: 5) == .completed
     }
 
+    private func waitForEnabled(_ element: XCUIElement) -> Bool {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "enabled == true"),
+            object: element
+        )
+        return XCTWaiter.wait(for: [expectation], timeout: 5) == .completed
+    }
+
     private func selectAll(in element: XCUIElement, app: XCUIApplication) throws {
-        element.press(forDuration: 1)
+        let textCoordinate = element.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.2, dy: 0.05)
+        )
+        textCoordinate.tap()
+        textCoordinate.press(forDuration: 1)
         try tapEditMenuItem(["Select All", "전체 선택"], in: app)
     }
 

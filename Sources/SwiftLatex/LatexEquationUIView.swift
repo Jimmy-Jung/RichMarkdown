@@ -8,7 +8,11 @@ import SwiftLatexCore
 /// Markdown 파싱·복사 버튼을 함께 만들지 않도록 제공하는 최소 렌더링 표면입니다.
 public final class LatexEquationUIView: UIView {
     private var boundedLatex: InputLimits.BoundedInput
+    private var fallbackSource: String
     private var contentView: UIView?
+
+    let rendersDisplayStyle: Bool
+    let renderPointSize: CGFloat?
 
     public var latex: String {
         get { boundedLatex.text }
@@ -16,6 +20,7 @@ public final class LatexEquationUIView: UIView {
             let bounded = InputLimits.bound(newValue)
             guard bounded != boundedLatex else { return }
             boundedLatex = bounded
+            fallbackSource = bounded.text
             rebuild()
         }
     }
@@ -27,9 +32,18 @@ public final class LatexEquationUIView: UIView {
         }
     }
 
-    public init(latex: String, theme: LatexTheme = .default) {
+    public init(
+        latex: String,
+        source: String? = nil,
+        theme: LatexTheme = .default,
+        isDisplay: Bool = true,
+        pointSize: CGFloat? = nil
+    ) {
         self.boundedLatex = InputLimits.bound(latex)
+        self.fallbackSource = InputLimits.bound(source ?? latex).text
         self.theme = theme
+        self.rendersDisplayStyle = isDisplay
+        self.renderPointSize = pointSize.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         super.init(frame: .zero)
 
         isAccessibilityElement = true
@@ -71,9 +85,9 @@ public final class LatexEquationUIView: UIView {
         let key = MathRenderKey(
             latex: boundedLatex.text,
             mathFont: theme.mathFont,
-            pointSize: bodyFont.pointSize,
+            pointSize: renderPointSize ?? bodyFont.pointSize,
             colorRGBA: textColor.rgbaValue,
-            isDisplay: true,
+            isDisplay: rendersDisplayStyle,
             displayScale: scale
         )
 
@@ -97,9 +111,11 @@ public final class LatexEquationUIView: UIView {
     private func fallbackLabel(textColor: UIColor) -> UILabel {
         let label = UILabel()
         label.numberOfLines = 0
-        label.text = boundedLatex.text
+        label.text = fallbackSource
         label.textColor = textColor
-        label.font = theme.codeFont.resolvedUIFont(compatibleWith: traitCollection)
+        label.font = renderPointSize.map {
+            UIFont.monospacedSystemFont(ofSize: $0, weight: .regular)
+        } ?? theme.codeFont.resolvedUIFont(compatibleWith: traitCollection)
         return label
     }
 }
