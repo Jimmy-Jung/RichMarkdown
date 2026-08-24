@@ -119,7 +119,10 @@ private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider
                 position: position
             )
         }
-        let availableWidth = max(proposedLineFragment.width - position.x, 1)
+        // 남은 공간(`- position.x`)으로 clamp하면 줄 끝의 수식을 실제보다 좁게 보고해
+        // TextKit이 줄을 바꾸지 않고 뒤 텍스트를 이어 붙인다(오른쪽 잘림). 줄 전체 폭을
+        // 기준으로 clamp해야 안 들어가는 수식이 다음 줄로 내려간다.
+        let availableWidth = max(proposedLineFragment.width, 1)
         let width = min(max(intrinsic.width, 1), availableWidth)
         let font = attributes[.font] as? UIFont
         return CGRect(

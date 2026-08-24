@@ -49,6 +49,13 @@
   유지) 추가. SwiftUI·UIKit 렌더러의 블록 수식이 뷰포트보다 좁을 때 지정 방향으로
   정렬되고, 넓으면 기존처럼 가로 스크롤한다.
 
+### 수정
+
+- **줄 끝 인라인 수식이 잘리던 문제.** `EquationTextAttachment`가 폭을 남은 공간
+  (`proposedLineFragment.width - position.x`)으로 clamp해, 줄 끝에 놓인 수식을 실제보다
+  좁게 보고했다. TextKit은 "들어간다"고 판단해 줄을 바꾸지 않고 수식은 그 좁은 폭에
+  잘려 그려졌다. 줄 전체 폭을 기준으로 clamp해 안 들어가는 수식은 다음 줄로 내려간다.
+
 ### 데모
 
 - **수식 Attachment (읽기 전용) 화면 추가.** `EquationTextAttachment` 직접 배치와
