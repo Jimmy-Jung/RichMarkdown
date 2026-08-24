@@ -526,7 +526,7 @@ import UIKit
         let view = LatexMarkdownUIView(markdown: #"""
         | 항목 | 수식 | 상태 |
         | :--- | :---: | ---: |
-        | 하나 | \(x+1\) | 완료 |
+        | 하나 | \(x+1\) | [완료](https://example.com) |
         """#)
         view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
         try await waitForRender(view)
@@ -537,7 +537,26 @@ import UIKit
         #expect(cells.count == 6, "헤더 3칸과 본문 3칸을 각각 렌더해야 한다")
         #expect(cells.map(\.textAlignment) == [.left, .center, .right, .left, .center, .right])
         #expect(cells.prefix(3).allSatisfy { $0.accessibilityTraits.contains(.header) })
+        #expect(cells.map(\.accessibilityHint) == [
+            "열 1, 헤더",
+            "열 2, 헤더",
+            "열 3, 헤더",
+            "행 1, 열 1, 헤더 항목",
+            "행 1, 열 2, 헤더 수식",
+            "행 1, 열 3, 헤더 상태",
+        ])
+        #expect((cells[4] as? LatexTextView)?.spokenOverride == "수식: x+1")
+        #expect((cells[5] as? LatexTextView)?.spokenOverride == nil, "셀 hint가 링크 label을 덮으면 안 된다")
+        #expect(
+            cells[5].attributedText.attribute(.link, at: 0, effectiveRange: nil) as? URL
+                == URL(string: "https://example.com")
+        )
         #expect(cells.allSatisfy { $0.layer.borderWidth > 0 })
+        let border = UIColor(cgColor: try #require(cells[0].layer.borderColor))
+        let expectedBorder = UIColor(LatexTheme.default.textColor)
+            .resolvedColor(with: view.traitCollection)
+            .withAlphaComponent(0.2)
+        #expect(border.rgbaValue == expectedBorder.rgbaValue)
         #expect(attachmentCount(in: table) == 1, "표 셀의 인라인 수식도 hydration되어야 한다")
         #expect(!renderedText(in: table).contains("|"), "Markdown 표 원문을 그대로 표시하면 안 된다")
     }

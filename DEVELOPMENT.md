@@ -53,10 +53,11 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 
 | 영역 | v1 계약 |
 |---|---|
-| Markdown 블록 | 문단, 헤딩, 순서/비순서 리스트, 인용, 구분선 |
+| Markdown 블록 | 문단, 헤딩, 순서/비순서 리스트, 인용, 구분선, GFM 표 |
 | 인라인 | 굵게, 기울임, 취소선, 코드, 절대 URL 링크, 줄바꿈 |
 | 수식 | 기본 `\(...\)`, `\[...\]`; opt-in `$...$`, `$$...$$` |
 | 코드 블록 | 언어 라벨, 가로 스크롤, 복사 버튼, plain monospace |
+| GFM 표 | 헤더, 셀 테두리, 좌·중앙·우 정렬, 가로 스크롤, 셀 내부 인라인 콘텐츠 |
 | 스트리밍 | 최신 전체 `String` 입력, coalescing과 latest-wins 게시 |
 | 선택 | SwiftUI `.textSelection(.enabled)`의 시스템 동작. 단 iOS 18+에서 인라인 코드가 있는 문단은 예외 — `.textSelection`이 커스텀 `TextRenderer`(인라인 코드 칩)를 우회하므로(실측, 수식자 순서 무관) 그 문단만 칩을 택한다. UIKit 렌더러는 선택과 칩을 모두 지원한다 |
 | UIKit | 네이티브 `LatexMarkdownUIView` + `UIHostingConfiguration`·`UIHostingController` 사용 예제 |
@@ -70,7 +71,7 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 - 범위(문자 구간) 단위 색·폰트 지정. 테마는 요소 단위다
 - callback 기반 링크/복사 API
 - 공개 입력 제한 설정
-- 표, 원격 이미지, Mermaid, HTML 실행, WebView, 편집, macOS UI
+- 원격 이미지, Mermaid, HTML 실행, WebView, 편집, macOS UI
 - 링크와 이미지 Markdown 문법 내부의 LaTeX 해석
 
 두 번째 실제 소비자나 측정된 요구가 생기기 전에는 위 기능을 추가하지 않는다.
@@ -588,7 +589,7 @@ v1 렌더 계약 케이스를 눈으로 확인하는 것이 목적이다.
 - 커버 케이스: 인라인 수식 baseline, 블록 수식(가로 스크롤·복사), 큰 구조(행렬),
   코드 블록(언어 라벨·긴 줄), 헤딩/리스트/인용/구분선, 링크 allowlist,
   금지 문맥(코드·링크·HTML) 보호, Markdown 기호 포함 수식, dollar math opt-in과
-  통화 표기, 실패 시 원문 표시, 다국어·결합 문자·RTL, 미지원 노드(표) 강등, 긴 답변
+  통화 표기, 실패 시 원문 표시, 다국어·결합 문자·RTL, GFM 표, 긴 답변
 - 우측 상단 메뉴에서 `$` 수식 파싱 opt-in을 켜고/끄고 비교할 수 있다
 - UIKit `UIHostingConfiguration` 화면은 같은 답변 fixture를 셀로 렌더한다
 

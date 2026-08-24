@@ -439,6 +439,13 @@ public final class LatexMarkdownUIView: UIView {
 
     private func tableView(_ table: ParsedTable, images: [MathSegment: RenderedMath]) -> UIView {
         let rows = [table.header] + table.rows
+        let headers = table.header.map {
+            spokenText($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let borderColor = UIColor(theme.textColor)
+            .resolvedColor(with: traitCollection)
+            .withAlphaComponent(0.2)
+            .cgColor
         let cellRows = rows.enumerated().map { rowIndex, cells in
             cells.enumerated().map { column, runs in
                 let cell = runsTextView(
@@ -449,9 +456,15 @@ public final class LatexMarkdownUIView: UIView {
                 cell.textAlignment = textAlignment(for: table.columnAlignments, at: column)
                 cell.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
                 cell.backgroundColor = rowIndex == 0 ? UIColor(theme.codeHeaderBackground) : .clear
-                cell.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+                cell.layer.borderColor = borderColor
                 cell.layer.borderWidth = 0.5
-                if rowIndex == 0 { cell.accessibilityTraits.insert(.header) }
+                if rowIndex == 0 {
+                    cell.accessibilityTraits.insert(.header)
+                    cell.accessibilityHint = "열 \(column + 1), 헤더"
+                } else {
+                    let header = headers.indices.contains(column) ? headers[column] : ""
+                    cell.accessibilityHint = "행 \(rowIndex), 열 \(column + 1), 헤더 \(header)"
+                }
                 return cell
             }
         }

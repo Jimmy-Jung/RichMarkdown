@@ -23,6 +23,24 @@ final class SwiftLatexDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testSwiftUITableRendersCells() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["SwiftLatex Demo"].waitForExistence(timeout: 10))
+        app.buttons["AI 챗봇 (SwiftUI)"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["AI 챗봇"].waitForExistence(timeout: 10))
+
+        let tableCase = app.staticTexts["GFM 표 · 정렬 · 인라인 콘텐츠"]
+        for _ in 0..<20 where !tableCase.exists { app.swipeUp() }
+
+        XCTAssertTrue(tableCase.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["항목"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["하나"].exists)
+        XCTAssertTrue(app.staticTexts["완료"].exists)
+    }
+
+    @MainActor
     func testChatRenderOptionsMenuIncludesThemePresets() {
         let app = XCUIApplication()
         app.launch()

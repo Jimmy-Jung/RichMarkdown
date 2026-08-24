@@ -319,6 +319,27 @@ import Testing
         #expect(document.allMathSegments.map(\.latex) == ["x+1"])
     }
 
+    @Test func oversizedTableFallsBackToReadableText() throws {
+        let markdown = "| 항목 |\n| --- |\n"
+            + String(repeating: #"| \(x+1\) |"# + "\n", count: InputLimits.maxTableCells)
+        let document = SwiftLatexParser.parse(
+            markdown: markdown,
+            parsesDollarMath: false
+        )
+
+        let block = try #require(document.blocks.first)
+        guard case .paragraph(let runs) = block else {
+            Issue.record("렌더 상한을 넘는 표는 plain text로 낮춰야 한다")
+            return
+        }
+        let text = runs.compactMap { run -> String? in
+            if case .text(let text) = run.content { return text }
+            return nil
+        }.joined()
+        #expect(text == markdown.trimmingCharacters(in: .whitespacesAndNewlines))
+        #expect(text.contains(#"\(x+1\)"#), "masked AST가 아니라 원본 수식 source를 보존해야 한다")
+    }
+
     private func flatText(_ document: ParsedDocument) -> String {
         document.blocks.map { block -> String in
             if case .paragraph(let runs) = block {
