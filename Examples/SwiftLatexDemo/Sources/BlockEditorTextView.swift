@@ -868,9 +868,25 @@ final class EquationTextAttachment: NSTextAttachment {
             location: location
         )
     }
+
 }
 
 private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider {
+    override init(
+        textAttachment: NSTextAttachment,
+        parentView: UIView?,
+        textLayoutManager: NSTextLayoutManager?,
+        location: any NSTextLocation
+    ) {
+        super.init(
+            textAttachment: textAttachment,
+            parentView: parentView,
+            textLayoutManager: textLayoutManager,
+            location: location
+        )
+        tracksTextAttachmentViewBounds = true
+    }
+
     override func loadView() {
         super.loadView()
         guard let attachment = textAttachment as? EquationTextAttachment else { return }
@@ -883,7 +899,6 @@ private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider
         )
         equationView.isUserInteractionEnabled = false
         view = equationView
-        tracksTextAttachmentViewBounds = true
     }
 
     override func attachmentBounds(
@@ -893,7 +908,8 @@ private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider
         proposedLineFragment: CGRect,
         position: CGPoint
     ) -> CGRect {
-        guard let equationView = view as? LatexEquationUIView else {
+        guard let attachment = textAttachment as? EquationTextAttachment,
+              let equationView = view as? LatexEquationUIView else {
             return super.attachmentBounds(
                 for: attributes,
                 location: location,
@@ -908,7 +924,7 @@ private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider
         let font = attributes[.font] as? UIFont
         return CGRect(
             x: 0,
-            y: font?.descender ?? 0,
+            y: attachment.isDisplay ? -(font?.lineHeight ?? 0) : (font?.descender ?? 0),
             width: width,
             height: max(intrinsic.height, font?.lineHeight ?? 1)
         )
@@ -941,7 +957,12 @@ enum MarkdownStyler {
             preset: preset,
             traitCollection: traitCollection
         )
-        attributes[.paragraphStyle] = paragraphStyle(for: block, numberedListOrdinal: 1)
+        attributes[.paragraphStyle] = paragraphStyle(
+            for: block,
+            numberedListOrdinal: 1,
+            preset: preset,
+            traitCollection: traitCollection
+        )
         return attributes
     }
 
@@ -1009,7 +1030,12 @@ enum MarkdownStyler {
             if range.length > 0 {
                 result.addAttribute(
                     .paragraphStyle,
-                    value: paragraphStyle(for: block, numberedListOrdinal: ordinal),
+                    value: paragraphStyle(
+                        for: block,
+                        numberedListOrdinal: ordinal,
+                        preset: preset,
+                        traitCollection: traitCollection
+                    ),
                     range: range
                 )
             }
@@ -1204,11 +1230,20 @@ enum MarkdownStyler {
 
     private static func paragraphStyle(
         for block: EditorBlock,
-        numberedListOrdinal: Int
+        numberedListOrdinal: Int,
+        preset: LatexThemePreset,
+        traitCollection: UITraitCollection?
     ) -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.lineSpacing = 2
         style.paragraphSpacing = block.kind == .paragraph ? 8 : 10
+        if block.kind == .equation {
+            style.paragraphSpacing += font(
+                for: block.kind,
+                preset: preset,
+                traitCollection: traitCollection
+            ).ascender
+        }
 
         switch block.kind {
         case .bulletedList, .numberedList, .toDo:

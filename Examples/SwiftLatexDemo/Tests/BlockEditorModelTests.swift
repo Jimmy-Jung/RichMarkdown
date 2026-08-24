@@ -614,7 +614,7 @@ struct BlockEditorModelTests {
     @Test("비활성 수식 attachment는 TextKit 2에서 실제 수식 뷰를 만든다")
     @MainActor
     func equationAttachmentMaterializesInTextKit2() throws {
-        let textView = UITextView(usingTextLayoutManager: true)
+        let textView = BlockDocumentUITextView()
         textView.frame = CGRect(x: 0, y: 0, width: 320, height: 160)
         textView.attributedText = MarkdownStyler.styledDocument([
             EditorBlock(kind: .equation, text: "E = mc^2"),
@@ -625,6 +625,24 @@ struct BlockEditorModelTests {
         window.isHidden = false
         let manager = try #require(textView.textLayoutManager)
         let contentManager = try #require(manager.textContentManager)
+        let attachmentOffset = 0
+        let attachment = try #require(
+            textView.attributedText.attribute(
+                .attachment,
+                at: attachmentOffset,
+                effectiveRange: nil
+            ) as? EquationTextAttachment
+        )
+        let attachmentLocation = try #require(contentManager.location(
+            contentManager.documentRange.location,
+            offsetBy: attachmentOffset
+        ))
+        let provider = try #require(attachment.viewProvider(
+            for: textView,
+            location: attachmentLocation,
+            textContainer: textView.textContainer
+        ))
+        #expect(provider.tracksTextAttachmentViewBounds)
         manager.ensureLayout(for: contentManager.documentRange)
         window.layoutIfNeeded()
 
@@ -635,6 +653,75 @@ struct BlockEditorModelTests {
         let equation = try #require(equationView(in: textView))
         #expect(equation.accessibilityLabel == "수식: E = mc^2")
         window.isHidden = true
+    }
+
+    @Test("블록 수식 attachment는 앞뒤 문장과 겹치지 않는다")
+    @MainActor
+    func displayEquationAttachmentExpandsTextLine() throws {
+        let preceding = EditorBlock(
+            kind: .paragraph,
+            text: #"$ 구분자도 켜져 있으면 수식입니다: $e^{i\pi} + 1 = 0$"#
+        )
+        let equation = EditorBlock(
+            kind: .equation,
+            text: #"\int_{-\infty}^{\infty} e^{-x^2} \, dx = \sqrt{\pi}"#
+        )
+        let following = EditorBlock(kind: .bulletedList, text: "할 일 하나")
+        let textView = BlockDocumentUITextView()
+        textView.frame = CGRect(x: 0, y: 0, width: 320, height: 240)
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        textView.attributedText = MarkdownStyler.styledDocument([
+            preceding,
+            equation,
+            following,
+        ])
+
+        let window = UIWindow(frame: textView.frame)
+        window.addSubview(textView)
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        let manager = try #require(textView.textLayoutManager)
+        let contentManager = try #require(manager.textContentManager)
+        manager.ensureLayout(for: contentManager.documentRange)
+        window.layoutIfNeeded()
+
+        func equationView(in view: UIView) -> LatexEquationUIView? {
+            if let equation = view as? LatexEquationUIView { return equation }
+            return view.subviews.lazy.compactMap(equationView).first
+        }
+
+        let equationView = try #require(equationView(in: textView))
+        let equationFrame = equationView.convert(equationView.bounds, to: textView)
+        let precedingEnd = try #require(textView.position(
+            from: textView.beginningOfDocument,
+            offset: preceding.text.utf16.count
+        ))
+        let precedingRect = textView.caretRect(for: precedingEnd)
+        let followingOffset = preceding.text.utf16.count + equation.text.utf16.count + 2
+        let followingStart = try #require(textView.position(
+            from: textView.beginningOfDocument,
+            offset: followingOffset
+        ))
+        let followingEnd = try #require(textView.position(
+            from: followingStart,
+            offset: following.text.utf16.count
+        ))
+        let followingRange = try #require(textView.textRange(
+            from: followingStart,
+            to: followingEnd
+        ))
+        let followingRect = textView.firstRect(for: followingRange)
+        #expect(equationFrame.height > 0)
+        #expect(
+            precedingRect.maxY <= equationFrame.minY,
+            "앞 문장 프레임 \(precedingRect)을 수식 프레임 \(equationFrame)이 침범합니다"
+        )
+        #expect(
+            equationFrame.maxY <= followingRect.minY,
+            "수식 프레임 \(equationFrame)이 다음 문장 프레임 \(followingRect)을 침범합니다"
+        )
     }
 
     @Test("수식 원문 전환은 surrogate 중간 caret을 유효한 UTF-16 경계로 맞춘다")
