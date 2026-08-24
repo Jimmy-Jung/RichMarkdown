@@ -165,11 +165,81 @@ struct LatexBlockView: View {
                 }
             }
 
+        case .table(let table):
+            TableBlockView(table: table, images: images)
+
         case .thematicBreak:
             Divider()
         }
     }
 
+}
+
+private struct TableBlockView: View {
+    let table: ParsedTable
+    let images: [MathSegment: RenderedMath]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                tableRow(table.header, isHeader: true)
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
+                    tableRow(row, isHeader: false)
+                }
+            }
+        }
+        .accessibilityLabel("표")
+    }
+
+    @ViewBuilder
+    private func tableRow(_ cells: [[InlineRun]], isHeader: Bool) -> some View {
+        GridRow {
+            ForEach(Array(cells.enumerated()), id: \.offset) { column, runs in
+                TableCellView(
+                    runs: isHeader ? runs.map(\.boldened) : runs,
+                    images: images,
+                    alignment: alignment(at: column),
+                    isHeader: isHeader
+                )
+            }
+        }
+    }
+
+    private func alignment(at column: Int) -> Alignment {
+        guard table.columnAlignments.indices.contains(column) else { return .leading }
+        switch table.columnAlignments[column] {
+        case .center: return .center
+        case .right: return .trailing
+        case .left, .none: return .leading
+        }
+    }
+}
+
+private struct TableCellView: View {
+    let runs: [InlineRun]
+    let images: [MathSegment: RenderedMath]
+    let alignment: Alignment
+    let isHeader: Bool
+
+    @Environment(\.latexTheme) private var theme
+
+    var body: some View {
+        InlineRunsText(runs: runs, images: images, font: theme.bodyFont)
+            .frame(minWidth: 96, maxWidth: 240, alignment: alignment)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(isHeader ? theme.codeHeaderBackground : Color.clear)
+            .overlay(Rectangle().stroke(Color(uiColor: .separator), lineWidth: 0.5))
+            .accessibilityAddTraits(isHeader ? .isHeader : [])
+    }
+}
+
+extension InlineRun {
+    var boldened: InlineRun {
+        var copy = self
+        copy.bold = true
+        return copy
+    }
 }
 
 // MARK: - Inline runs
@@ -183,9 +253,35 @@ struct InlineRunsText: View {
     @Environment(\.latexFontScale) private var fontScale
 
     var body: some View {
-        combinedText
-            .textSelection(.enabled)
+        chipDecoratedText
             .modifier(MathAccessibilityLabel(runs: runs))
+    }
+
+    /// iOS 18+는 `TextRenderer`로 인라인 코드 칩(둥근 배경+테두리)을 그린다.
+    /// 이전 OS는 `text(for:)`가 넣은 사각 `backgroundColor`가 fallback이다.
+    ///
+    /// `.textSelection(.enabled)`은 선택 가능한 텍스트 경로로 바꿔 커스텀
+    /// `TextRenderer` 드로잉을 우회한다(실측 — 수식자 순서와 무관). 그래서
+    /// 인라인 코드가 있는 문단만 선택 대신 칩을 택한다. UIKit 렌더러는
+    /// 둘 다 지원하므로 선택이 필요하면 `LatexMarkdownUIView`를 쓴다.
+    @ViewBuilder private var chipDecoratedText: some View {
+        if #available(iOS 18.0, *), hasInlineCode {
+            combinedText.textRenderer(
+                InlineCodeChipTextRenderer(
+                    background: theme.inlineCodeBackground,
+                    border: theme.inlineCodeBorder
+                )
+            )
+        } else {
+            combinedText.textSelection(.enabled)
+        }
+    }
+
+    private var hasInlineCode: Bool {
+        runs.contains { run in
+            if case .code = run.content { return true }
+            return false
+        }
     }
 
     private var combinedText: Text {
@@ -204,6 +300,13 @@ struct InlineRunsText: View {
             attributed.font = theme.codeFont.resolvedFont(
                 scaledBy: fontScale.factor(for: theme.codeFont.relativeTo)
             )
+            attributed.foregroundColor = theme.inlineCodeForeground
+            if #available(iOS 18.0, *) {
+                // 칩은 `InlineCodeChipTextRenderer`가 그린다. 사각 배경을 겹치지 않는다.
+                return styled(Text(emphasized(attributed, run)), run)
+                    .customAttribute(InlineCodeChipTextAttribute())
+            }
+            // iOS 16·17 fallback: Text run은 둥근 칩을 그릴 수 없어 사각 배경까지만.
             attributed.backgroundColor = theme.inlineCodeBackground
             return styled(Text(emphasized(attributed, run)), run)
 

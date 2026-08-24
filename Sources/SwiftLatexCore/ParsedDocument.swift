@@ -33,6 +33,14 @@ package struct ParsedDocument: Sendable, Hashable {
                     items.forEach(visit)
                 case .orderedList(_, let items):
                     items.forEach(visit)
+                case .table(let table):
+                    for runs in table.header + table.rows.flatMap({ $0 }) {
+                        for run in runs {
+                            if case .math(let segment) = run.content, seen.insert(segment).inserted {
+                                ordered.append(segment)
+                            }
+                        }
+                    }
                 case .codeBlock, .thematicBreak:
                     break
                 }
@@ -51,7 +59,20 @@ package enum ParsedBlock: Sendable, Hashable {
     case blockQuote([ParsedBlock])
     case unorderedList(items: [[ParsedBlock]])
     case orderedList(start: Int, items: [[ParsedBlock]])
+    case table(ParsedTable)
     case thematicBreak
+}
+
+package struct ParsedTable: Sendable, Hashable {
+    package enum ColumnAlignment: Sendable, Hashable {
+        case left
+        case center
+        case right
+    }
+
+    package let columnAlignments: [ColumnAlignment?]
+    package let header: [[InlineRun]]
+    package let rows: [[[InlineRun]]]
 }
 
 package struct MathSegment: Sendable, Hashable {

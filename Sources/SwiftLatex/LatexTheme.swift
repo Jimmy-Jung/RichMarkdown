@@ -9,6 +9,10 @@ public struct LatexTheme: Sendable, Equatable {
     public var linkColor: Color
     public var codeBlockBackground: Color
     public var inlineCodeBackground: Color
+    /// 인라인 코드 텍스트 색. 배경만으로는 코드가 눈에 띄지 않아 Notion처럼 강조한다.
+    public var inlineCodeForeground: Color
+    /// 인라인 코드 칩 테두리 색.
+    public var inlineCodeBorder: Color
     public var quoteBar: Color
     public var codeHeaderBackground: Color
 
@@ -33,6 +37,8 @@ public struct LatexTheme: Sendable, Equatable {
         linkColor: Color = .accessibleLink,
         codeBlockBackground: Color = Color(.secondarySystemBackground),
         inlineCodeBackground: Color = Color(.secondarySystemFill),
+        inlineCodeForeground: Color = .inlineCodeAccent,
+        inlineCodeBorder: Color = Color(.separator),
         quoteBar: Color = Color(.systemGray3),
         codeHeaderBackground: Color = Color(.tertiarySystemBackground),
         bodyFont: LatexFont = LatexFont(relativeTo: .body),
@@ -48,6 +54,8 @@ public struct LatexTheme: Sendable, Equatable {
         self.linkColor = linkColor
         self.codeBlockBackground = codeBlockBackground
         self.inlineCodeBackground = inlineCodeBackground
+        self.inlineCodeForeground = inlineCodeForeground
+        self.inlineCodeBorder = inlineCodeBorder
         self.quoteBar = quoteBar
         self.codeHeaderBackground = codeHeaderBackground
         self.bodyFont = bodyFont
@@ -81,6 +89,15 @@ public extension Color {
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.55, green: 0.75, blue: 1.00, alpha: 1)
             : UIColor(red: 0.04, green: 0.31, blue: 0.72, alpha: 1)
+    })
+
+    /// 기본 인라인 코드 텍스트 색 (Notion 스타일 붉은 강조).
+    /// 기본 칩 배경(`secondarySystemFill`을 base 위에 합성한 값) 대비
+    /// light #A93226 약 5.5:1, dark #FF7369 약 5.7:1로 본문 기준(4.5:1)을 넘는다.
+    static let inlineCodeAccent = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1.00, green: 0.45, blue: 0.41, alpha: 1)
+            : UIColor(red: 0.66, green: 0.20, blue: 0.15, alpha: 1)
     })
 }
 

@@ -5,6 +5,24 @@
 
 ## [Unreleased]
 
+### 추가
+
+Notion 스타일 인라인 코드 칩. 배경색만 바뀌던 인라인 코드가 둥근 모서리·테두리
+배경 + 강조색 텍스트로 렌더된다.
+
+- **테마 확장.** `LatexTheme.inlineCodeForeground`(기본: light `#A93226`,
+  dark `#FF7369` — 기본 칩 배경 대비 각각 약 5.5:1, 5.7:1로 WCAG AA 통과)와
+  `inlineCodeBorder`(기본 `separator`) 추가. 기존 init 호출은 기본값으로 호환된다.
+- **UIKit 렌더러.** `.backgroundColor` 사각 칠 대신 공개 attribute
+  `.inlineCodeChip`(`InlineCodeChipStyle`)을 싣고, `InlineCodeDecorationView`가
+  TextKit 2 segment 좌표로 칩을 텍스트 뒤에 그린다. `CAShapeLayer` 기반이라
+  문서 길이만큼의 비트맵을 만들지 않고, 스크롤 재진입은 no-op이다.
+- **SwiftUI 렌더러.** iOS 18+는 `TextRenderer`로 같은 규격의 칩을 그린다.
+  한글·모노 폰트 fallback으로 run이 갈라져도 한 줄 안에서는 rect를 병합해
+  이음새가 없다. iOS 16·17은 기존 사각 배경 + 강조색 fallback.
+  제약: `.textSelection(.enabled)`은 커스텀 `TextRenderer`를 우회하므로(실측)
+  인라인 코드가 있는 문단은 선택 대신 칩을 택한다 (DEVELOPMENT.md 기능 표 참고).
+
 ### 성능
 
 UIKit 렌더러(`LatexMarkdownUIView`)의 스크롤 버벅임 개선. 공개 API 변화는 없다.

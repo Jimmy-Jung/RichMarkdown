@@ -294,6 +294,31 @@ import Testing
         #expect(model.imageRequest == submitted, "빈 사전으로도 완결 게시가 와야 한다")
     }
 
+    @Test func parsesTableStructureAlignmentAndInlineContent() throws {
+        let document = SwiftLatexParser.parse(
+            markdown: #"""
+            | 항목 | 수식 | 상태 |
+            | :--- | :---: | ---: |
+            | **하나** | \(x+1\) | `완료` |
+            """#,
+            parsesDollarMath: false
+        )
+
+        let block = try #require(document.blocks.first)
+        guard case .table(let table) = block else {
+            Issue.record("GFM 표를 plain text 문단으로 강등하면 안 된다")
+            return
+        }
+
+        #expect(table.columnAlignments == [.left, .center, .right])
+        #expect(table.header.count == 3)
+        #expect(table.rows.count == 1)
+        #expect(table.rows[0].count == 3)
+        #expect(table.rows[0][0].first?.bold == true)
+        #expect(table.rows[0][2].first?.content == .code("완료"))
+        #expect(document.allMathSegments.map(\.latex) == ["x+1"])
+    }
+
     private func flatText(_ document: ParsedDocument) -> String {
         document.blocks.map { block -> String in
             if case .paragraph(let runs) = block {
