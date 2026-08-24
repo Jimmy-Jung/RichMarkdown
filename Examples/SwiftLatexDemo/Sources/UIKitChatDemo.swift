@@ -73,7 +73,15 @@ extension LatexThemePreset {
 struct UIKitChatConfiguration: Equatable {
     var parsesDollarMath = false
     var showsCaseLabels = true
+    var equationAlignment: EquationAlignmentOption = .leading
     var preset: LatexThemePreset = .standard
+
+    /// preset 테마에 수식 정렬 주입을 합성한 최종 테마.
+    var resolvedTheme: LatexTheme {
+        var theme = preset.theme
+        theme.equationAlignment = equationAlignment.latexAlignment
+        return theme
+    }
 }
 
 // MARK: - SwiftUI 껍데기
@@ -96,6 +104,7 @@ struct UIKitChatDemoView: View {
                     Menu {
                         Toggle("$ 수식 파싱 (opt-in)", isOn: $configuration.parsesDollarMath)
                         Toggle("케이스 라벨 표시", isOn: $configuration.showsCaseLabels)
+                        EquationAlignmentMenu(selection: $configuration.equationAlignment)
                         Picker("테마", selection: $configuration.preset) {
                             ForEach(LatexThemePreset.allCases) { preset in
                                 Text(verbatim: preset.rawValue).tag(preset)
@@ -169,7 +178,7 @@ final class UIKitChatViewController: UICollectionViewController {
     static func prewarmSharedMessageViews(configuration: UIKitChatConfiguration) {
         for message in ChatFixtures.conversation where message.role == .assistant {
             let entry = sharedMessageViewCache.entry(for: message)
-            entry.view.theme = configuration.preset.theme
+            entry.view.theme = configuration.resolvedTheme
             entry.view.parsesDollarMath = configuration.parsesDollarMath
             entry.view.markdown = message.text
             entry.beginObservingContentChanges()
@@ -354,7 +363,7 @@ final class AssistantMessageCell: UICollectionViewCell {
 
     func apply(_ configuration: UIKitChatConfiguration) {
         caseRow.isHidden = !(configuration.showsCaseLabels && !caseName.isEmpty)
-        entry?.view.theme = configuration.preset.theme
+        entry?.view.theme = configuration.resolvedTheme
         entry?.view.parsesDollarMath = configuration.parsesDollarMath
     }
 

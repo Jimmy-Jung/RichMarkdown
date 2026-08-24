@@ -5,6 +5,13 @@
 > `Examples/SwiftLatexDemo`에서 구현한 화면 코드 중 package source로 옮길 가치가 있는
 > 코드를 발굴하고, 각 코드가 무엇인지 · 재활용한다면 어떻게 활용할지를 정리한다.
 > 우선순위는 "이동 비용 대비 재사용 가치" 기준이다.
+>
+> **구현 상태 (2026-08-24 완료)**: 1~3순위 이동 완료 — `EquationTextAttachment`는
+> `Sources/SwiftLatex`로, 블록 엔진·에디터 뷰는 신규 product `SwiftLatexBlockEditor`로
+> 이동했다. 선행 작업(UI 문자열 분리, preset 결합 해소, pasteboard type 개명, 툴바
+> 주입점)도 함께 반영했다. 4순위 캐시 패턴은 README "UICollectionView 재사용" 절에
+> 레시피로 문서화했다 (코드 이동은 eviction 설계 후 재검토 유지). 아래 본문은 발굴
+> 당시 분석 기록이다 — demo 파일 위치·줄 번호는 이동 전 기준.
 
 ## 요약
 

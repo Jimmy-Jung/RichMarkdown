@@ -1,9 +1,11 @@
+import SwiftLatexBlockEditor
 import SwiftUI
 
 /// 논리 블록은 유지하면서 화면에는 하나의 연속 문서만 노출한다.
 struct BlockEditorDemoView: View {
     @State private var model: BlockEditorModel
     @State private var parsesDollarMath = false
+    @State private var equationAlignment: EquationAlignmentOption = .center
     @State private var preset = LatexThemePreset.fromLaunchArguments()
 
     init() {
@@ -21,8 +23,19 @@ struct BlockEditorDemoView: View {
             onToolbarAction: perform,
             onReplaceDocumentBlocks: replaceDocumentBlocks,
             parsesDollarMath: parsesDollarMath,
-            preset: preset,
-            sourceMarkdown: model.markdown
+            theme: preset.theme,
+            blockAlignment: BlockAlignmentConfiguration(
+                equation: equationAlignment.textAlignment
+            ),
+            sourceMarkdown: model.markdown,
+            makeInputAccessory: { onAction in
+                BlockKeyboardToolbar(
+                    kind: .paragraph,
+                    canUndo: false,
+                    canRedo: false,
+                    onAction: onAction
+                )
+            }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
@@ -33,6 +46,7 @@ struct BlockEditorDemoView: View {
                 Menu {
                     Toggle("$ 수식 파싱 (opt-in)", isOn: $parsesDollarMath)
                         .accessibilityIdentifier("blockEditor.parsesDollarMath")
+                    EquationAlignmentMenu(selection: $equationAlignment)
                     Picker("테마", selection: $preset) {
                         ForEach(LatexThemePreset.allCases) { preset in
                             Text(verbatim: preset.rawValue).tag(preset)

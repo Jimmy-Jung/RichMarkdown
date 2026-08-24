@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// 블록 수식의 가로 정렬. 콘텐츠가 가용 폭보다 좁을 때만 의미가 있고,
+/// 넓으면 기존처럼 가로 스크롤한다.
+public enum LatexEquationAlignment: Sendable, Equatable {
+    case leading
+    case center
+    case trailing
+}
+
 /// v1 공개 theme. 값 비교로 렌더 요청 key에 포함된다.
 ///
 /// 색과 폰트 모두 **요소 단위**다. 범위(문자 구간) 단위 지정은 제공하지 않는다.
@@ -31,6 +39,8 @@ public struct LatexTheme: Sendable, Equatable {
     public var codeLabelFont: LatexFont
     /// 수식 서체.
     public var mathFont: LatexMathFont
+    /// 블록 수식 정렬. 기본 leading (콘텐츠가 좁을 때만 의미).
+    public var equationAlignment: LatexEquationAlignment
 
     public init(
         textColor: Color = .primary,
@@ -48,7 +58,8 @@ public struct LatexTheme: Sendable, Equatable {
         heading4Font: LatexFont = LatexFont(relativeTo: .headline),
         codeFont: LatexFont = LatexFont(design: .monospaced, relativeTo: .body),
         codeLabelFont: LatexFont = LatexFont(design: .monospaced, relativeTo: .caption),
-        mathFont: LatexMathFont = .latinModern
+        mathFont: LatexMathFont = .latinModern,
+        equationAlignment: LatexEquationAlignment = .leading
     ) {
         self.textColor = textColor
         self.linkColor = linkColor
@@ -66,6 +77,7 @@ public struct LatexTheme: Sendable, Equatable {
         self.codeFont = codeFont
         self.codeLabelFont = codeLabelFont
         self.mathFont = mathFont
+        self.equationAlignment = equationAlignment
     }
 
     /// 헤딩 레벨별 폰트. 4단계 이하는 모두 `heading4Font`다.

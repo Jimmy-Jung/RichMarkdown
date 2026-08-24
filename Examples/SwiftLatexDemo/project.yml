@@ -14,6 +14,9 @@ targets:
     sources: [Sources]
     dependencies:
       - package: SwiftLatex
+        product: SwiftLatex
+      - package: SwiftLatex
+        product: SwiftLatexBlockEditor
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

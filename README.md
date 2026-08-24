@@ -44,16 +44,22 @@ generation 관리를 공유한다.
 ## 스크린샷
 
 `Examples/SwiftLatexDemo`의 실제 화면. iPhone 16 Pro / iOS 18.6에서 촬영했다.
+`SwiftLatexDemoUITests/DocumentationScreenshotTests`로 재생성한다 (실행법은 해당 파일 주석).
 
 | 인라인·블록 수식 | Markdown 요소 |
 |---|---|
 | ![인라인과 블록 수식](Docs/screenshots/01-math.png) | ![Markdown 블록과 인라인 강조](Docs/screenshots/02-markdown.png) |
-| 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 둥근 인라인 코드 칩, 링크, 리스트, 인용, 구분선. `\*별표\*` 같은 escape 해제도 함께 |
+| 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 둥근 인라인 코드 칩, 링크, 리스트, 왼쪽 세로 바로 구분한 인용, 구분선. `\*별표\*` 같은 escape 해제도 함께 |
 
 | GFM 표 | Notion 스타일 블록 편집 |
 |---|---|
 | ![정렬과 인라인 콘텐츠를 포함한 GFM 표](Docs/screenshots/03-table.png) | ![하나의 연속 문서에서 편집하는 Notion 스타일 블록 편집기](Docs/screenshots/04-block-editor.png) |
 | 좌·중앙·우 정렬과 셀 안의 강조·인라인 코드·수식을 지원하며 좁은 화면에서는 가로 스크롤 | 하나의 연속 `UITextView`에서 제목·목록·할 일·인용·코드·수식을 편집하고 키보드 툴바로 블록과 인라인 서식을 바꾼다 |
+
+| 수식 Attachment 직접 구성 | MarkdownStyler 읽기 전용 |
+|---|---|
+| ![임의 문서에 EquationTextAttachment를 직접 배치한 화면](Docs/screenshots/05-attachment-hand-built.png) | ![블록 모델을 읽기 전용으로 스타일링한 화면](Docs/screenshots/06-attachment-styler.png) |
+| 블록 편집기 없이 `EquationTextAttachment`를 `UITextView` 문서에 직접 넣는다. 인라인 baseline, display 블록 배치, `$` 스캔 토글, 주변 폰트를 따라가는 크기 | `MarkdownStyler.styledDocument`만으로 만든 읽기 전용 문서. 둥근 테두리/체크 완료 상태의 할 일, 왼쪽 세로 바 인용, 인라인 코드 칩, 코드 블록 리터럴 보호 |
 
 ---
 
@@ -69,6 +75,13 @@ dependencies: [
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
 ]
+```
+
+Notion 스타일 블록 편집기가 필요하면 별도 product를 추가한다
+([블록 편집기](#블록-편집기-swiftlatexblockeditor) 참고).
+
+```swift
+.target(name: "MyApp", dependencies: ["SwiftLatex", "SwiftLatexBlockEditor"]),
 ```
 
 Xcode에서는 File → Add Package Dependencies에 저장소 URL을 넣는다.
@@ -258,7 +271,17 @@ let equationView = LatexEquationUIView(latex: #"\int_0^1 x^2 \, dx"#)
 바뀌면 해당 캐시는 무효화한다. 무한 피드에서는 뷰를 무제한 보관하지 말고 상한을 둔다.
 
 `Examples/SwiftLatexDemo`의 **AI 챗봇 (UIKit)**이 이 전략을 보여 준다. 이는 패키지 API가
-아니며 메시지 수명과 메모리 예산은 소비 앱이 결정한다.
+아니며 메시지 수명과 메모리 예산은 소비 앱이 결정한다. 옮겨 적을 때 실측으로 확인된
+두 지점을 지켜야 한다.
+
+- **늦은 `prepareForReuse`의 뷰 탈취 방지** — 화면 밖 셀은 reuse pool에서 늦게
+  정리되는데, 그 사이 같은 메시지 뷰가 다른 셀로 이사했을 수 있다. detach 시
+  `entry.view.superview === bubble`일 때만 `removeFromSuperview()`를 호출한다.
+  무조건 제거하면 화면에 보이는 셀에서 뷰를 뜯어내 빈 버블이 남는다
+  (빠른 스크롤 왕복에서 재현, 데모의 `UIKitChatCellReuseTests`가 회귀 방어).
+- **prewarm 시점은 루트 화면** — SwiftMath 폰트 등록 + 메시지 raster가 화면 전환
+  (0.35s)보다 오래 걸리므로, 채팅 화면 진입 직전이 아니라 앱 루트의 `.task`에서
+  캐시에 markdown을 미리 주입한다. 재호출은 dedupe로 no-op다.
 
 셀에서 쓸 때는 수식 이미지 hydration이 최초 레이아웃 뒤에 오므로,
 `onContentSizeChange`로 self-sizing 재측정을 요청한다.
@@ -306,6 +329,59 @@ NSLayoutConstraint.activate([
 host.didMove(toParent: self)
 ```
 
+### 블록 편집기 (SwiftLatexBlockEditor)
+
+Notion 스타일 블록 문서 편집기. 논리 블록(`제목·목록·할 일·인용·코드·수식`)은
+모델이 유지하고, 화면에는 하나의 TextKit 2 `UITextView`만 노출해 UIKit 기본
+선택기가 블록 경계와 무관하게 선택·복사·전체 선택을 처리한다. 한글 IME composition
+처리와 수식 attachment ↔ 원문 전환의 선택 경계 보정을 포함한다.
+
+```swift
+import SwiftLatexBlockEditor
+import SwiftUI
+
+struct NoteEditorScreen: View {
+    @State private var model: BlockEditorModel
+
+    init(markdown: String) {
+        _model = State(initialValue: BlockEditorModel(markdown: markdown))
+    }
+
+    var body: some View {
+        BlockDocumentTextEditor(
+            blocks: model.blocks,
+            selection: model.currentDocumentSelection,
+            canUndo: model.canUndo,
+            canRedo: model.canRedo,
+            onReplaceText: { model.replaceDocumentText(in: $0, with: $1) },
+            onSelectionChange: { model.updateDocumentSelection($0) },
+            onToolbarAction: perform,
+            theme: .default
+        )
+    }
+
+    private func perform(_ action: EditorToolbarAction, selection: NSRange) {
+        model.updateDocumentSelection(selection)
+        guard let active = model.blockSelection(for: selection) else { return }
+        switch action {
+        case let .transform(kind): model.transform(id: active.blockID, to: kind)
+        case .undo: _ = model.undo()
+        case .redo: _ = model.redo()
+        default: break  // insert·format·indent 등은 데모 앱의 perform 참고
+        }
+    }
+}
+```
+
+- **저장 포맷은 markdown** — `model.markdown`으로 손실 없이 직렬화된다.
+  `BlockEditorModel`은 UI 의존이 없어 markdown 구조 조작 파이프라인에 단독 사용 가능.
+- **키보드 툴바는 앱 책임** — `makeInputAccessory:`로 `BlockEditorInputAccessory`
+  준수 뷰를 주입한다. 데모의 `BlockKeyboardToolbar`가 레퍼런스 구현이다.
+- **구조 보존 복사/붙여넣기** — 전체 선택 복사 시 markdown과 함께
+  `com.swiftlatex.block-document` pasteboard payload를 게시한다.
+- `InlineMarkdownCodec`은 LaTeX 구간(`\(...\)`, `$...$`)을 보호하는 인라인
+  markdown 파서로 단독 재사용할 수 있다.
+
 ### 데모 앱
 
 ```bash
@@ -324,6 +400,16 @@ UIKit 화면 2개가 함께 들어 있다.
   (기본 / 큰 글자 / Serif / 색 강조)을 메뉴에서 바꿔 폰트·색·수식 서체를 확인한다.
   `-swiftlatexPreset Serif` launch argument로 특정 프리셋에서 시작할 수 있다.
 - **UIKit UIHostingConfiguration** — SwiftUI 뷰를 호스팅하는 셀 예제.
+
+블록 편집기 product 화면 2개.
+
+- **블록 편집 (Notion 스타일)** — `SwiftLatexBlockEditor`의 `BlockDocumentTextEditor`
+  + `BlockEditorModel`을 배선한 편집 화면. 키보드 툴바 주입
+  (`BlockEditorInputAccessory`) 레퍼런스.
+- **수식 Attachment (읽기 전용)** — 블록 에디터 없이 `EquationTextAttachment`를
+  임의 문서에 직접 배치하는 경로와, `MarkdownStyler.styledDocument`로 블록 모델을
+  읽기 전용 렌더하는 경로를 세그먼트로 전환해 비교한다. 테마 메뉴로 attachment
+  재구성(테마 캡처) 계약을 확인한다.
 
 ---
 

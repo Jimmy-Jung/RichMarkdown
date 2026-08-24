@@ -18,8 +18,15 @@ struct EditorDemoView: View {
     @State private var markdown = Self.seedDocument
     @State private var mode: Mode = .split
     @State private var parsesDollarMath = true
+    @State private var equationAlignment: EquationAlignmentOption = .leading
     @State private var preset = LatexThemePreset.fromLaunchArguments()
     @FocusState private var editorFocused: Bool
+
+    private var theme: LatexTheme {
+        var theme = preset.theme
+        theme.equationAlignment = equationAlignment.latexAlignment
+        return theme
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,6 +56,7 @@ struct EditorDemoView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Toggle("$ 수식 파싱 (opt-in)", isOn: $parsesDollarMath)
+                    EquationAlignmentMenu(selection: $equationAlignment)
                     Picker("테마", selection: $preset) {
                         ForEach(LatexThemePreset.allCases) { preset in
                             Text(verbatim: preset.rawValue).tag(preset)
@@ -81,7 +89,7 @@ struct EditorDemoView: View {
     private var preview: some View {
         ScrollView {
             LatexMarkdownView(markdown: markdown, parsesDollarMath: parsesDollarMath)
-                .latexTheme(preset.theme)
+                .latexTheme(theme)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
         }
