@@ -22,7 +22,8 @@ generation 관리를 공유한다.
 
 - WebView·HTML 실행 없음. 전부 `Text`, `Image`, `ScrollView`로 렌더한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
-- 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다.
+- 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
+  (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
 
 ## 0.2.0 베타 핵심
 
@@ -41,6 +42,7 @@ generation 관리를 공유한다.
 ## 스크린샷
 
 `Examples/SwiftLatexDemo`의 챗봇 화면. iPhone 16 Pro / iOS 18.6 실제 렌더다.
+인라인 코드는 이후 둥근 칩으로 바뀌었다 — 아래 이미지는 사각 배경 시절이다.
 
 | 인라인·블록 수식 | Markdown 요소 |
 |---|---|
@@ -97,11 +99,12 @@ struct MessageView: View {
 |---|---|
 | `LatexMarkdownView(markdown:parsesDollarMath:)` | 렌더 뷰. `parsesDollarMath` 기본값 `false` |
 | `.latexTheme(_:)` | 색·폰트를 바꾸는 View modifier |
-| `LatexTheme` | 요소별 색 6종 + 폰트 7종 + 수식 서체 |
+| `LatexTheme` | 요소별 색 8종 + 폰트 7종 + 수식 서체 |
 | `LatexFont` | 폰트 지정값 (서체·Dynamic Type 기준·크기·굵기) |
 | `LatexTextStyle` / `LatexFontWeight` | Dynamic Type 기준 스타일, 굵기 |
 | `LatexMathFont` | 수식 서체 12종 |
 | `Color.accessibleLink` | 대비 기준을 넘는 기본 링크 색 |
+| `Color.inlineCodeAccent` | 대비 기준을 넘는 기본 인라인 코드 텍스트 색 |
 
 메시지 전체의 세로 스크롤과 목록 virtualization은 소비 앱 책임이다. 뷰는 자기
 콘텐츠 높이만 갖는다.
@@ -157,6 +160,8 @@ LatexMarkdownView(markdown: message)
             linkColor: .accessibleLink,
             codeBlockBackground: Color(.secondarySystemBackground),
             inlineCodeBackground: Color(.secondarySystemFill),
+            inlineCodeForeground: .inlineCodeAccent,
+            inlineCodeBorder: Color(.separator),
             quoteBar: Color(.systemGray3),
             codeHeaderBackground: Color(.tertiarySystemBackground),
             bodyFont: LatexFont(relativeTo: .body),
@@ -170,6 +175,20 @@ LatexMarkdownView(markdown: message)
         )
     )
 ```
+
+인라인 코드는 Notion 스타일 **칩**으로 렌더한다 — `inlineCodeBackground` 채움 +
+`inlineCodeBorder` 테두리(모서리 반경 4pt) + `inlineCodeForeground` 텍스트. 기본
+전경색 `Color.inlineCodeAccent`는 기본 칩 배경 대비 light 약 5.5:1, dark 약 5.7:1로
+WCAG AA(4.5:1)를 넘는다. 칩을 원하지 않으면 `inlineCodeBorder`를 `.clear`로,
+`inlineCodeForeground`를 `.primary`로 두면 이전(배경만) 표시에 가까워진다.
+
+칩 드로잉 경로는 렌더러별로 다르다.
+
+| 렌더러 | 방식 |
+|---|---|
+| UIKit `LatexMarkdownUIView` | `.inlineCodeChip` attribute + `InlineCodeDecorationView`(TextKit 2 segment 좌표, `CAShapeLayer`) |
+| SwiftUI iOS 18+ | `TextRenderer`로 같은 규격의 칩. 한 줄 안에서 폰트 fallback으로 갈라진 run은 rect를 병합 |
+| SwiftUI iOS 16·17 | 사각 `backgroundColor` + 강조색 fallback (`Text` run은 둥근 칩을 그릴 수 없다) |
 
 어느 폰트가 어디에 닿는지:
 
@@ -395,7 +414,7 @@ UIKit의 `LatexMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스
 | 지원 | 내용 |
 |---|---|
 | 블록 | 문단, 헤딩, 순서/비순서 리스트, 인용, 구분선, 코드 블록 |
-| 인라인 | 굵게, 기울임, 취소선, 코드, 절대 URL 링크, 줄바꿈 |
+| 인라인 | 굵게, 기울임, 취소선, 코드(둥근 칩), 절대 URL 링크, 줄바꿈 |
 | 코드 블록 | 언어 라벨, 가로 스크롤, 복사 버튼, plain monospace |
 
 ### 수식 문법
@@ -456,6 +475,12 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
   취소선은 Markdown 원문이 정하고 소비 앱 API로는 지정할 수 없다.
 - 인라인 코드는 감싼 블록 크기를 따르지 않고 `codeFont` 크기를 쓴다.
   헤딩 안의 인라인 코드도 `codeFont` 크기다.
+- **SwiftUI 렌더러 iOS 18+에서 인라인 코드가 있는 문단은 텍스트 선택이 빠진다.**
+  `.textSelection(.enabled)`이 커스텀 `TextRenderer`(칩 드로잉)를 우회하므로(실측,
+  수식자 순서 무관) 그 문단만 선택 대신 칩을 택한다. 다른 문단은 그대로 선택된다.
+  선택과 칩을 모두 원하면 UIKit `LatexMarkdownUIView`를 쓴다.
+- 칩은 좌우 2pt 바깥으로 넓혀 그린다. 행 맨 앞(x=0)의 인라인 코드는 컨테이너
+  경계에서 그만큼 잘릴 수 있다.
 - `.custom` 서체에서는 `weight` 지정이 무시될 수 있다(서체가 해당 굵기를 갖고 있어야 한다).
 
 ---
