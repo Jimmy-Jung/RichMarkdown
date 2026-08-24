@@ -441,11 +441,20 @@ struct BlockMathView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                if let rendered {
-                    Image(uiImage: rendered.image)
-                        .accessibilityLabel("수식: \(segment.latex)")
-                } else {
+            if let rendered {
+                // 정렬은 콘텐츠가 뷰포트보다 좁을 때만 의미가 있다. GeometryReader로
+                // 뷰포트 폭을 얻어 minWidth로 채우고, 높이는 이미지 크기로 고정해
+                // GeometryReader의 greedy 세로 확장을 막는다.
+                GeometryReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Image(uiImage: rendered.image)
+                            .frame(minWidth: proxy.size.width, alignment: alignment)
+                            .accessibilityLabel("수식: \(segment.latex)")
+                    }
+                }
+                .frame(height: rendered.image.size.height)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
                     Text(verbatim: segment.source)
                         .latexFont(theme.codeFont)
                         .foregroundStyle(theme.textColor)
@@ -453,6 +462,14 @@ struct BlockMathView: View {
                 }
             }
             CopyButton(text: segment.source, accessibilityLabel: "수식 원문 복사")
+        }
+    }
+
+    private var alignment: Alignment {
+        switch theme.equationAlignment {
+        case .leading: .leading
+        case .center: .center
+        case .trailing: .trailing
         }
     }
 }

@@ -5,6 +5,56 @@
 
 ## [Unreleased]
 
+### 추가
+
+- **신규 product `SwiftLatexBlockEditor`.** demo에만 있던 Notion 스타일 블록 편집기를
+  package로 이동했다 (`Docs/DEMO_REUSE_CANDIDATES.md`의 발굴 결과 구현).
+  - `EditorBlock`/`EditorBlockKind`/`InlineMark`/`BlockEditorModel` — 순수 로직 엔진.
+    markdown↔블록 왕복 파싱, 블록↔문서 UTF-16 좌표 변환, undo/redo, 인라인 서식 토글.
+  - `InlineMarkdownCodec` — LaTeX 구간을 보호하는 인라인 markdown 파서/직렬화기 (public 승격).
+  - `BlockDocumentTextEditor` — TextKit 2 단일 문서 투영 편집기. 한글 IME composition
+    reconcile, diff 기반 변경 복원, 수식 attachment 경계 보정 포함.
+  - `MarkdownStyler` — demo 전용 preset 결합을 해소하고 `LatexTheme`만 받는다.
+    폰트는 `bodyFont`/`headingFont(level:)`/`codeFont`에서 해석한다.
+  - `BlockDocumentPasteboardPayload` — 구조 보존 복사/붙여넣기 payload. pasteboard type을
+    `com.swiftlatex.block-document`로 개명했다 (demo 접미사 제거).
+  - 키보드 툴바는 package에 포함하지 않는다 — `BlockEditorInputAccessory` 주입점만 열고
+    구체 UI(`BlockKeyboardToolbar`)와 블록 표시 문자열(`title`/`systemImage`)은 demo에 남긴다.
+- **`EquationTextAttachment` 공개.** `UITextView`(TextKit 2) 문서 흐름 안에 수식을
+  라이브 뷰로 배치하는 attachment를 `SwiftLatex`로 이동했다. 블록 에디터 없이도
+  attributed string 파이프라인에 수식을 끼울 수 있다.
+- **`LatexFont.resolvedUIFont(compatibleWith:)` 공개.** `LatexTheme`의 폰트를 UIKit
+  attributed string으로 옮기는 외부 렌더러용 (additive).
+
+- **Notion 스타일 인용문.** 블록 에디터 인용문이 보조 색 텍스트 대신 본문 색 +
+  왼쪽 세로 바(`LatexTheme.quoteBar`, 3pt 둥근 바)로 렌더된다. 바는 공개 attribute
+  `.blockQuoteBar`(`QuoteBarStyle`)를 읽는 `QuoteBarDecorationView`가 TextKit 2
+  segment 좌표로 텍스트 뒤에 그린다 — 인라인 코드 칩과 같은 `CAShapeLayer` 패턴이라
+  문자 삽입 없이(UTF-16 offset 계약 유지) 연속 인용 블록에 이어진 바 하나를 그린다.
+
+- **Notion 스타일 할 일 체크박스.** 시스템 마커 글리프(`.box` 채워진 사각형,
+  `.check` 박스 없는 체크) 대신 미완료는 둥근 테두리 박스, 완료는 액센트(tint) 채움 +
+  흰 체크로 그린다. 완료 항목 텍스트는 흐린 색 + 취소선. 할 일 블록은 NSTextList를
+  쓰지 않는다 — 마커 글리프가 취소선을 상속해 박스 위로 선이 그려지므로 수동 indent로
+  자리만 확보하고, 박스는 공개 attribute `.toDoCheckbox`(`ToDoCheckboxStyle`)를
+  읽는 `ToDoCheckboxDecorationView`가 그린다 — 칩·인용 바와 같은 데코레이션 패턴.
+
+- **블록 정렬 주입.** `BlockAlignmentConfiguration`(code 기본 좌측 `.natural`,
+  equation 기본 중앙)을 `MarkdownStyler.styledDocument`/`typingAttributes`와
+  `BlockDocumentTextEditor(blockAlignment:)`에 주입할 수 있다. 코드 블록 정렬은
+  명시적으로 좌측이 기본이 됐고, 수식 블록의 중앙 정렬 하드코딩이 제거됐다.
+
+- **렌더러 블록 수식 정렬.** `LatexTheme.equationAlignment`
+  (`LatexEquationAlignment` — leading/center/trailing, 기본 leading으로 기존 동작
+  유지) 추가. SwiftUI·UIKit 렌더러의 블록 수식이 뷰포트보다 좁을 때 지정 방향으로
+  정렬되고, 넓으면 기존처럼 가로 스크롤한다.
+
+### 데모
+
+- **수식 Attachment (읽기 전용) 화면 추가.** `EquationTextAttachment` 직접 배치와
+  `MarkdownStyler.styledDocument` 읽기 전용 렌더를 세그먼트로 비교한다. 이동한
+  public API의 단독 사용 경로(블록 에디터 없이)를 화면으로 확인할 수 있다.
+
 ## [0.3.0] - 2026-08-24
 
 ### 추가

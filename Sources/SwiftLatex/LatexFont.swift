@@ -175,7 +175,9 @@ public struct LatexFont: Sendable, Hashable {
     ///
     /// trait을 넘기지 않으면 앱 전역(앰비언트) 설정으로 해석되므로,
     /// 뷰 안에서는 반드시 그 뷰의 `traitCollection`을 넘긴다.
-    func resolvedUIFont(compatibleWith traits: UITraitCollection?) -> UIFont {
+    /// `SwiftLatexBlockEditor`처럼 `LatexTheme`의 폰트를 UIKit attributed string으로
+    /// 옮기는 외부 렌더러를 위해 공개한다.
+    public func resolvedUIFont(compatibleWith traits: UITraitCollection?) -> UIFont {
         let metrics = UIFontMetrics(forTextStyle: relativeTo.uiTextStyle)
         let base: UIFont
 

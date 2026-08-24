@@ -30,6 +30,9 @@ struct ContentView: View {
                 NavigationLink("블록 편집 (Notion 스타일)") {
                     BlockEditorDemoView()
                 }
+                NavigationLink("수식 Attachment (읽기 전용)") {
+                    AttachmentDemoView()
+                }
                 NavigationLink("UIKit UIHostingConfiguration") {
                     HostingConfigurationDemo()
                         .ignoresSafeArea()

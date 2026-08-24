@@ -575,7 +575,11 @@ public final class LatexMarkdownUIView: UIView {
 
         let copy = copyButton(text: segment.source, accessibilityLabel: "수식 원문 복사")
         let row = UIStackView(arrangedSubviews: [
-            horizontalScroll(content: content, contentSize: contentSize),
+            horizontalScroll(
+                content: content,
+                contentSize: contentSize,
+                alignment: theme.equationAlignment
+            ),
             copy,
         ])
         row.axis = .horizontal
@@ -769,22 +773,47 @@ public final class LatexMarkdownUIView: UIView {
 
     /// 가로 스크롤 컨테이너. content 크기를 명시 제약으로 고정해
     /// UIScrollView의 높이 모호성을 없앤다.
-    private func horizontalScroll(content: UIView, contentSize: CGSize) -> UIScrollView {
+    private func horizontalScroll(
+        content: UIView,
+        contentSize: CGSize,
+        alignment: LatexEquationAlignment = .leading
+    ) -> UIScrollView {
         let scroll = UIScrollView()
         scroll.showsHorizontalScrollIndicator = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         content.translatesAutoresizingMaskIntoConstraints = false
-        scroll.addSubview(content)
+        // 정렬은 콘텐츠가 뷰포트보다 좁을 때만 의미가 있다. 컨테이너가 뷰포트 폭을
+        // 채우고(우선순위 high), 콘텐츠가 더 넓으면 required >= 제약이 이겨 스크롤한다.
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(content)
+        scroll.addSubview(container)
 
+        let fillsViewport = container.widthAnchor.constraint(
+            equalTo: scroll.frameLayoutGuide.widthAnchor
+        )
+        fillsViewport.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-            content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            container.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            container.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            container.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            container.widthAnchor.constraint(greaterThanOrEqualToConstant: contentSize.width),
+            fillsViewport,
+            container.heightAnchor.constraint(equalToConstant: contentSize.height),
             content.widthAnchor.constraint(equalToConstant: contentSize.width),
             content.heightAnchor.constraint(equalToConstant: contentSize.height),
+            content.topAnchor.constraint(equalTo: container.topAnchor),
             scroll.heightAnchor.constraint(equalToConstant: contentSize.height),
         ])
+        switch alignment {
+        case .leading:
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor).isActive = true
+        case .center:
+            content.centerXAnchor.constraint(equalTo: container.centerXAnchor).isActive = true
+        case .trailing:
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor).isActive = true
+        }
         return scroll
     }
 

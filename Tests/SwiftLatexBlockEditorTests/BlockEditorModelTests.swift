@@ -1,10 +1,36 @@
-// Created by JunyoungJung on 2026-08-21.
+// Created by JunyoungJung on 2026-08-24.
 
 import Foundation
 import SwiftLatex
+import SwiftUI
 import Testing
 import UIKit
-@testable import SwiftLatexDemo
+@testable import SwiftLatexBlockEditor
+
+/// demo `LatexThemePreset`과 같은 규격의 테마 fixture.
+/// MarkdownStyler가 preset이 아니라 `LatexTheme`만 받는 계약을 검증한다.
+private extension LatexTheme {
+    static let testLarge = LatexTheme(
+        bodyFont: LatexFont(relativeTo: .body, size: 24),
+        heading1Font: LatexFont(relativeTo: .title1, size: 38, weight: .bold),
+        heading2Font: LatexFont(relativeTo: .title2, size: 30, weight: .bold),
+        heading3Font: LatexFont(relativeTo: .title3, size: 26, weight: .semibold),
+        codeFont: LatexFont(design: .monospaced, relativeTo: .body, size: 20),
+        codeLabelFont: LatexFont(design: .monospaced, relativeTo: .caption, size: 16)
+    )
+
+    static let testSerif = LatexTheme(
+        bodyFont: LatexFont(design: .custom(name: "Georgia"), relativeTo: .body),
+        heading1Font: LatexFont(design: .custom(name: "Georgia-Bold"), relativeTo: .title1),
+        heading2Font: LatexFont(design: .custom(name: "Georgia-Bold"), relativeTo: .title2),
+        heading3Font: LatexFont(design: .custom(name: "Georgia-Bold"), relativeTo: .title3),
+        heading4Font: LatexFont(design: .custom(name: "Georgia-Bold"), relativeTo: .headline)
+    )
+
+    static let testTinted = LatexTheme(
+        textColor: Color(red: 0.20, green: 0.16, blue: 0.55)
+    )
+}
 
 @Suite("Notion 스타일 블록 편집 모델", .serialized)
 struct BlockEditorModelTests {
@@ -439,8 +465,35 @@ struct BlockEditorModelTests {
         #expect(bulletStyle.textLists.last?.markerFormat == .disc)
         #expect(try paragraphStyle(for: firstNumber.id).textLists.last?.markerFormat == .decimal)
         #expect(try paragraphStyle(for: secondNumber.id).textLists.last?.startingItemNumber == 2)
-        #expect(try paragraphStyle(for: unchecked.id).textLists.last?.markerFormat == .box)
-        #expect(try paragraphStyle(for: checked.id).textLists.last?.markerFormat == .check)
+        // Notion 스타일: NSTextList 마커 없이 수동 indent로 자리만 확보하고
+        // 박스는 ToDoCheckboxDecorationView가 그린다 (마커가 있으면 취소선이
+        // 마커까지 상속돼 박스 위로 선이 그려진다). attribute로 상태를 싣는다.
+        #expect(try paragraphStyle(for: unchecked.id).textLists.isEmpty)
+        #expect(try paragraphStyle(for: checked.id).textLists.isEmpty)
+        #expect(try paragraphStyle(for: unchecked.id).headIndent > 0)
+        #expect(try paragraphStyle(for: unchecked.id).firstLineHeadIndent > 0)
+
+        func checkboxStyle(for id: UUID) throws -> ToDoCheckboxStyle {
+            let range = try #require(model.documentRange(for: id))
+            return try #require(
+                styled.attribute(.toDoCheckbox, at: range.location, effectiveRange: nil)
+                    as? ToDoCheckboxStyle
+            )
+        }
+        #expect(try checkboxStyle(for: unchecked.id).isChecked == false)
+        #expect(try checkboxStyle(for: checked.id).isChecked == true)
+
+        // 완료 항목은 흐린 색 + 취소선, 미완료는 그대로.
+        let checkedRange = try #require(model.documentRange(for: checked.id))
+        #expect(
+            styled.attribute(.strikethroughStyle, at: checkedRange.location, effectiveRange: nil)
+                != nil
+        )
+        let uncheckedRange = try #require(model.documentRange(for: unchecked.id))
+        #expect(
+            styled.attribute(.strikethroughStyle, at: uncheckedRange.location, effectiveRange: nil)
+                == nil
+        )
     }
 
     @Test("의미 기반 인라인 마크를 plain text의 정확한 범위에 표시한다")
@@ -495,7 +548,7 @@ struct BlockEditorModelTests {
         let styled = MarkdownStyler.styledDocument(
             [block],
             parsesDollarMath: true,
-            preset: .large
+            theme: .testLarge
         )
 
         func location(of needle: String) throws -> Int {
@@ -525,28 +578,28 @@ struct BlockEditorModelTests {
         #expect(parenAttachment.pointSize == headingFont.pointSize)
     }
 
-    @Test("렌더 프리셋은 편집기 글꼴과 색에 반영된다")
-    func renderPresetChangesEditorTypographyAndColor() throws {
+    @Test("테마는 편집기 글꼴과 색에 반영된다")
+    func themeChangesEditorTypographyAndColor() throws {
         let block = EditorBlock(kind: .paragraph, text: "본문")
         let traits = UITraitCollection(preferredContentSizeCategory: .large)
         let standard = MarkdownStyler.styledDocument(
             [block],
-            preset: .standard,
+            theme: .default,
             traitCollection: traits
         )
         let large = MarkdownStyler.styledDocument(
             [block],
-            preset: .large,
+            theme: .testLarge,
             traitCollection: traits
         )
         let serif = MarkdownStyler.styledDocument(
             [block],
-            preset: .serif,
+            theme: .testSerif,
             traitCollection: traits
         )
         let tinted = MarkdownStyler.styledDocument(
             [block],
-            preset: .tinted,
+            theme: .testTinted,
             traitCollection: traits
         )
 
@@ -565,55 +618,56 @@ struct BlockEditorModelTests {
         #expect(!tintedColor.isEqual(standardColor))
     }
 
-    @Test("키보드 툴바의 +는 블록 메뉴이고 Aa는 인라인 서식을 펼친다")
-    @MainActor
-    func keyboardToolbarUsesNotionButtonRoles() throws {
-        var receivedActions: [String] = []
-        let toolbar = BlockKeyboardToolbar(
-            kind: .paragraph,
-            canUndo: true,
-            canRedo: true
-        ) { action in
-            switch action {
-            case let .insert(kind):
-                receivedActions.append("insert:\(kind.title)")
-            case .format(.bold):
-                receivedActions.append("bold")
-            default:
-                receivedActions.append("unexpected")
-            }
-        }
+    @Test("코드는 좌측·수식은 중앙이 기본이고 정렬은 주입으로 바뀐다")
+    func blockAlignmentIsInjectable() throws {
+        let code = EditorBlock(kind: .code(language: "swift"), text: "let x = 1")
+        let equation = EditorBlock(kind: .equation, text: "x + y")
+        let model = BlockEditorModel(blocks: [code, equation])
 
-        if #available(iOS 26.0, *) {
-            let surface = try #require(
-                toolbar.subviews.compactMap { $0 as? UIVisualEffectView }.first
+        func alignment(
+            in document: NSAttributedString,
+            for id: UUID
+        ) throws -> NSTextAlignment {
+            let range = try #require(model.documentRange(for: id))
+            let style = try #require(
+                document.attribute(.paragraphStyle, at: range.location, effectiveRange: nil)
+                    as? NSParagraphStyle
             )
-            let glass = try #require(surface.effect as? UIGlassEffect)
-            #expect(!glass.isInteractive)
+            return style.alignment
         }
 
-        func button(_ identifier: String, in view: UIView) -> UIButton? {
-            if let button = view as? UIButton,
-               button.accessibilityIdentifier == identifier {
-                return button
-            }
-            return view.subviews.lazy.compactMap { button(identifier, in: $0) }.first
-        }
+        let defaults = MarkdownStyler.styledDocument(
+            model.blocks,
+            editingEquationIDs: [equation.id]
+        )
+        #expect(try alignment(in: defaults, for: code.id) == .natural)
+        #expect(try alignment(in: defaults, for: equation.id) == .center)
 
-        let addButton = try #require(button("blockToolbar.add", in: toolbar))
-        let formatButton = try #require(button("blockToolbar.format", in: toolbar))
-        let boldButton = try #require(button("blockToolbar.bold", in: toolbar))
+        let injected = MarkdownStyler.styledDocument(
+            model.blocks,
+            editingEquationIDs: [equation.id],
+            alignment: BlockAlignmentConfiguration(code: .center, equation: .natural)
+        )
+        #expect(try alignment(in: injected, for: code.id) == .center)
+        #expect(try alignment(in: injected, for: equation.id) == .natural)
+    }
 
-        #expect(addButton.showsMenuAsPrimaryAction)
-        #expect(addButton.menu?.children.count == 10)
-        #expect(formatButton.menu == nil)
-        #expect(boldButton.isHidden)
+    @Test("인용 블록은 본문 색을 유지하고 세로 바 attribute를 받는다")
+    func quoteKeepsBodyColorAndGetsBarAttribute() throws {
+        let quote = EditorBlock(kind: .quote, text: "인용")
+        let paragraph = EditorBlock(kind: .paragraph, text: "본문")
+        let styled = MarkdownStyler.styledDocument([quote, paragraph])
 
-        formatButton.sendActions(for: .touchUpInside)
-        #expect(!boldButton.isHidden)
-
-        boldButton.sendActions(for: .touchUpInside)
-        #expect(receivedActions == ["bold"])
+        // "인용\n본문" — 인용 0..<2, 개행 2, 문단 3부터.
+        let quoteColor = try #require(
+            styled.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        )
+        let bodyColor = try #require(
+            styled.attribute(.foregroundColor, at: 3, effectiveRange: nil) as? UIColor
+        )
+        #expect(quoteColor.isEqual(bodyColor), "Notion처럼 인용문도 본문 색을 유지한다")
+        #expect(styled.attribute(.blockQuoteBar, at: 0, effectiveRange: nil) is QuoteBarStyle)
+        #expect(styled.attribute(.blockQuoteBar, at: 3, effectiveRange: nil) == nil)
     }
 
     @Test("비활성 수식 attachment는 TextKit 2에서 실제 수식 뷰를 만든다")
@@ -920,7 +974,7 @@ struct BlockEditorModelTests {
     func coordinatorUsesTextViewEditRange() {
         let id = UUID()
         var model = BlockEditorModel(blocks: [
-            EditorBlock(id: id, kind: .bulletedList, text: ""),
+            EditorBlock(id: id, kind: .paragraph, text: "\n"),
         ])
         var replacementRange: NSRange?
         let editor = BlockDocumentTextEditor(
@@ -1308,55 +1362,5 @@ struct BlockEditorModelTests {
         #expect(block.kind == .equation)
         #expect(block.text == "\n  x^2 + y^2  \n")
         #expect(block.markdown == source)
-    }
-}
-
-/// UIKit 챗 데모의 셀 수명 회귀 (빠른 스크롤 왕복에서 빈 버블).
-///
-/// 화면 밖으로 나간 셀은 `prepareForReuse` 없이 reuse pool에 머물다가 다음 dequeue
-/// 때에야 정리된다. 그 사이 같은 메시지가 다른 셀에 attach되면 캐시된 뷰가 새 셀로
-/// 이사하는데, 이후 pooled 셀의 늦은 `prepareForReuse`가 뷰를 무조건
-/// `removeFromSuperview`하면 화면에 보이는 셀에서 뷰를 뜯어내 빈 버블이 남는다.
-@MainActor
-@Suite struct UIKitChatCellReuseTests {
-
-    @Test func stalePrepareForReuseDoesNotStealMovedMessageView() {
-        let message = ChatMessage.answer("케이스", "재사용 검증 본문")
-        let cache = AssistantMessageViewCache()
-        let entry = cache.entry(for: message)
-        let configuration = UIKitChatConfiguration()
-
-        let frame = CGRect(x: 0, y: 0, width: 390, height: 300)
-        let cellX = AssistantMessageCell(frame: frame)
-        cellX.configure(message, configuration: configuration, entry: entry)
-        #expect(entry.view.isDescendant(of: cellX), "첫 셀에 뷰가 붙는다")
-
-        // cellX가 화면 밖(reuse pool)에 있는 동안 같은 메시지가 다른 셀에 붙는다.
-        let cellY = AssistantMessageCell(frame: frame)
-        cellY.configure(message, configuration: configuration, entry: entry)
-        #expect(entry.view.isDescendant(of: cellY), "뷰는 최신 셀로 이사한다")
-
-        // pooled cellX가 다른 메시지용으로 재-dequeue될 때의 늦은 정리.
-        cellX.prepareForReuse()
-
-        #expect(
-            entry.view.isDescendant(of: cellY),
-            "늦은 prepareForReuse가 이사한 뷰를 화면의 셀에서 뜯어내면 안 된다"
-        )
-        #expect(entry.view.superview != nil)
-    }
-
-    /// 뷰가 아직 자기 셀에 있을 때의 prepareForReuse는 기존대로 뷰를 떼어낸다.
-    @Test func prepareForReuseDetachesOwnedView() {
-        let message = ChatMessage.answer("케이스", "정상 detach 본문")
-        let cache = AssistantMessageViewCache()
-        let entry = cache.entry(for: message)
-
-        let cell = AssistantMessageCell(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
-        cell.configure(message, configuration: UIKitChatConfiguration(), entry: entry)
-        #expect(entry.view.isDescendant(of: cell))
-
-        cell.prepareForReuse()
-        #expect(entry.view.superview == nil, "자기 셀의 뷰는 정상적으로 떼어낸다")
     }
 }

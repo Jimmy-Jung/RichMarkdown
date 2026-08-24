@@ -218,7 +218,14 @@ enum ChatFixtures {
 struct ChatDemoView: View {
     @State private var parsesDollarMath = false
     @State private var showsCaseLabels = true
+    @State private var equationAlignment: EquationAlignmentOption = .leading
     @State private var preset = LatexThemePreset.fromLaunchArguments()
+
+    private var theme: LatexTheme {
+        var theme = preset.theme
+        theme.equationAlignment = equationAlignment.latexAlignment
+        return theme
+    }
 
     var body: some View {
         ScrollView {
@@ -228,7 +235,7 @@ struct ChatDemoView: View {
                         message: message,
                         parsesDollarMath: parsesDollarMath,
                         showsCaseLabel: showsCaseLabels,
-                        theme: preset.theme
+                        theme: theme
                     )
                 }
             }
@@ -242,6 +249,7 @@ struct ChatDemoView: View {
                 Menu {
                     Toggle("$ 수식 파싱 (opt-in)", isOn: $parsesDollarMath)
                     Toggle("케이스 라벨 표시", isOn: $showsCaseLabels)
+                    EquationAlignmentMenu(selection: $equationAlignment)
                     Picker("테마", selection: $preset) {
                         ForEach(LatexThemePreset.allCases) { preset in
                             Text(verbatim: preset.rawValue).tag(preset)
