@@ -180,6 +180,30 @@ private struct ModelBuilder {
             }
             return .orderedList(start: Int(list.startIndex), items: Array(items))
 
+        case let table as Table:
+            let header = Array(table.head.cells.map { inlineRuns(of: $0) })
+            let rows = Array(table.body.rows.map { row in
+                Array(row.cells.map { inlineRuns(of: $0) })
+            })
+            let cellCount = header.count + rows.reduce(0) { $0 + $1.count }
+            guard table.maxColumnCount <= InputLimits.maxTableColumns,
+                  cellCount <= InputLimits.maxTableCells
+            else {
+                return fallbackBlock(block)
+            }
+            return .table(ParsedTable(
+                columnAlignments: table.columnAlignments.map { alignment in
+                    switch alignment {
+                    case .some(.left): .left
+                    case .some(.center): .center
+                    case .some(.right): .right
+                    case .none: nil
+                    }
+                },
+                header: header,
+                rows: rows
+            ))
+
         case is ThematicBreak:
             return .thematicBreak
 
@@ -190,11 +214,15 @@ private struct ModelBuilder {
             return .paragraph([InlineRun(content: .text(literal))])
 
         default:
-            // 미지원 노드는 읽을 수 있는 plain text로 낮추며 조용히 삭제하지 않는다.
-            let fallback = block.format().trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !fallback.isEmpty else { return nil }
-            return .paragraph([InlineRun(content: .text(fallback))])
+            return fallbackBlock(block)
         }
+    }
+
+    /// 미지원 노드와 렌더 상한을 넘는 표는 조용히 삭제하지 않고 plain text로 낮춘다.
+    private func fallbackBlock(_ block: BlockMarkup) -> ParsedBlock? {
+        let fallback = block.format().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !fallback.isEmpty else { return nil }
+        return .paragraph([InlineRun(content: .text(fallback))])
     }
 
     private func inlineRuns(of container: Markup) -> [InlineRun] {

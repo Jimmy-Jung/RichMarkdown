@@ -97,9 +97,12 @@ import UIKit
         #expect(containsMarker(try render(blockView(block))))
     }
 
-    @Test func swiftUIInlineCodeUsesThemeTextColor() throws {
+    /// 인라인 코드 전경은 `textColor`가 아니라 `inlineCodeForeground`를 따른다.
+    @Test func swiftUIInlineCodeUsesInlineCodeForeground() throws {
         let block = ParsedBlock.paragraph([InlineRun(content: .code("code"))])
-        #expect(containsMarker(try render(blockView(block))))
+        let view = LatexBlockView(block: block, images: [:])
+            .latexTheme(LatexTheme(inlineCodeForeground: Self.marker))
+        #expect(containsMarker(try render(view)))
     }
 
     @Test func swiftUIRawFallbackUsesThemeTextColor() throws {
@@ -206,7 +209,9 @@ import UIKit
         let x = 1
         ```
         """
-        let view = LatexMarkdownUIView(markdown: markdown, theme: Self.markerTheme)
+        // 인라인 코드 전경은 `inlineCodeForeground`를 따르므로 함께 marker로 맞춘다.
+        let theme = LatexTheme(textColor: Self.marker, inlineCodeForeground: Self.marker)
+        let view = LatexMarkdownUIView(markdown: markdown, theme: theme)
         view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
         try await waitForRender(view)
 

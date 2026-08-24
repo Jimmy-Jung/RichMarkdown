@@ -9,6 +9,8 @@ package enum InputLimits {
     package static let displayPrefixUTF8Bytes = 65_536    // 초과 시 표시 상한 64 KiB
     package static let maxBlockQuoteDepth = 64
     package static let maxMathSourceUTF8Bytes = 4_096     // MathImage.asImage() 호출 전 수식 source 상한
+    package static let maxTableColumns = 32
+    package static let maxTableCells = 512
     package static let truncationMarker = "… [입력 제한 초과]"
 
     package struct BoundedInput: Sendable, Equatable {

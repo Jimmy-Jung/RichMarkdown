@@ -329,6 +329,15 @@ public final class LatexMarkdownUIView: UIView {
             return children.reduce(0) { $0 + mathImageCount($1, images: images) }
         case .unorderedList(let items), .orderedList(_, let items):
             return items.joined().reduce(0) { $0 + mathImageCount($1, images: images) }
+        case .table(let table):
+            return (table.header + table.rows.flatMap { $0 }).reduce(0) { count, runs in
+                count + runs.reduce(0) { runCount, run in
+                    guard case .math(let segment) = run.content, images[segment] != nil else {
+                        return runCount
+                    }
+                    return runCount + 1
+                }
+            }
         case .codeBlock, .thematicBreak:
             return 0
         }
@@ -392,6 +401,9 @@ public final class LatexMarkdownUIView: UIView {
                 listRow(marker: "\(start + index).", monospacedDigit: true, item: item, images: images)
             })
 
+        case .table(let table):
+            return tableView(table, images: images)
+
         case .thematicBreak:
             let line = UIView()
             line.backgroundColor = .separator
@@ -423,6 +435,71 @@ public final class LatexMarkdownUIView: UIView {
         // ponytail: 중첩 스택은 firstBaseline이 불안정하다. top 정렬로 고정한다.
         row.alignment = .top
         return row
+    }
+
+    private func tableView(_ table: ParsedTable, images: [MathSegment: RenderedMath]) -> UIView {
+        let rows = [table.header] + table.rows
+        let cellRows = rows.enumerated().map { rowIndex, cells in
+            cells.enumerated().map { column, runs in
+                let cell = runsTextView(
+                    rowIndex == 0 ? runs.map(\.boldened) : runs,
+                    images: images,
+                    font: bodyUIFont
+                )
+                cell.textAlignment = textAlignment(for: table.columnAlignments, at: column)
+                cell.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+                cell.backgroundColor = rowIndex == 0 ? UIColor(theme.codeHeaderBackground) : .clear
+                cell.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+                cell.layer.borderWidth = 0.5
+                if rowIndex == 0 { cell.accessibilityTraits.insert(.header) }
+                return cell
+            }
+        }
+
+        let columnCount = table.header.count
+        let columnWidths = (0..<columnCount).map { column in
+            let naturalWidth = cellRows.compactMap { row in
+                row.indices.contains(column) ? Self.fittingSize(row[column]).width : nil
+            }.max() ?? 96
+            return min(max(naturalWidth, 96), 240)
+        }
+
+        let rowViews = cellRows.map { cells in
+            for (column, cell) in cells.enumerated() where columnWidths.indices.contains(column) {
+                cell.widthAnchor.constraint(equalToConstant: columnWidths[column]).isActive = true
+            }
+            let row = UIStackView(arrangedSubviews: cells)
+            row.axis = .horizontal
+            row.spacing = 0
+            row.alignment = .fill
+            return row
+        }
+
+        let grid = verticalStack(spacing: 0, rowViews)
+        let contentWidth = columnWidths.reduce(0, +)
+        let fitted = grid.systemLayoutSizeFitting(
+            CGSize(width: contentWidth, height: UIView.layoutFittingCompressedSize.height),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        )
+        let scroll = horizontalScroll(
+            content: grid,
+            contentSize: CGSize(width: ceil(contentWidth), height: max(1, ceil(fitted.height)))
+        )
+        scroll.accessibilityContainerType = .semanticGroup
+        return scroll
+    }
+
+    private func textAlignment(
+        for alignments: [ParsedTable.ColumnAlignment?],
+        at column: Int
+    ) -> NSTextAlignment {
+        guard alignments.indices.contains(column) else { return .left }
+        switch alignments[column] {
+        case .center: return .center
+        case .right: return .right
+        case .left, .none: return .left
+        }
     }
 
     private func codeBlockView(language: String?, code: String) -> UIView {
@@ -557,7 +634,10 @@ public final class LatexMarkdownUIView: UIView {
 
         case .code(let code):
             var attributes = baseAttributes(run, font: codeUIFont)
-            attributes[.backgroundColor] = UIColor(theme.inlineCodeBackground)
+            // 칩(둥근 배경+테두리)은 사각형만 그리는 `.backgroundColor` 대신
+            // `InlineCodeDecorationView`가 이 attribute를 읽어 그린다.
+            attributes[.foregroundColor] = UIColor(theme.inlineCodeForeground)
+            attributes[.inlineCodeChip] = InlineCodeChipStyle(theme: theme)
             return NSAttributedString(string: code, attributes: attributes)
 
         case .math(let segment):
@@ -621,7 +701,24 @@ public final class LatexMarkdownUIView: UIView {
         view.linkTextAttributes = [:]
         // 폰트는 rebuild가 다시 만든다. UIKit의 자동 스케일링은 쓰지 않는다.
         view.adjustsFontForContentSizeCategory = false
+        if Self.containsInlineCodeChip(attributed) {
+            view.inlineCodeDecoration = InlineCodeDecorationView.install(on: view)
+        }
         return view
+    }
+
+    private static func containsInlineCodeChip(_ attributed: NSAttributedString) -> Bool {
+        var found = false
+        attributed.enumerateAttribute(
+            .inlineCodeChip,
+            in: NSRange(location: 0, length: attributed.length)
+        ) { value, _, stop in
+            if value != nil {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
     }
 
     private func copyButton(text: String, accessibilityLabel: String) -> UIButton {
@@ -757,8 +854,23 @@ final class LatexTextView: UITextView {
         didSet { accessibilityLabel = spokenOverride }
     }
 
+    var inlineCodeDecoration: InlineCodeDecorationView?
+
     override var accessibilityValue: String? {
         get { spokenOverride == nil ? super.accessibilityValue : nil }
         set { super.accessibilityValue = newValue }
+    }
+
+    override var attributedText: NSAttributedString! {
+        get { super.attributedText }
+        set {
+            super.attributedText = newValue
+            inlineCodeDecoration?.invalidate()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        inlineCodeDecoration?.refresh()
     }
 }

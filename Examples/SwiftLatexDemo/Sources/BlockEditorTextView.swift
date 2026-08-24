@@ -27,6 +27,7 @@ final class BlockDocumentUITextView: UITextView {
     var fullDocumentBlocks: [EditorBlock] = []
     var onPasteDocumentBlocks: ((NSRange, [EditorBlock]) -> Bool)?
     private let ownedContentStorage: NSTextContentStorage
+    private(set) var inlineCodeDecoration: InlineCodeDecorationView?
 
     init() {
         let contentStorage = NSTextContentStorage()
@@ -36,6 +37,20 @@ final class BlockDocumentUITextView: UITextView {
         layoutManager.textContainer = textContainer
         ownedContentStorage = contentStorage
         super.init(frame: .zero, textContainer: textContainer)
+        inlineCodeDecoration = InlineCodeDecorationView.install(on: self)
+    }
+
+    override var attributedText: NSAttributedString! {
+        get { super.attributedText }
+        set {
+            super.attributedText = newValue
+            inlineCodeDecoration?.invalidate()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        inlineCodeDecoration?.refresh()
     }
 
     @available(*, unavailable)
@@ -372,6 +387,9 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
             isApplyingUpdate = true
             if view.text == styled.string {
                 Self.applyAttributes(from: styled, to: view.textStorage)
+                // textStorage 직접 재작성은 attributedText setter를 거치지 않아
+                // 칩 밑판에 변경을 직접 알린다 (수식 편집 진입 등 attribute-only 변경).
+                (view as? BlockDocumentUITextView)?.inlineCodeDecoration?.invalidate()
             } else {
                 view.attributedText = styled
             }
@@ -1105,9 +1123,16 @@ enum MarkdownStyler {
                     )
                 case .code:
                     text.addAttribute(.font, value: mono, range: mark.range)
+                    // 칩(둥근 배경+테두리)은 `.backgroundColor` 대신
+                    // `InlineCodeDecorationView`가 이 attribute를 읽어 그린다.
                     text.addAttribute(
-                        .backgroundColor,
-                        value: UIColor(preset.theme.inlineCodeBackground),
+                        .foregroundColor,
+                        value: UIColor(preset.theme.inlineCodeForeground),
+                        range: mark.range
+                    )
+                    text.addAttribute(
+                        .inlineCodeChip,
+                        value: InlineCodeChipStyle(theme: preset.theme),
                         range: mark.range
                     )
                 }

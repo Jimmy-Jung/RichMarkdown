@@ -58,7 +58,7 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 | 수식 | 기본 `\(...\)`, `\[...\]`; opt-in `$...$`, `$$...$$` |
 | 코드 블록 | 언어 라벨, 가로 스크롤, 복사 버튼, plain monospace |
 | 스트리밍 | 최신 전체 `String` 입력, coalescing과 latest-wins 게시 |
-| 선택 | SwiftUI `.textSelection(.enabled)`의 시스템 동작 |
+| 선택 | SwiftUI `.textSelection(.enabled)`의 시스템 동작. 단 iOS 18+에서 인라인 코드가 있는 문단은 예외 — `.textSelection`이 커스텀 `TextRenderer`(인라인 코드 칩)를 우회하므로(실측, 수식자 순서 무관) 그 문단만 칩을 택한다. UIKit 렌더러는 선택과 칩을 모두 지원한다 |
 | UIKit | 네이티브 `LatexMarkdownUIView` + `UIHostingConfiguration`·`UIHostingController` 사용 예제 |
 | 접근성 | Dynamic Type, VoiceOver, 키보드, 명암/굵은 텍스트 검증 |
 

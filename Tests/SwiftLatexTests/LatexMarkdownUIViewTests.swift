@@ -487,4 +487,58 @@ import UIKit
             bubble.removeFromSuperview()
         }
     }
+
+    @Test func inlineCodeCarriesChipAttributeAndAccentColor() async throws {
+        let view = LatexMarkdownUIView(markdown: "앞 `code` 뒤")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let textView = try #require(textViews(in: view).first)
+        let attributed = try #require(textView.attributedText)
+        var chipRange = NSRange(location: NSNotFound, length: 0)
+        let chip = attributed.attribute(.inlineCodeChip, at: 2, effectiveRange: &chipRange)
+        #expect(chip is InlineCodeChipStyle)
+        #expect(chipRange == NSRange(location: 2, length: 4))
+        // 사각형만 그리는 `.backgroundColor`는 더 이상 쓰지 않는다 — 칩 밑판이 대신 그린다.
+        #expect(attributed.attribute(.backgroundColor, at: 2, effectiveRange: nil) == nil)
+        let bodyColor = attributed.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        let codeColor = attributed.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? UIColor
+        #expect(codeColor != nil)
+        #expect(codeColor != bodyColor)
+        #expect((textView as? LatexTextView)?.inlineCodeDecoration != nil)
+    }
+
+    @Test func inlineCodeDecorationDrawsChipPathAfterLayout() async throws {
+        let view = LatexMarkdownUIView(markdown: "앞 `code` 뒤")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let textView = try #require(textViews(in: view).compactMap { $0 as? LatexTextView }.first)
+        textView.layoutIfNeeded()
+        let decoration = try #require(textView.inlineCodeDecoration)
+        decoration.refresh()
+        let path = try #require((decoration.layer as? CAShapeLayer)?.path)
+        #expect(!path.boundingBox.isEmpty)
+        #expect(path.boundingBox.width > 0)
+    }
+
+    @Test func rendersTableAsScrollableGridWithAlignmentAndInlineMath() async throws {
+        let view = LatexMarkdownUIView(markdown: #"""
+        | 항목 | 수식 | 상태 |
+        | :--- | :---: | ---: |
+        | 하나 | \(x+1\) | 완료 |
+        """#)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let table = try #require(view.blockStack.arrangedSubviews.first as? UIScrollView)
+        let cells = textViews(in: table)
+        #expect(view.blockStack.arrangedSubviews.count == 1)
+        #expect(cells.count == 6, "헤더 3칸과 본문 3칸을 각각 렌더해야 한다")
+        #expect(cells.map(\.textAlignment) == [.left, .center, .right, .left, .center, .right])
+        #expect(cells.prefix(3).allSatisfy { $0.accessibilityTraits.contains(.header) })
+        #expect(cells.allSatisfy { $0.layer.borderWidth > 0 })
+        #expect(attachmentCount(in: table) == 1, "표 셀의 인라인 수식도 hydration되어야 한다")
+        #expect(!renderedText(in: table).contains("|"), "Markdown 표 원문을 그대로 표시하면 안 된다")
+    }
 }

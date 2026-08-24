@@ -454,7 +454,12 @@ struct BlockEditorModelTests {
         #expect(bold.fontDescriptor.symbolicTraits.contains(.traitBold))
         #expect(italic.fontDescriptor.symbolicTraits.contains(.traitItalic))
         #expect(styled.attribute(.strikethroughStyle, at: 7, effectiveRange: nil) != nil)
-        #expect(styled.attribute(.backgroundColor, at: 10, effectiveRange: nil) != nil)
+        // 인라인 코드는 칩 attribute + 본문과 다른 강조색을 받는다.
+        #expect(styled.attribute(.inlineCodeChip, at: 10, effectiveRange: nil) is InlineCodeChipStyle)
+        let bodyColor = styled.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        let codeColor = styled.attribute(.foregroundColor, at: 10, effectiveRange: nil) as? UIColor
+        #expect(codeColor != nil)
+        #expect(codeColor != bodyColor)
     }
 
     @Test("\\(...\\)는 기본, 달러 수식은 opt-in으로 렌더하고 UTF-16 offset을 보존한다")
@@ -769,6 +774,7 @@ struct BlockEditorModelTests {
         #expect(codeFont?.pointSize ?? 0 > 1)
         #expect(codeFont?.fontDescriptor.symbolicTraits.contains(.traitBold) == false)
         #expect(styledCode.attribute(.backgroundColor, at: 0, effectiveRange: nil) == nil)
+        #expect(styledCode.attribute(.inlineCodeChip, at: 0, effectiveRange: nil) == nil)
 
         let styledEquation = MarkdownStyler.styledDocument([equation])
         #expect(styledEquation.length == equation.text.utf16.count)
