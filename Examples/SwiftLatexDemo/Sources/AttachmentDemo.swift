@@ -172,6 +172,7 @@ struct ReadOnlyEquationDocumentView: UIViewRepresentable {
             handBuiltDocument(
                 theme: theme,
                 parsesDollarMath: parsesDollarMath,
+                blockAlignment: blockAlignment,
                 traitCollection: traitCollection
             )
         case .styler:
@@ -193,6 +194,7 @@ struct ReadOnlyEquationDocumentView: UIViewRepresentable {
     static func handBuiltDocument(
         theme: LatexTheme,
         parsesDollarMath: Bool,
+        blockAlignment: BlockAlignmentConfiguration = .default,
         traitCollection: UITraitCollection?
     ) -> NSAttributedString {
         let body = theme.bodyFont.resolvedUIFont(compatibleWith: traitCollection)
@@ -249,12 +251,13 @@ struct ReadOnlyEquationDocumentView: UIViewRepresentable {
             }
         }
         // display 수식 — isDisplay가 baseline을 줄 높이만큼 내려 블록처럼 배치한다.
+        // 정렬은 메뉴에서 주입한 `BlockAlignmentConfiguration.equation`을 따른다.
         func appendDisplay(_ latex: String) {
-            let centered = NSMutableParagraphStyle()
-            centered.alignment = .center
-            centered.paragraphSpacing = 12
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = blockAlignment.equation
+            paragraph.paragraphSpacing = 12
             var displayAttributes = attributes(font: body)
-            displayAttributes[.paragraphStyle] = centered
+            displayAttributes[.paragraphStyle] = paragraph
             result.append(attachmentString(
                 EquationTextAttachment(
                     latex: latex,
