@@ -22,19 +22,12 @@ package enum SwiftLatexParser {
         let bytes = Array(text.utf8)
         let lineMap = UTF8LineMap(utf8: bytes)
 
-        // 1차 파싱: 수식을 찾는 데 쓰지 않는다. code/HTML/link/image 금지 문맥과 paragraph 범위만 수집.
-        let firstPass = Document(parsing: text)
-        var collector = Pass1Collector(lineMap: lineMap)
-        collector.visit(firstPass)
-
-        let scanner = MathScanner(
+        let scan = scanMath(
+            text: text,
             bytes: bytes,
-            forbiddenRanges: collector.forbiddenRanges,
-            softRanges: collector.softRanges,
-            paragraphRanges: collector.paragraphRanges,
+            lineMap: lineMap,
             parsesDollarMath: parsesDollarMath
         )
-        let scan = scanner.scan()
 
         // 보호 버퍼로 2차 파싱. byte 길이가 같아 range를 원문에 그대로 쓴다.
         let masked = MathProtector.protect(bytes: bytes, spans: scan.spans)
@@ -48,6 +41,46 @@ package enum SwiftLatexParser {
             wasTruncated: boundedInput.wasTruncated,
             diagnostics: scan.diagnostics
         )
+    }
+
+    /// 편집기처럼 원문 위치가 필요한 클라이언트용 패키지 내부 API.
+    /// Markdown code/HTML/link/image barrier와 delimiter 규칙을 공개 렌더러와 동일하게 적용한다.
+    package static func scanInlineMathSpans(
+        markdown: String,
+        parsesDollarMath: Bool,
+        excludingUTF8Ranges: [Range<Int>] = []
+    ) -> [ProtectedMathSpan] {
+        let bytes = Array(markdown.utf8)
+        let scan = scanMath(
+            text: markdown,
+            bytes: bytes,
+            lineMap: UTF8LineMap(utf8: bytes),
+            parsesDollarMath: parsesDollarMath,
+            additionalForbiddenRanges: excludingUTF8Ranges
+        )
+        return scan.spans.filter { !$0.kind.isDisplay }
+    }
+
+    private static func scanMath(
+        text: String,
+        bytes: [UInt8],
+        lineMap: UTF8LineMap,
+        parsesDollarMath: Bool,
+        additionalForbiddenRanges: [Range<Int>] = []
+    ) -> MathScanner.Result {
+        // 1차 파싱은 code/HTML/link/image 금지 문맥과 paragraph 범위만 수집한다.
+        let firstPass = Document(parsing: text)
+        var collector = Pass1Collector(lineMap: lineMap)
+        collector.visit(firstPass)
+        collector.forbiddenRanges.append(contentsOf: additionalForbiddenRanges)
+
+        return MathScanner(
+            bytes: bytes,
+            forbiddenRanges: collector.forbiddenRanges,
+            softRanges: collector.softRanges,
+            paragraphRanges: collector.paragraphRanges,
+            parsesDollarMath: parsesDollarMath
+        ).scan()
     }
 }
 

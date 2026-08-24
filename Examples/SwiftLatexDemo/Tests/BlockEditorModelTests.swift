@@ -6,7 +6,7 @@ import Testing
 import UIKit
 @testable import SwiftLatexDemo
 
-@Suite("Notion 스타일 블록 편집 모델")
+@Suite("Notion 스타일 블록 편집 모델", .serialized)
 struct BlockEditorModelTests {
     @Test("Enter는 UTF-16 커서 위치에서 블록을 나누고 ID를 보존한다")
     func splitBlockAtCaret() throws {
@@ -231,6 +231,28 @@ struct BlockEditorModelTests {
         #expect(model.blocks[0].indentLevel == 0)
     }
 
+    @Test("일반 문단도 들여쓰기와 내어쓰기가 화면에 반영된다")
+    func paragraphIndentUpdatesLayout() throws {
+        let id = UUID()
+        var model = BlockEditorModel(blocks: [
+            EditorBlock(id: id, kind: .paragraph, text: "본문"),
+        ])
+
+        let indented = model.indent(id: id)
+        #expect(indented)
+        #expect(model.blocks[0].indentLevel == 1)
+
+        let styled = MarkdownStyler.styledDocument(model.blocks)
+        let paragraphStyle = try #require(
+            styled.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+        #expect(paragraphStyle.headIndent > 0)
+
+        let outdented = model.outdent(id: id)
+        #expect(outdented)
+        #expect(model.blocks[0].indentLevel == 0)
+    }
+
     @Test("인라인 서식 토글은 선택한 하위 범위만 해제한다")
     func inlineFormatToggleSubtractsSelectedRange() throws {
         let id = UUID()
@@ -433,6 +455,160 @@ struct BlockEditorModelTests {
         #expect(italic.fontDescriptor.symbolicTraits.contains(.traitItalic))
         #expect(styled.attribute(.strikethroughStyle, at: 7, effectiveRange: nil) != nil)
         #expect(styled.attribute(.backgroundColor, at: 10, effectiveRange: nil) != nil)
+    }
+
+    @Test("\\(...\\)는 기본, 달러 수식은 opt-in으로 렌더하고 UTF-16 offset을 보존한다")
+    func dollarMathRenderingIsOptInAndPreservesOffsets() throws {
+        let block = EditorBlock(kind: .paragraph, text: #"$x^2$ 그리고 \(y\)"#)
+        let dollarRange = NSRange(location: 0, length: 5)
+        let parenthesizedRange = try #require(block.text.range(of: #"\(y\)"#))
+        let parenthesizedLocation = NSRange(parenthesizedRange, in: block.text).location
+
+        let optOut = MarkdownStyler.styledDocument([block], parsesDollarMath: false)
+        #expect(optOut.length == block.text.utf16.count)
+        #expect(optOut.attribute(.attachment, at: dollarRange.location, effectiveRange: nil) == nil)
+        #expect(optOut.attribute(.attachment, at: parenthesizedLocation, effectiveRange: nil) != nil)
+
+        let optIn = MarkdownStyler.styledDocument([block], parsesDollarMath: true)
+        #expect(optIn.length == block.text.utf16.count)
+        #expect(optIn.attribute(.attachment, at: dollarRange.location, effectiveRange: nil) != nil)
+        #expect(optIn.attribute(.attachment, at: parenthesizedLocation, effectiveRange: nil) != nil)
+
+        let editing = MarkdownStyler.styledDocument(
+            [block],
+            parsesDollarMath: true,
+            selection: NSRange(location: 2, length: 0)
+        )
+        #expect(editing.attribute(.attachment, at: dollarRange.location, effectiveRange: nil) == nil)
+        #expect(String(editing.string.prefix(dollarRange.length)) == "$x^2$")
+    }
+
+    @Test("인라인 수식은 코드·escape·통화 표현을 제외하고 주변 글꼴 크기를 쓴다")
+    func inlineMathUsesCanonicalScannerAndSurroundingFont() throws {
+        var block = EditorBlock(markdown: #"`$code$` \(x\) $y$ \$escaped\$ $5 and $10"#)
+        block.kind = .heading(level: 1)
+        let styled = MarkdownStyler.styledDocument(
+            [block],
+            parsesDollarMath: true,
+            preset: .large
+        )
+
+        func location(of needle: String) throws -> Int {
+            let range = try #require(block.text.range(of: needle))
+            return NSRange(range, in: block.text).location
+        }
+
+        #expect(styled.attribute(.attachment, at: try location(of: "$code$"), effectiveRange: nil) == nil)
+        #expect(styled.attribute(.attachment, at: try location(of: #"\$escaped\$"#), effectiveRange: nil) == nil)
+        #expect(styled.attribute(.attachment, at: try location(of: "$5 and $10"), effectiveRange: nil) == nil)
+
+        let parenAttachment = try #require(
+            styled.attribute(.attachment, at: try location(of: #"\(x\)"#), effectiveRange: nil)
+                as? EquationTextAttachment
+        )
+        let dollarAttachment = try #require(
+            styled.attribute(.attachment, at: try location(of: "$y$"), effectiveRange: nil)
+                as? EquationTextAttachment
+        )
+        let headingFont = try #require(
+            styled.attribute(.font, at: try location(of: #"\(x\)"#), effectiveRange: nil) as? UIFont
+        )
+
+        #expect(parenAttachment.source == #"\(x\)"#)
+        #expect(dollarAttachment.source == "$y$")
+        #expect(parenAttachment.isDisplay == false)
+        #expect(parenAttachment.pointSize == headingFont.pointSize)
+    }
+
+    @Test("렌더 프리셋은 편집기 글꼴과 색에 반영된다")
+    func renderPresetChangesEditorTypographyAndColor() throws {
+        let block = EditorBlock(kind: .paragraph, text: "본문")
+        let traits = UITraitCollection(preferredContentSizeCategory: .large)
+        let standard = MarkdownStyler.styledDocument(
+            [block],
+            preset: .standard,
+            traitCollection: traits
+        )
+        let large = MarkdownStyler.styledDocument(
+            [block],
+            preset: .large,
+            traitCollection: traits
+        )
+        let serif = MarkdownStyler.styledDocument(
+            [block],
+            preset: .serif,
+            traitCollection: traits
+        )
+        let tinted = MarkdownStyler.styledDocument(
+            [block],
+            preset: .tinted,
+            traitCollection: traits
+        )
+
+        let standardFont = try #require(standard.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        let largeFont = try #require(large.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        let serifFont = try #require(serif.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        let standardColor = try #require(
+            standard.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        )
+        let tintedColor = try #require(
+            tinted.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        )
+
+        #expect(largeFont.pointSize > standardFont.pointSize)
+        #expect(serifFont.familyName == "Georgia")
+        #expect(!tintedColor.isEqual(standardColor))
+    }
+
+    @Test("키보드 툴바의 +는 블록 메뉴이고 Aa는 인라인 서식을 펼친다")
+    @MainActor
+    func keyboardToolbarUsesNotionButtonRoles() throws {
+        var receivedActions: [String] = []
+        let toolbar = BlockKeyboardToolbar(
+            kind: .paragraph,
+            canUndo: true,
+            canRedo: true
+        ) { action in
+            switch action {
+            case let .insert(kind):
+                receivedActions.append("insert:\(kind.title)")
+            case .format(.bold):
+                receivedActions.append("bold")
+            default:
+                receivedActions.append("unexpected")
+            }
+        }
+
+        if #available(iOS 26.0, *) {
+            let surface = try #require(
+                toolbar.subviews.compactMap { $0 as? UIVisualEffectView }.first
+            )
+            let glass = try #require(surface.effect as? UIGlassEffect)
+            #expect(!glass.isInteractive)
+        }
+
+        func button(_ identifier: String, in view: UIView) -> UIButton? {
+            if let button = view as? UIButton,
+               button.accessibilityIdentifier == identifier {
+                return button
+            }
+            return view.subviews.lazy.compactMap { button(identifier, in: $0) }.first
+        }
+
+        let addButton = try #require(button("blockToolbar.add", in: toolbar))
+        let formatButton = try #require(button("blockToolbar.format", in: toolbar))
+        let boldButton = try #require(button("blockToolbar.bold", in: toolbar))
+
+        #expect(addButton.showsMenuAsPrimaryAction)
+        #expect(addButton.menu?.children.count == 10)
+        #expect(formatButton.menu == nil)
+        #expect(boldButton.isHidden)
+
+        formatButton.sendActions(for: .touchUpInside)
+        #expect(!boldButton.isHidden)
+
+        boldButton.sendActions(for: .touchUpInside)
+        #expect(receivedActions == ["bold"])
     }
 
     @Test("비활성 수식 attachment는 TextKit 2에서 실제 수식 뷰를 만든다")
@@ -876,6 +1052,66 @@ struct BlockEditorModelTests {
         let block = EditorBlock(markdown: source)
 
         #expect(block.markdown == #"**굵게** <em>기울임</em> ~~취소~~ `코드`"#)
+    }
+
+    @Test("전체 문서 앱 내부 복사·붙여넣기는 블록 종류와 선택을 보존한다")
+    func wholeDocumentBlockRoundTripPreservesBlocks() throws {
+        let source = BlockEditorModel(markdown: #"""
+        # **제목**
+        본문 \(x\)
+        \[
+        E = mc^2
+        \]
+        - [x] 할 일
+        """#)
+        var target = BlockEditorModel(markdown: "기존")
+
+        let replacementSelection = target.replaceDocumentBlocks(
+            in: NSRange(location: 0, length: target.documentText.utf16.count),
+            with: source.blocks
+        )
+        let selection = try #require(replacementSelection)
+
+        #expect(target.blocks.map(\.kind) == source.blocks.map(\.kind))
+        #expect(target.blocks.map(\.text) == source.blocks.map(\.text))
+        #expect(target.blocks.map(\.inlineMarks) == source.blocks.map(\.inlineMarks))
+        #expect(selection == NSRange(location: target.documentText.utf16.count - 1, length: 0))
+    }
+
+    @Test("앱 내부 전체 문서 붙여넣기는 Markdown과 충돌하는 원문 블록도 그대로 보존한다")
+    func wholeDocumentBlockPastePreservesAmbiguousBlocks() throws {
+        let source = BlockEditorModel(blocks: [
+            EditorBlock(kind: .paragraph, text: "# 리터럴 제목"),
+            EditorBlock(kind: .paragraph, text: ""),
+            EditorBlock(kind: .paragraph, text: "- 리터럴 목록"),
+            EditorBlock(kind: .code(language: "swift"), text: "let fence = \"```\""),
+        ])
+        var target = BlockEditorModel(markdown: "기존")
+
+        let replacementSelection = target.replaceDocumentBlocks(
+            in: NSRange(location: 0, length: target.documentText.utf16.count),
+            with: source.blocks
+        )
+        let selection = try #require(replacementSelection)
+
+        #expect(target.blocks.map(\.kind) == source.blocks.map(\.kind))
+        #expect(target.blocks.map(\.text) == source.blocks.map(\.text))
+        #expect(target.blocks.map(\.inlineMarks) == source.blocks.map(\.inlineMarks))
+        #expect(selection == NSRange(location: target.documentText.utf16.count - 1, length: 0))
+    }
+
+    @Test("외부 plain text로 전체 교체해도 Markdown 블록 문법으로 해석하지 않는다")
+    func wholeDocumentPlainTextReplacementDoesNotParseMarkdown() throws {
+        var model = BlockEditorModel(markdown: "# 기존 제목")
+
+        let selection = model.replaceDocumentText(
+            in: NSRange(location: 0, length: model.documentText.utf16.count),
+            with: "# 리터럴 제목\n\n- 리터럴 목록"
+        )
+
+        #expect(model.blocks.map(\.kind) == [.paragraph, .paragraph, .paragraph, .paragraph])
+        #expect(model.blocks.map(\.text) == ["# 리터럴 제목", "", "- 리터럴 목록", ""])
+        #expect(selection == NSRange(location: model.documentText.utf16.count - 1, length: 0))
     }
 
     @Test("교차 인라인 마크도 Markdown 왕복 시 의미 범위를 보존한다")

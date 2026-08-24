@@ -292,6 +292,45 @@ import UIKit
         #expect(fallback.intrinsicContentSize.height > 0)
     }
 
+    @Test func inlineMathScannerUsesCanonicalRulesAndPreservesUTF16Ranges() throws {
+        let source = #"\(x\) `$code$` $y$ \$escaped\$ $5 and $10 [\(link\)](https://example.com) ![\(image\)](https://example.com/i.png) 한글😀"#
+        let code = try #require(source.range(of: "$code$"))
+        let excluded = NSRange(code, in: source)
+
+        let optOut = LatexInlineMathScanner.scan(
+            source,
+            parsesDollarMath: false,
+            excluding: [excluded]
+        )
+        #expect(optOut.map(\.source) == [#"\(x\)"#])
+
+        let optIn = LatexInlineMathScanner.scan(
+            source,
+            parsesDollarMath: true,
+            excluding: [excluded]
+        )
+        #expect(optIn.map(\.source) == [#"\(x\)"#, "$y$"])
+        for span in optIn {
+            #expect((source as NSString).substring(with: span.range) == span.source)
+        }
+    }
+
+    @Test func inlineEquationViewUsesTextModePointSizeAndOriginalSourceFallback() {
+        let fallback = LatexEquationUIView(
+            latex: #"\frac{"#,
+            source: #"\(\frac{\)"#,
+            isDisplay: false,
+            pointSize: 31
+        )
+
+        #expect(fallback.rendersDisplayStyle == false)
+        #expect(fallback.renderPointSize == 31)
+        #expect((fallback.subviews.first as? UILabel)?.text == #"\(\frac{\)"#)
+
+        fallback.latex = #"\sqrt{"#
+        #expect((fallback.subviews.first as? UILabel)?.text == #"\sqrt{"#)
+    }
+
     /// 블록 수식의 벡터 뷰. SwiftMath 타입을 테스트 타깃으로 끌어오지 않기 위해 구조로
     /// 판정한다 — 수식 접근성 label을 갖고, 원문 fallback(`UITextView`)도
     /// raster(`UIImageView`)도 아닌 뷰.

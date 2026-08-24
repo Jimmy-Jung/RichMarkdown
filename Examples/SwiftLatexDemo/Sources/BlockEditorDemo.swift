@@ -3,6 +3,8 @@ import SwiftUI
 /// 논리 블록은 유지하면서 화면에는 하나의 연속 문서만 노출한다.
 struct BlockEditorDemoView: View {
     @State private var model: BlockEditorModel
+    @State private var parsesDollarMath = false
+    @State private var preset = LatexThemePreset.fromLaunchArguments()
 
     init() {
         _model = State(initialValue: BlockEditorModel(markdown: EditorDemoView.seedDocument))
@@ -16,12 +18,33 @@ struct BlockEditorDemoView: View {
             canRedo: model.canRedo,
             onReplaceText: replaceDocumentText,
             onSelectionChange: { model.updateDocumentSelection($0) },
-            onToolbarAction: perform
+            onToolbarAction: perform,
+            onReplaceDocumentBlocks: replaceDocumentBlocks,
+            parsesDollarMath: parsesDollarMath,
+            preset: preset,
+            sourceMarkdown: model.markdown
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
         .navigationTitle("블록 편집")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Toggle("$ 수식 파싱 (opt-in)", isOn: $parsesDollarMath)
+                        .accessibilityIdentifier("blockEditor.parsesDollarMath")
+                    Picker("테마", selection: $preset) {
+                        ForEach(LatexThemePreset.allCases) { preset in
+                            Text(verbatim: preset.rawValue).tag(preset)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                }
+                .accessibilityLabel("렌더 옵션")
+                .accessibilityIdentifier("blockEditor.options")
+            }
+        }
     }
 
     private func replaceDocumentText(
@@ -31,6 +54,13 @@ struct BlockEditorDemoView: View {
         model.replaceDocumentText(in: range, with: replacement)
     }
 
+    private func replaceDocumentBlocks(
+        in range: NSRange,
+        with blocks: [EditorBlock]
+    ) -> NSRange? {
+        model.replaceDocumentBlocks(in: range, with: blocks)
+    }
+
     private func perform(_ action: EditorToolbarAction, selection: NSRange) {
         if case .done = action { return }
 
@@ -38,8 +68,8 @@ struct BlockEditorDemoView: View {
         guard let active = model.blockSelection(for: selection) else { return }
 
         switch action {
-        case .insert:
-            updateSelection(model.insert(after: active.blockID))
+        case let .insert(kind):
+            updateSelection(model.insert(after: active.blockID, kind: kind))
         case let .transform(kind):
             model.transform(id: active.blockID, to: kind)
         case let .format(format):

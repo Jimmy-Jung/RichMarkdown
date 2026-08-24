@@ -3,9 +3,10 @@
 import SwiftUI
 import SwiftLatex
 import UIKit
+import UniformTypeIdentifiers
 
 enum EditorToolbarAction {
-    case insert
+    case insert(EditorBlockKind)
     case transform(EditorBlockKind)
     case format(InlineFormat)
     case indent
@@ -17,6 +18,109 @@ enum EditorToolbarAction {
     case moveUp
     case moveDown
     case done
+}
+
+final class BlockDocumentUITextView: UITextView {
+    static let blockDocumentPasteboardType = "com.swiftlatex.demo.block-document"
+
+    var fullDocumentMarkdown: String?
+    var fullDocumentBlocks: [EditorBlock] = []
+    var onPasteDocumentBlocks: ((NSRange, [EditorBlock]) -> Bool)?
+    private let ownedContentStorage: NSTextContentStorage
+
+    init() {
+        let contentStorage = NSTextContentStorage()
+        let layoutManager = NSTextLayoutManager()
+        let textContainer = NSTextContainer(size: .zero)
+        contentStorage.addTextLayoutManager(layoutManager)
+        layoutManager.textContainer = textContainer
+        ownedContentStorage = contentStorage
+        super.init(frame: .zero, textContainer: textContainer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("BlockDocumentUITextView는 코드로만 생성합니다")
+    }
+
+    override func copy(_ sender: Any?) {
+        let fullRange = NSRange(location: 0, length: text.utf16.count)
+        guard selectedRange == fullRange, let fullDocumentMarkdown else {
+            super.copy(sender)
+            return
+        }
+        var item: [String: Any] = [
+            UTType.utf8PlainText.identifier: fullDocumentMarkdown,
+        ]
+        if let data = BlockDocumentPasteboardPayload.encode(fullDocumentBlocks) {
+            item[Self.blockDocumentPasteboardType] = data
+        }
+        UIPasteboard.general.setItems([item])
+    }
+
+    override func paste(_ sender: Any?) {
+        guard
+            let data = UIPasteboard.general.data(
+                forPasteboardType: Self.blockDocumentPasteboardType
+            ),
+            let blocks = BlockDocumentPasteboardPayload.decode(data),
+            onPasteDocumentBlocks?(selectedRange, blocks) == true
+        else {
+            super.paste(sender)
+            return
+        }
+    }
+}
+
+private struct BlockDocumentPasteboardPayload: Codable {
+    private static let maximumBytes = 256 * 1_024
+    private let version: Int
+    private let blocks: [Block]
+
+    private struct Block: Codable {
+        let kind: EditorBlockKind
+        let text: String
+        let inlineMarks: [InlineMark]
+        let indentLevel: Int
+
+        init(_ block: EditorBlock) {
+            kind = block.kind
+            text = block.text
+            inlineMarks = block.inlineMarks
+            indentLevel = block.indentLevel
+        }
+
+        var editorBlock: EditorBlock {
+            let safeKind: EditorBlockKind = switch kind {
+            case let .heading(level): .heading(level: min(max(level, 1), 3))
+            default: kind
+            }
+            return EditorBlock(
+                kind: safeKind,
+                text: text,
+                inlineMarks: inlineMarks,
+                indentLevel: safeKind.supportsIndentation ? min(max(indentLevel, 0), 3) : 0
+            )
+        }
+    }
+
+    static func encode(_ blocks: [EditorBlock]) -> Data? {
+        guard !blocks.isEmpty else { return nil }
+        let payload = Self(version: 1, blocks: blocks.map(Block.init))
+        guard let data = try? JSONEncoder().encode(payload), data.count <= maximumBytes else {
+            return nil
+        }
+        return data
+    }
+
+    static func decode(_ data: Data) -> [EditorBlock]? {
+        guard data.count <= maximumBytes,
+              let payload = try? JSONDecoder().decode(Self.self, from: data),
+              payload.version == 1,
+              !payload.blocks.isEmpty
+        else { return nil }
+        return payload.blocks.map(\.editorBlock)
+    }
 }
 
 /// 논리 블록 전체를 TextKit 2 문서 하나로 투영한다.
@@ -31,11 +135,15 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
     let onReplaceText: (NSRange, String) -> NSRange?
     let onSelectionChange: (NSRange) -> Void
     let onToolbarAction: (EditorToolbarAction, NSRange) -> Void
+    var onReplaceDocumentBlocks: ((NSRange, [EditorBlock]) -> NSRange?)? = nil
+    var parsesDollarMath = false
+    var preset: LatexThemePreset = .standard
+    var sourceMarkdown: String? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeUIView(context: Context) -> UITextView {
-        let view = UITextView(usingTextLayoutManager: true)
+    func makeUIView(context: Context) -> BlockDocumentUITextView {
+        let view = BlockDocumentUITextView()
         view.backgroundColor = .clear
         view.smartDashesType = .no
         view.smartQuotesType = .no
@@ -46,12 +154,24 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityIdentifier = "blockDocumentTextView"
         view.accessibilityLabel = "문서 편집기"
+        view.fullDocumentMarkdown = sourceMarkdown
+        view.fullDocumentBlocks = blocks
         let editingEquationIDs = selection.map {
             Self.equationBlockIDs(in: blocks, selection: $0)
+        } ?? []
+        let editingInlineMathRanges = selection.map {
+            MarkdownStyler.inlineMathRanges(
+                in: blocks,
+                intersecting: $0,
+                parsesDollarMath: parsesDollarMath
+            )
         } ?? []
         view.attributedText = MarkdownStyler.styledDocument(
             blocks,
             editingEquationIDs: editingEquationIDs,
+            parsesDollarMath: parsesDollarMath,
+            preset: preset,
+            selection: selection,
             traitCollection: view.traitCollection
         )
         if let selection {
@@ -59,11 +179,17 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         }
 
         let coordinator = context.coordinator
+        view.onPasteDocumentBlocks = { [weak coordinator] range, blocks in
+            coordinator?.replaceDocumentBlocks(in: range, with: blocks) != nil
+        }
         view.delegate = coordinator
         coordinator.editingView = view
         coordinator.baselineText = view.text
         coordinator.lastBlocks = blocks
         coordinator.lastEditingEquationIDs = editingEquationIDs
+        coordinator.lastEditingInlineMathRanges = editingInlineMathRanges
+        coordinator.lastParsesDollarMath = parsesDollarMath
+        coordinator.lastPreset = preset
         coordinator.lastContentSizeCategory = sizeCategory
         let block = activeBlock
         let kind = block?.kind ?? .paragraph
@@ -78,6 +204,7 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         coordinator.applyTypingAttributes(
             MarkdownStyler.typingAttributes(
                 for: block,
+                preset: preset,
                 traitCollection: view.traitCollection
             ),
             to: view
@@ -85,9 +212,11 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: UITextView, context: Context) {
+    func updateUIView(_ view: BlockDocumentUITextView, context: Context) {
         let coordinator = context.coordinator
         coordinator.parent = self
+        view.fullDocumentMarkdown = sourceMarkdown
+        view.fullDocumentBlocks = blocks
         let nextSelection = Self.clamped(
             selection ?? view.selectedRange,
             length: blocks.map(\.text).joined(separator: "\n").utf16.count
@@ -95,6 +224,13 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         let editingEquationIDs = selection.map { _ in
             Self.equationBlockIDs(in: blocks, selection: nextSelection)
         } ?? coordinator.lastEditingEquationIDs
+        let editingInlineMathRanges = selection.map { _ in
+            MarkdownStyler.inlineMathRanges(
+                in: blocks,
+                intersecting: nextSelection,
+                parsesDollarMath: parsesDollarMath
+            )
+        } ?? coordinator.lastEditingInlineMathRanges
         let block = activeBlock
         let kind = block?.kind ?? .paragraph
         coordinator.accessory?.update(kind: kind, canUndo: canUndo, canRedo: canRedo)
@@ -102,6 +238,9 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         guard view.markedTextRange == nil else { return }
         if coordinator.lastBlocks != blocks
             || coordinator.lastEditingEquationIDs != editingEquationIDs
+            || coordinator.lastEditingInlineMathRanges != editingInlineMathRanges
+            || coordinator.lastParsesDollarMath != parsesDollarMath
+            || coordinator.lastPreset != preset
             || coordinator.lastContentSizeCategory != sizeCategory
         {
             coordinator.applyDocumentStyle(to: view, selection: nextSelection)
@@ -112,6 +251,7 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         coordinator.applyTypingAttributes(
             MarkdownStyler.typingAttributes(
                 for: block,
+                preset: preset,
                 traitCollection: view.traitCollection
             ),
             to: view
@@ -132,6 +272,9 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         var baselineText = ""
         var lastBlocks: [EditorBlock] = []
         var lastEditingEquationIDs: Set<UUID> = []
+        var lastEditingInlineMathRanges: [NSRange] = []
+        var lastParsesDollarMath = false
+        var lastPreset: LatexThemePreset = .standard
         var lastContentSizeCategory: ContentSizeCategory?
         private var pendingTextChange: (range: NSRange, replacement: String)?
         private var compositionRange: NSRange?
@@ -162,7 +305,14 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
                 in: parent.blocks,
                 selection: textView.selectedRange
             )
-            if editingEquationIDs != lastEditingEquationIDs {
+            let editingInlineMathRanges = MarkdownStyler.inlineMathRanges(
+                in: parent.blocks,
+                intersecting: textView.selectedRange,
+                parsesDollarMath: parent.parsesDollarMath
+            )
+            if editingEquationIDs != lastEditingEquationIDs
+                || editingInlineMathRanges != lastEditingInlineMathRanges
+            {
                 applyDocumentStyle(to: textView, selection: textView.selectedRange)
             }
             lastCommittedSelection = textView.selectedRange
@@ -184,20 +334,39 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
             parent.onToolbarAction(action, range)
         }
 
+        func replaceDocumentBlocks(
+            in range: NSRange,
+            with blocks: [EditorBlock]
+        ) -> NSRange? {
+            guard !isApplyingUpdate, editingView?.markedTextRange == nil else { return nil }
+            pendingTextChange = nil
+            compositionRange = nil
+            return parent.onReplaceDocumentBlocks?(range, blocks)
+        }
+
         func applyDocumentStyle(to view: UITextView, selection: NSRange? = nil) {
             let requestedSelection = selection ?? view.selectedRange
             let editingEquationIDs = BlockDocumentTextEditor.equationBlockIDs(
                 in: parent.blocks,
                 selection: requestedSelection
             )
+            let editingInlineMathRanges = MarkdownStyler.inlineMathRanges(
+                in: parent.blocks,
+                intersecting: requestedSelection,
+                parsesDollarMath: parent.parsesDollarMath
+            )
             let selection = BlockDocumentTextEditor.sourceAlignedSelection(
                 requestedSelection,
                 in: parent.blocks,
-                editingEquationIDs: editingEquationIDs
+                editingEquationIDs: editingEquationIDs,
+                editingInlineMathRanges: editingInlineMathRanges
             )
             let styled = MarkdownStyler.styledDocument(
                 parent.blocks,
                 editingEquationIDs: editingEquationIDs,
+                parsesDollarMath: parent.parsesDollarMath,
+                preset: parent.preset,
+                selection: selection,
                 traitCollection: view.traitCollection
             )
             isApplyingUpdate = true
@@ -214,6 +383,9 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
             baselineText = styled.string
             lastBlocks = parent.blocks
             lastEditingEquationIDs = editingEquationIDs
+            lastEditingInlineMathRanges = editingInlineMathRanges
+            lastParsesDollarMath = parent.parsesDollarMath
+            lastPreset = parent.preset
             lastContentSizeCategory = parent.sizeCategory
             isApplyingUpdate = false
         }
@@ -377,18 +549,21 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
     private static func sourceAlignedSelection(
         _ selection: NSRange,
         in blocks: [EditorBlock],
-        editingEquationIDs: Set<UUID>
+        editingEquationIDs: Set<UUID>,
+        editingInlineMathRanges: [NSRange]
     ) -> NSRange {
         let start = sourceAlignedOffset(
             selection.location,
             in: blocks,
             editingEquationIDs: editingEquationIDs,
+            editingInlineMathRanges: editingInlineMathRanges,
             preferUpperBoundary: false
         )
         let end = sourceAlignedOffset(
             NSMaxRange(selection),
             in: blocks,
             editingEquationIDs: editingEquationIDs,
+            editingInlineMathRanges: editingInlineMathRanges,
             preferUpperBoundary: selection.length > 0
         )
         return NSRange(location: start, length: max(end - start, 0))
@@ -398,12 +573,17 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
         _ offset: Int,
         in blocks: [EditorBlock],
         editingEquationIDs: Set<UUID>,
+        editingInlineMathRanges: [NSRange],
         preferUpperBoundary: Bool
     ) -> Int {
         var blockStart = 0
         for (index, block) in blocks.enumerated() {
             let blockEnd = blockStart + block.text.utf16.count
-            if editingEquationIDs.contains(block.id),
+            let blockRange = NSRange(location: blockStart, length: block.text.utf16.count)
+            let editsInlineMath = editingInlineMathRanges.contains {
+                NSIntersectionRange($0, blockRange).length > 0
+            }
+            if (editingEquationIDs.contains(block.id) || editsInlineMath),
                offset >= blockStart,
                offset <= blockEnd {
                 var localOffset = offset - blockStart
@@ -431,13 +611,16 @@ struct BlockDocumentTextEditor: UIViewRepresentable {
 }
 
 /// Notion 모바일의 키보드 위 가로 스크롤 명령 막대.
-fileprivate final class BlockKeyboardToolbar: UIView {
+final class BlockKeyboardToolbar: UIView {
     private let surfaceView = BlockKeyboardToolbar.makeSurfaceView()
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
-    private let kindButton = UIButton(type: .system)
+    private let addButton = UIButton(type: .system)
+    private let formatButton = UIButton(type: .system)
     private let undoButton = UIButton(type: .system)
     private let redoButton = UIButton(type: .system)
+    private var formattingButtons: [UIButton] = []
+    private var isFormattingVisible = false
     private let onAction: (EditorToolbarAction) -> Void
 
     init(
@@ -462,6 +645,7 @@ fileprivate final class BlockKeyboardToolbar: UIView {
 
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.accessibilityIdentifier = "blockKeyboardToolbarScroll"
         surfaceView.contentView.addSubview(scrollView)
 
         stackView.axis = .horizontal
@@ -492,14 +676,33 @@ fileprivate final class BlockKeyboardToolbar: UIView {
             stackView.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
         ])
 
-        configureButton(kindButton, image: "textformat", label: "블록 유형", identifier: "blockToolbar.type")
-        kindButton.showsMenuAsPrimaryAction = true
-        stackView.addArrangedSubview(button("plus", "블록 추가", "blockToolbar.add", .insert))
-        stackView.addArrangedSubview(kindButton)
-        stackView.addArrangedSubview(button("bold", "굵게", "blockToolbar.bold", .format(.bold)))
-        stackView.addArrangedSubview(button("italic", "기울임", "blockToolbar.italic", .format(.italic)))
-        stackView.addArrangedSubview(button("strikethrough", "취소선", "blockToolbar.strike", .format(.strikethrough)))
-        stackView.addArrangedSubview(button("chevron.left.forwardslash.chevron.right", "인라인 코드", "blockToolbar.code", .format(.code)))
+        configureButton(addButton, image: "plus", label: "블록 추가", identifier: "blockToolbar.add")
+        addButton.showsMenuAsPrimaryAction = true
+        addButton.menu = blockMenu()
+        stackView.addArrangedSubview(addButton)
+
+        configureButton(formatButton, image: "textformat", label: "서식", identifier: "blockToolbar.format")
+        formatButton.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            setFormattingVisible(!isFormattingVisible)
+        }, for: .touchUpInside)
+        stackView.addArrangedSubview(formatButton)
+
+        formattingButtons = [
+            button("bold", "굵게", "blockToolbar.bold", .format(.bold)),
+            button("italic", "기울임", "blockToolbar.italic", .format(.italic)),
+            button("strikethrough", "취소선", "blockToolbar.strike", .format(.strikethrough)),
+            button(
+                "chevron.left.forwardslash.chevron.right",
+                "인라인 코드",
+                "blockToolbar.code",
+                .format(.code)
+            ),
+        ]
+        formattingButtons.forEach {
+            $0.isHidden = true
+            stackView.addArrangedSubview($0)
+        }
         stackView.addArrangedSubview(button("decrease.indent", "내어쓰기", "blockToolbar.outdent", .outdent))
         stackView.addArrangedSubview(button("increase.indent", "들여쓰기", "blockToolbar.indent", .indent))
         configureButton(undoButton, image: "arrow.uturn.backward", label: "실행 취소", identifier: "blockToolbar.undo")
@@ -526,10 +729,25 @@ fileprivate final class BlockKeyboardToolbar: UIView {
     }
 
     func update(kind: EditorBlockKind, canUndo: Bool, canRedo: Bool) {
-        kindButton.menu = kindMenu(current: kind)
-        kindButton.accessibilityLabel = "블록 유형, \(kind.title)"
+        addButton.accessibilityValue = "현재 블록: \(kind.title)"
         undoButton.isEnabled = canUndo
         redoButton.isEnabled = canRedo
+    }
+
+    private func setFormattingVisible(_ isVisible: Bool) {
+        guard isFormattingVisible != isVisible else { return }
+        isFormattingVisible = isVisible
+        formattingButtons.forEach { $0.isHidden = !isVisible }
+        formatButton.isSelected = isVisible
+        formatButton.accessibilityLabel = isVisible ? "서식 도구 닫기" : "서식"
+        layoutIfNeeded()
+        if !isVisible {
+            scrollView.setContentOffset(.zero, animated: true)
+        }
+        UIAccessibility.post(
+            notification: .layoutChanged,
+            argument: isVisible ? formattingButtons.first : formatButton
+        )
     }
 
     private func button(
@@ -559,13 +777,12 @@ fileprivate final class BlockKeyboardToolbar: UIView {
     private static func makeSurfaceView() -> UIVisualEffectView {
         if #available(iOS 26.0, *) {
             let effect = UIGlassEffect(style: .regular)
-            effect.isInteractive = true
             return UIVisualEffectView(effect: effect)
         }
         return UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
     }
 
-    private func kindMenu(current: EditorBlockKind) -> UIMenu {
+    private func blockMenu() -> UIMenu {
         let kinds: [EditorBlockKind] = [
             .paragraph,
             .heading(level: 1),
@@ -582,9 +799,8 @@ fileprivate final class BlockKeyboardToolbar: UIView {
             UIAction(
                 title: kind.title,
                 image: UIImage(systemName: kind.systemImage),
-                state: kind == current ? .on : .off
             ) { [weak self] _ in
-                self?.onAction(.transform(kind))
+                self?.onAction(.insert(kind))
             }
         })
     }
@@ -611,11 +827,25 @@ fileprivate final class BlockKeyboardToolbar: UIView {
     }
 }
 
-private final class EquationTextAttachment: NSTextAttachment {
+final class EquationTextAttachment: NSTextAttachment {
     let latex: String
+    let source: String
+    let theme: LatexTheme
+    let isDisplay: Bool
+    let pointSize: CGFloat
 
-    init(latex: String) {
+    init(
+        latex: String,
+        source: String,
+        theme: LatexTheme,
+        isDisplay: Bool,
+        pointSize: CGFloat
+    ) {
         self.latex = latex
+        self.source = source
+        self.theme = theme
+        self.isDisplay = isDisplay
+        self.pointSize = pointSize
         super.init(data: nil, ofType: nil)
         allowsTextAttachmentView = true
         lineLayoutPadding = 0
@@ -644,7 +874,13 @@ private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider
     override func loadView() {
         super.loadView()
         guard let attachment = textAttachment as? EquationTextAttachment else { return }
-        let equationView = LatexEquationUIView(latex: attachment.latex)
+        let equationView = LatexEquationUIView(
+            latex: attachment.latex,
+            source: attachment.source,
+            theme: attachment.theme,
+            isDisplay: attachment.isDisplay,
+            pointSize: attachment.pointSize
+        )
         equationView.isUserInteractionEnabled = false
         view = equationView
         tracksTextAttachmentViewBounds = true
@@ -683,21 +919,26 @@ private final class EquationAttachmentViewProvider: NSTextAttachmentViewProvider
 enum MarkdownStyler {
     static func baseAttributes(
         for kind: EditorBlockKind,
+        preset: LatexThemePreset = .standard,
         traitCollection: UITraitCollection? = nil
     ) -> [NSAttributedString.Key: Any] {
         [
-            .font: font(for: kind, traitCollection: traitCollection),
-            .foregroundColor: kind == .quote ? UIColor.secondaryLabel : UIColor.label,
+            .font: font(for: kind, preset: preset, traitCollection: traitCollection),
+            .foregroundColor: kind == .quote
+                ? UIColor.secondaryLabel
+                : UIColor(preset.theme.textColor),
         ]
     }
 
     static func typingAttributes(
         for block: EditorBlock?,
+        preset: LatexThemePreset = .standard,
         traitCollection: UITraitCollection? = nil
     ) -> [NSAttributedString.Key: Any] {
         let block = block ?? EditorBlock(text: "")
         var attributes = baseAttributes(
             for: block.kind,
+            preset: preset,
             traitCollection: traitCollection
         )
         attributes[.paragraphStyle] = paragraphStyle(for: block, numberedListOrdinal: 1)
@@ -707,6 +948,9 @@ enum MarkdownStyler {
     static func styledDocument(
         _ blocks: [EditorBlock],
         editingEquationIDs: Set<UUID> = [],
+        parsesDollarMath: Bool = false,
+        preset: LatexThemePreset = .standard,
+        selection: NSRange? = nil,
         traitCollection: UITraitCollection? = nil
     ) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -734,15 +978,29 @@ enum MarkdownStyler {
             if block.kind == .equation,
                !editingEquationIDs.contains(block.id),
                !block.text.isEmpty {
-                result.append(equationAttachment(for: block, traitCollection: traitCollection))
+                result.append(equationAttachment(
+                    for: block,
+                    preset: preset,
+                    traitCollection: traitCollection
+                ))
             } else {
-                result.append(styled(block, traitCollection: traitCollection))
+                let localSelection = selection.flatMap {
+                    selectionWithinBlock($0, blockStart: start, blockLength: block.text.utf16.count)
+                }
+                result.append(styled(
+                    block,
+                    parsesDollarMath: parsesDollarMath,
+                    preset: preset,
+                    selection: localSelection,
+                    traitCollection: traitCollection
+                ))
             }
             if index < blocks.count - 1 {
                 result.append(NSAttributedString(
                     string: "\n",
                     attributes: baseAttributes(
                         for: block.kind,
+                        preset: preset,
                         traitCollection: traitCollection
                     )
                 ))
@@ -761,20 +1019,49 @@ enum MarkdownStyler {
         return result
     }
 
+    static func inlineMathRanges(
+        in blocks: [EditorBlock],
+        intersecting selection: NSRange,
+        parsesDollarMath: Bool
+    ) -> [NSRange] {
+        var blockStart = 0
+        var result: [NSRange] = []
+        for (index, block) in blocks.enumerated() {
+            let blockRange = NSRange(location: blockStart, length: block.text.utf16.count)
+            if intersects(blockRange, selection: selection) {
+                for span in inlineMathSpans(in: block, parsesDollarMath: parsesDollarMath) {
+                    let documentRange = NSRange(
+                        location: blockStart + span.range.location,
+                        length: span.range.length
+                    )
+                    if intersects(documentRange, selection: selection) {
+                        result.append(documentRange)
+                    }
+                }
+            }
+            blockStart += block.text.utf16.count
+            if index < blocks.count - 1 { blockStart += 1 }
+        }
+        return result
+    }
+
     static func styled(
         _ block: EditorBlock,
+        parsesDollarMath: Bool = false,
+        preset: LatexThemePreset = .standard,
+        selection: NSRange? = nil,
         traitCollection: UITraitCollection? = nil
     ) -> NSAttributedString {
         let text = NSMutableAttributedString(
             string: block.text,
-            attributes: baseAttributes(for: block.kind, traitCollection: traitCollection)
+            attributes: baseAttributes(
+                for: block.kind,
+                preset: preset,
+                traitCollection: traitCollection
+            )
         )
         guard !block.kind.preservesLineBreaks else { return text }
-        let mono = scaledMonospacedFont(
-            forTextStyle: .body,
-            pointSizeAdjustment: -2,
-            traitCollection: traitCollection
-        )
+        let mono = inlineCodeFont(preset: preset, traitCollection: traitCollection)
 
         for format in InlineFormat.allCases {
             for mark in block.inlineMarks where mark.format == format && mark.range.length > 0 {
@@ -794,32 +1081,125 @@ enum MarkdownStyler {
                     text.addAttribute(.font, value: mono, range: mark.range)
                     text.addAttribute(
                         .backgroundColor,
-                        value: UIColor.secondarySystemFill,
+                        value: UIColor(preset.theme.inlineCodeBackground),
                         range: mark.range
                     )
                 }
             }
+        }
+
+        let inlineMathSpans = inlineMathSpans(in: block, parsesDollarMath: parsesDollarMath)
+        for span in inlineMathSpans where !intersects(span.range, selection: selection) {
+            text.replaceCharacters(
+                in: span.range,
+                with: equationAttachment(
+                    latex: span.latex,
+                    source: span.source,
+                    sourceLength: span.range.length,
+                    kind: block.kind,
+                    preset: preset,
+                    isDisplay: false,
+                    traitCollection: traitCollection
+                )
+            )
         }
         return text
     }
 
     private static func equationAttachment(
         for block: EditorBlock,
+        preset: LatexThemePreset,
         traitCollection: UITraitCollection?
     ) -> NSAttributedString {
-        let length = block.text.utf16.count
-        let attachment = EquationTextAttachment(latex: block.text)
+        equationAttachment(
+            latex: block.text,
+            source: block.text,
+            sourceLength: block.text.utf16.count,
+            kind: block.kind,
+            preset: preset,
+            isDisplay: true,
+            traitCollection: traitCollection
+        )
+    }
+
+    private static func equationAttachment(
+        latex: String,
+        source: String,
+        sourceLength: Int,
+        kind: EditorBlockKind,
+        preset: LatexThemePreset,
+        isDisplay: Bool,
+        traitCollection: UITraitCollection?
+    ) -> NSAttributedString {
+        let attributes = baseAttributes(
+            for: kind,
+            preset: preset,
+            traitCollection: traitCollection
+        )
+        let pointSize = (attributes[.font] as? UIFont)?.pointSize
+            ?? UIFont.preferredFont(forTextStyle: .body).pointSize
+        let attachment = EquationTextAttachment(
+            latex: latex,
+            source: source,
+            theme: preset.theme,
+            isDisplay: isDisplay,
+            pointSize: pointSize
+        )
         let result = NSMutableAttributedString(attachment: attachment)
-        if length > 1 {
+        if sourceLength > 1 {
             result.append(NSAttributedString(
-                string: String(repeating: "\u{2063}", count: length - 1)
+                string: String(repeating: "\u{2063}", count: sourceLength - 1)
             ))
         }
         result.addAttributes(
-            baseAttributes(for: block.kind, traitCollection: traitCollection),
+            attributes,
             range: NSRange(location: 0, length: result.length)
         )
         return result
+    }
+
+    private static func inlineMathSpans(
+        in block: EditorBlock,
+        parsesDollarMath: Bool
+    ) -> [LatexInlineMathSpan] {
+        guard !block.kind.preservesLineBreaks else { return [] }
+        let codeRanges = block.inlineMarks.compactMap { mark in
+            mark.format == .code ? mark.range : nil
+        }
+        return LatexInlineMathScanner.scan(
+            block.text,
+            parsesDollarMath: parsesDollarMath,
+            excluding: codeRanges
+        )
+    }
+
+    private static func selectionWithinBlock(
+        _ selection: NSRange,
+        blockStart: Int,
+        blockLength: Int
+    ) -> NSRange? {
+        let blockRange = NSRange(location: blockStart, length: blockLength)
+        if selection.length == 0 {
+            guard selection.location >= blockStart,
+                  selection.location <= NSMaxRange(blockRange)
+            else { return nil }
+            return NSRange(location: selection.location - blockStart, length: 0)
+        }
+        let intersection = NSIntersectionRange(selection, blockRange)
+        guard intersection.length > 0 else { return nil }
+        return NSRange(
+            location: intersection.location - blockStart,
+            length: intersection.length
+        )
+    }
+
+    private static func intersects(_ range: NSRange, selection: NSRange?) -> Bool {
+        guard let selection else { return false }
+        if selection.length == 0 {
+            return selection.location >= range.location
+                && selection.location < NSMaxRange(range)
+        }
+        return NSIntersectionRange(range, selection).length > 0
     }
 
     private static func paragraphStyle(
@@ -854,6 +1234,9 @@ enum MarkdownStyler {
         case .paragraph, .heading:
             break
         }
+        let nestingIndent = CGFloat(block.indentLevel) * 20
+        style.firstLineHeadIndent += nestingIndent
+        style.headIndent += nestingIndent
         return style
     }
 
@@ -883,37 +1266,116 @@ enum MarkdownStyler {
 
     private static func font(
         for kind: EditorBlockKind,
+        preset: LatexThemePreset,
         traitCollection: UITraitCollection?
     ) -> UIFont {
-        switch kind {
-        case let .heading(level):
-            let style: UIFont.TextStyle = switch level {
+        if case .code = kind {
+            return scaledMonospacedFont(
+                forTextStyle: .body,
+                referencePointSize: preset == .large ? 20 : nil,
+                traitCollection: traitCollection
+            )
+        }
+        if case .equation = kind {
+            return scaledMonospacedFont(
+                forTextStyle: .body,
+                referencePointSize: preset == .large ? 20 : nil,
+                traitCollection: traitCollection
+            )
+        }
+
+        let style: UIFont.TextStyle
+        let largeSize: CGFloat
+        let serifName: String
+        let isHeading: Bool
+        if case let .heading(level) = kind {
+            style = switch level {
             case 1: .title1
             case 2: .title2
             default: .title3
             }
-            return withTraits(
-                .traitBold,
-                font: UIFont.preferredFont(
-                    forTextStyle: style,
-                    compatibleWith: traitCollection
-                )
+            largeSize = switch level {
+            case 1: 38
+            case 2: 30
+            default: 26
+            }
+            serifName = "Georgia-Bold"
+            isHeading = true
+        } else {
+            style = .body
+            largeSize = 24
+            serifName = "Georgia"
+            isHeading = false
+        }
+
+        switch preset {
+        case .standard, .tinted:
+            let font = UIFont.preferredFont(
+                forTextStyle: style,
+                compatibleWith: traitCollection
             )
-        case .code, .equation:
-            return scaledMonospacedFont(
-                forTextStyle: .body,
+            return isHeading ? withTraits(.traitBold, font: font) : font
+        case .large:
+            return scaledSystemFont(
+                pointSize: largeSize,
+                weight: isHeading ? .bold : .regular,
+                textStyle: style,
                 traitCollection: traitCollection
             )
-        default:
-            return UIFont.preferredFont(
-                forTextStyle: .body,
-                compatibleWith: traitCollection
+        case .serif:
+            return scaledCustomFont(
+                name: serifName,
+                textStyle: style,
+                traitCollection: traitCollection
             )
         }
     }
 
+    private static func inlineCodeFont(
+        preset: LatexThemePreset,
+        traitCollection: UITraitCollection?
+    ) -> UIFont {
+        scaledMonospacedFont(
+            forTextStyle: .body,
+            referencePointSize: preset == .large ? 20 : nil,
+            pointSizeAdjustment: preset == .large ? 0 : -2,
+            traitCollection: traitCollection
+        )
+    }
+
+    private static func scaledSystemFont(
+        pointSize: CGFloat,
+        weight: UIFont.Weight,
+        textStyle: UIFont.TextStyle,
+        traitCollection: UITraitCollection?
+    ) -> UIFont {
+        UIFontMetrics(forTextStyle: textStyle).scaledFont(
+            for: .systemFont(ofSize: pointSize, weight: weight),
+            compatibleWith: traitCollection
+        )
+    }
+
+    private static func scaledCustomFont(
+        name: String,
+        textStyle: UIFont.TextStyle,
+        traitCollection: UITraitCollection?
+    ) -> UIFont {
+        let referenceTraits = UITraitCollection(preferredContentSizeCategory: .large)
+        let referenceSize = UIFont.preferredFont(
+            forTextStyle: textStyle,
+            compatibleWith: referenceTraits
+        ).pointSize
+        let base = UIFont(name: name, size: referenceSize)
+            ?? UIFont.systemFont(ofSize: referenceSize)
+        return UIFontMetrics(forTextStyle: textStyle).scaledFont(
+            for: base,
+            compatibleWith: traitCollection
+        )
+    }
+
     private static func scaledMonospacedFont(
         forTextStyle textStyle: UIFont.TextStyle,
+        referencePointSize: CGFloat? = nil,
         pointSizeAdjustment: CGFloat = 0,
         traitCollection: UITraitCollection?
     ) -> UIFont {
@@ -923,7 +1385,7 @@ enum MarkdownStyler {
             compatibleWith: referenceTraits
         ).pointSize
         let base = UIFont.monospacedSystemFont(
-            ofSize: max(referenceSize + pointSizeAdjustment, 1),
+            ofSize: max((referencePointSize ?? referenceSize) + pointSizeAdjustment, 1),
             weight: .regular
         )
         return UIFontMetrics(forTextStyle: textStyle).scaledFont(

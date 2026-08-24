@@ -2,7 +2,7 @@
 
 import Foundation
 
-enum EditorBlockKind: Equatable, Hashable {
+enum EditorBlockKind: Codable, Equatable, Hashable {
     case paragraph
     case heading(level: Int)
     case bulletedList
@@ -48,12 +48,7 @@ enum EditorBlockKind: Equatable, Hashable {
     }
 
     var supportsIndentation: Bool {
-        switch self {
-        case .bulletedList, .numberedList, .toDo:
-            true
-        default:
-            false
-        }
+        true
     }
 
     var supportsRenderedCaret: Bool {
@@ -200,7 +195,7 @@ struct BlockSelection: Equatable {
     let range: NSRange
 }
 
-enum InlineFormat: Int, CaseIterable, Hashable {
+enum InlineFormat: Int, CaseIterable, Codable, Hashable {
     case bold
     case italic
     case strikethrough
@@ -216,7 +211,7 @@ enum InlineFormat: Int, CaseIterable, Hashable {
     }
 }
 
-struct InlineMark: Equatable {
+struct InlineMark: Codable, Equatable {
     let format: InlineFormat
     var range: NSRange
 }
@@ -800,6 +795,28 @@ struct BlockEditorModel {
         blocks.map(\.text).joined(separator: "\n")
     }
 
+    var markdown: String {
+        var numberedCounts: [Int: Int] = [:]
+        var previousKinds: [Int: EditorBlockKind] = [:]
+        return blocks.map { block in
+            let depth = block.indentLevel
+            numberedCounts = numberedCounts.filter { $0.key <= depth }
+            previousKinds = previousKinds.filter { $0.key <= depth }
+            let ordinal: Int
+            if block.kind == .numberedList {
+                ordinal = previousKinds[depth] == .numberedList
+                    ? (numberedCounts[depth] ?? 0) + 1
+                    : 1
+                numberedCounts[depth] = ordinal
+            } else {
+                ordinal = 1
+                numberedCounts[depth] = 0
+            }
+            previousKinds[depth] = block.kind
+            return block.markdown(numberedListOrdinal: ordinal)
+        }.joined(separator: "\n")
+    }
+
     func block(id: UUID) -> EditorBlock? {
         blocks.first { $0.id == id }
     }
@@ -900,11 +917,10 @@ struct BlockEditorModel {
         )
 
         if range.location == 0, range.length == documentText.utf16.count {
-            let parts = replacement.split(separator: "\n", omittingEmptySubsequences: false)
-            let updated = parts.map { EditorBlock(kind: .paragraph, text: String($0)) }
-            apply(updated)
-            updateDocumentSelection(nextSelection)
-            return currentDocumentSelection
+            let plainTextBlocks = replacement
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .map { EditorBlock(text: String($0)) }
+            return replaceDocumentBlocks(in: range, with: plainTextBlocks)
         }
 
         guard let start = documentPosition(at: range.location),
@@ -1015,6 +1031,24 @@ struct BlockEditorModel {
             + Array(blocks[(end.index + 1)...])
         apply(updated)
         updateDocumentSelection(nextSelection)
+        return currentDocumentSelection
+    }
+
+    /// 앱 전용 pasteboard 표현으로 전달된 논리 블록 전체를 손실 없이 복원한다.
+    @discardableResult
+    mutating func replaceDocumentBlocks(
+        in range: NSRange,
+        with replacement: [EditorBlock]
+    ) -> NSRange? {
+        guard range == NSRange(location: 0, length: documentText.utf16.count) else {
+            return nil
+        }
+        apply(Self.normalized(replacement))
+        let trailingEmptyBlockLength = blocks.count > 1 && blocks.last?.text.isEmpty == true ? 1 : 0
+        updateDocumentSelection(NSRange(
+            location: max(0, documentText.utf16.count - trailingEmptyBlockLength),
+            length: 0
+        ))
         return currentDocumentSelection
     }
 
