@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-25
+
 ### 추가
 
 - **신규 product `SwiftLatexBlockEditor`.** demo에만 있던 Notion 스타일 블록 편집기를
@@ -238,7 +240,8 @@ SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는�
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
-[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.4.0
 [0.3.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.3.0
 [0.2.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.2.0
 [0.1.1]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.1.1

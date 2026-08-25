@@ -88,7 +88,7 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 
 ## 2. 최소 공개 표면
 
-v1의 공개 product는 `SwiftLatex` 하나다. 0.3.0부터 Notion 스타일 블록 편집기가
+v1의 공개 product는 `SwiftLatex` 하나다. 0.4.0부터 Notion 스타일 블록 편집기가
 별도 product `SwiftLatexBlockEditor`로 추가됐다 — 렌더 라이브러리와 관심사가 달라
 같은 product에 합치지 않으며, 편집기가 필요 없는 앱은 의존하지 않는다.
 
