@@ -3,10 +3,10 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.0%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.3.0 beta** — GFM 표, Notion 스타일 인라인 코드 칩, 연속 문서형 블록 편집
-> 데모를 추가하고 UIKit 렌더링 경로를 최적화했다.
+> **0.4.0 beta** — 블록 편집기를 `SwiftLatexBlockEditor` product로 분리하고,
+> 인용문·할 일 체크박스를 Notion 규격으로 맞췄다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
@@ -26,16 +26,20 @@ generation 관리를 공유한다.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
 
-## 0.3.0 베타 핵심
+## 0.4.0 베타 핵심
 
-- **GFM 표** — 헤더, 테두리, 열 정렬과 셀 안의 강조·링크·인라인 코드·수식을
-  SwiftUI와 UIKit에서 같은 파싱 결과로 렌더한다. 좁은 화면에서는 가로 스크롤한다.
-- **Notion 스타일 인라인 코드** — 둥근 칩, 테두리, 대비를 확보한 강조색으로 렌더한다.
-  SwiftUI iOS 18+와 UIKit TextKit 2가 같은 테마 값을 사용한다.
-- **UIKit 렌더링 최적화** — 변경되지 않은 블록과 fallback 텍스트 뷰를 재사용하고,
-  블록 수식은 벡터로 렌더해 불필요한 raster와 self-sizing 갱신을 줄였다.
-- **연속 문서형 블록 편집 데모** — 논리 블록은 유지하면서 하나의 TextKit 2
-  `UITextView`에서 선택·입력·undo/redo·인라인 서식을 처리한다.
+- **블록 편집기 product 분리** — 데모에만 있던 Notion 스타일 편집기를
+  `SwiftLatexBlockEditor`로 옮겼다. markdown 왕복 파싱·undo/redo를 담은
+  `BlockEditorModel`과 TextKit 2 단일 문서 편집기 `BlockDocumentTextEditor`를 쓴다.
+  편집기가 필요 없는 앱은 이 product에 의존하지 않는다.
+- **`EquationTextAttachment` 공개** — 편집기 없이도 임의의 `UITextView` 문서에
+  수식을 라이브 뷰로 끼워 넣는다.
+- **Notion 규격 인용문·할 일** — 인용문은 본문 색 + 왼쪽 세로 바, 할 일은 둥근
+  테두리 박스와 액센트 채움 체크(완료는 흐림 + 취소선)로 렌더한다.
+- **블록 수식 정렬 주입** — 렌더러는 `LatexTheme.equationAlignment`, 편집기는
+  `BlockAlignmentConfiguration`으로 좌·중앙·우를 고른다.
+- **줄 끝 수식 잘림 수정** — 줄 끝에 놓인 인라인 수식이 좁게 보고돼 잘리던 문제를
+  고쳐, 안 들어가는 수식은 다음 줄로 내려간다.
 
 설계 문서: [DEVELOPMENT.md](DEVELOPMENT.md)
 
@@ -69,8 +73,8 @@ generation 관리를 공유한다.
 
 ```swift
 dependencies: [
-    // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.3 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.3.0")),
+    // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.4 minor로 고정한다.
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.4.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),

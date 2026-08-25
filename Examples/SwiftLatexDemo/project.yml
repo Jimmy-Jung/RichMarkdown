@@ -22,7 +22,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: "0.3.0"
+        MARKETING_VERSION: "0.4.0"
         CODE_SIGN_STYLE: Automatic
   SwiftLatexDemoUITests:
     type: bundle.ui-testing
