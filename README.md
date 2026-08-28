@@ -3,10 +3,10 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.4.0 beta** — 블록 편집기를 `SwiftLatexBlockEditor` product로 분리하고,
-> 인용문·할 일 체크박스를 Notion 규격으로 맞췄다.
+> **0.4.1 beta** — 스트리밍 append가 이전 렌더를 유지하도록 렌더 계약을 고치고,
+> SSE 실시간 렌더링 데모(SwiftUI·UIKit)를 추가했다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
@@ -26,20 +26,17 @@ generation 관리를 공유한다.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
 
-## 0.4.0 베타 핵심
+## 0.4.1 베타 핵심
 
-- **블록 편집기 product 분리** — 데모에만 있던 Notion 스타일 편집기를
-  `SwiftLatexBlockEditor`로 옮겼다. markdown 왕복 파싱·undo/redo를 담은
-  `BlockEditorModel`과 TextKit 2 단일 문서 편집기 `BlockDocumentTextEditor`를 쓴다.
-  편집기가 필요 없는 앱은 이 product에 의존하지 않는다.
-- **`EquationTextAttachment` 공개** — 편집기 없이도 임의의 `UITextView` 문서에
-  수식을 라이브 뷰로 끼워 넣는다.
-- **Notion 규격 인용문·할 일** — 인용문은 본문 색 + 왼쪽 세로 바, 할 일은 둥근
-  테두리 박스와 액센트 채움 체크(완료는 흐림 + 취소선)로 렌더한다.
-- **블록 수식 정렬 주입** — 렌더러는 `LatexTheme.equationAlignment`, 편집기는
-  `BlockAlignmentConfiguration`으로 좌·중앙·우를 고른다.
-- **줄 끝 수식 잘림 수정** — 줄 끝에 놓인 인라인 수식이 좁게 보고돼 잘리던 문제를
-  고쳐, 안 들어가는 수식은 다음 줄로 내려간다.
+- **스트리밍 append가 이전 렌더를 유지** — 누적 문자열을 다시 넘길 때마다 문서
+  전체가 원문 텍스트로 되돌아갔다가 재렌더되던 플래시를 없앴다. 새 markdown이
+  표시 중 문서의 확장이면 새 parse가 게시될 때까지 이전 렌더를 그대로 보인다.
+  셀 재사용(다른 문자열 교체)은 기존대로 이전 문서를 한 프레임도 보이지 않는다.
+- **부분 hydration** — 캐시된 수식 raster는 파싱 게시와 동시에 hydration된다.
+  스트리밍 중 이미 렌더된 수식이 원문으로 되돌아가는 프레임이 사라졌다.
+- **SSE 실시간 렌더링 데모 2종(SwiftUI·UIKit)** — `text/event-stream` 프레임을
+  디코딩해 누적 문자열을 넘기는 실전 배선 예제. `URLSession.AsyncBytes.lines`가
+  빈 줄(이벤트 경계)을 삼키는 함정을 우회하는 줄 분리기 포함.
 
 설계 문서: [DEVELOPMENT.md](DEVELOPMENT.md)
 
@@ -48,7 +45,8 @@ generation 관리를 공유한다.
 ## 스크린샷
 
 `Examples/SwiftLatexDemo`의 실제 화면. iPhone 16 Pro / iOS 18.6에서 촬영했다.
-`SwiftLatexDemoUITests/DocumentationScreenshotTests`로 재생성한다 (실행법은 해당 파일 주석).
+정지컷은 `SwiftLatexDemoUITests/DocumentationScreenshotTests`로 (실행법은 해당 파일 주석),
+SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 
 | 인라인·블록 수식 | Markdown 요소 |
 |---|---|
@@ -65,6 +63,11 @@ generation 관리를 공유한다.
 | ![임의 문서에 EquationTextAttachment를 직접 배치한 화면](Docs/screenshots/05-attachment-hand-built.png) | ![블록 모델을 읽기 전용으로 스타일링한 화면](Docs/screenshots/06-attachment-styler.png) |
 | 블록 편집기 없이 `EquationTextAttachment`를 `UITextView` 문서에 직접 넣는다. 인라인 baseline, display 블록 배치, `$` 스캔 토글, 주변 폰트를 따라가는 크기 | `MarkdownStyler.styledDocument`만으로 만든 읽기 전용 문서. 둥근 테두리/체크 완료 상태의 할 일, 왼쪽 세로 바 인용, 인라인 코드 칩, 코드 블록 리터럴 보호 |
 
+| SSE 실시간 렌더링 (SwiftUI) | SSE 실시간 렌더링 (UIKit) |
+|---|---|
+| ![SSE 프레임이 도착하는 대로 렌더되는 SwiftUI 스트리밍 데모](Docs/screenshots/07-sse-swiftui.gif) | ![같은 스트림을 UIKit 렌더러로 배선한 스트리밍 데모](Docs/screenshots/08-sse-uikit.gif) |
+| 5Hz SSE 프레임이 도착하는 대로 누적 문자열을 다시 넘긴다. 스트리밍 append가 이전 렌더를 유지해 원문 플래시 없이 새 블록이 이어 붙는다 | 같은 스트림을 UIKit `LatexMarkdownUIView`로 배선. 스트리밍 append에서 블록 뷰를 증분 재사용한다 |
+
 ---
 
 ## 설치
@@ -74,7 +77,7 @@ generation 관리를 공유한다.
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.4 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.4.0")),
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.4.1")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
@@ -162,6 +165,15 @@ var body: some View {
 
 토큰 이벤트는 **최대 약 10Hz로 합쳐서** 전달한다. 그보다 잦게 갱신해도 내부
 coalescing이 흡수하지만(실행 1 + 대기 1), 불필요한 파싱을 줄이는 쪽이 낫다.
+
+누적 갱신(새 문자열이 이전 문자열의 확장)에서는 새 parse가 게시될 때까지 **이전
+렌더를 유지한다** — 갱신마다 원문 텍스트로 되돌아가는 플래시가 없다. 같은 뷰에
+전혀 다른 문자열을 넣는 교체(셀 재사용)는 이전 문서를 한 프레임도 보이지 않고
+즉시 원문 fallback으로 넘어간다.
+
+SSE(`text/event-stream`) 배선 예시는 데모의 **SSE 실시간 렌더링** 화면
+(`Examples/SwiftLatexDemo/Sources/SSEDemo.swift`)에 있다. 프레임 디코더는
+`URLSession.bytes`와 로컬 시뮬레이션이 함께 쓰는 동기 상태 머신이다.
 
 측정값(Debug, iPhone 16 Pro / iOS 18.6 simulator): 50 KiB 입력 parse p50 119ms,
 p95 129–230ms. 10Hz로 30초 갱신 후 마지막 입력에서 idle까지 25–28ms.
@@ -396,6 +408,32 @@ cd Examples/SwiftLatexDemo && xcodegen generate && open SwiftLatexDemo.xcodeproj
 인라인/블록 수식, 코드 블록, 리스트·인용, GFM 표, 링크 allowlist, 금지 문맥 보호,
 실패 시 원문 표시, 다국어·RTL, 미지원 노드 강등, 긴 답변을 한 화면에서 확인한다. 두 화면의
 우측 상단 `렌더 옵션` 메뉴는 `$` 수식 opt-in, 케이스 라벨, 테마 프리셋을 제공한다.
+
+스트리밍 확인 화면 2개.
+
+- **SSE 실시간 렌더링 (SwiftUI)** — `text/event-stream` 프레임을 받아 누적 문자열을
+  `LatexMarkdownView`에 계속 넘기는 화면. 엔드포인트 칸이 비어 있으면 fixture를 SSE
+  프레임으로 만들어 5/20/60Hz로 로컬에서 흘린다(네트워크 불필요). 프레임 payload는
+  OpenAI 호환(`choices[0].delta.content`)이며 디코더는 `choices[0].text`,
+  Anthropic `delta.text`, 순수 텍스트 payload, 오류 payload도 함께 받는다.
+  - **도착 속도와 화면 갱신 속도를 분리한다.** 도착한 델타를 모아 약 10Hz로만 반영한다.
+    매 청크 갱신 + 자동 스크롤은 스크롤 레이아웃을 그 빈도로 강제해 메인 스레드를
+    포화시키고, 렌더 게시가 계속 stale 판정을 받아 화면이 원문에 고착한다(실측).
+  - 누적 갱신에서는 이전 렌더가 유지된 채 새 블록이 이어 붙는다(«스트리밍» 절의
+    append 계약). 문자 수로 자르므로 구분자가 절반만 도착한 구간에서는 파싱이 끝나도
+    수식이 원문으로 남는 fail-open을 볼 수 있다.
+  - 엔드포인트를 넣으면 `URLSession.bytes`로 실제 스트림을 읽는다. **GET·바디 없음·인증
+    헤더 없음**이라 OpenAI/Anthropic API에 직접 붙일 수 없고, GET으로 `text/event-stream`을
+    중계하는 로컬 프록시를 앞에 둔다(실측: 시뮬레이터에서 `http://127.0.0.1:PORT`는 ATS
+    예외 없이 붙는다. LAN·사내 평문 http는 ATS에 막히므로 예외가 필요하다).
+    응답 `Content-Type`이 `text/event-stream`이 아니면 거부한다.
+
+- **SSE 실시간 렌더링 (UIKit)** — 같은 디코더·전송 로직을 UIKit 네이티브
+  `LatexMarkdownUIView`로 배선한 화면. `onContentSizeChange`로 자동 스크롤을 걸고,
+  스트리밍 append에서 블록 뷰 증분 재사용(0.3.0 성능 작업)이 그대로 동작하는지 확인한다.
+
+- **라이브 편집 (분할 미리보기)** — `TextEditor` 입력이 곧바로 `LatexMarkdownView`로
+  흘러 타이핑으로 coalescing 동작을 확인하는 화면.
 
 UIKit 화면 2개가 함께 들어 있다.
 

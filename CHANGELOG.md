@@ -5,6 +5,48 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-28
+
+### 추가
+
+- **데모에 `SSE 실시간 렌더링` 화면.** `text/event-stream` 프레임을 디코딩해 누적
+  문자열을 `LatexMarkdownView`에 계속 넘기는 스트리밍 확인 화면
+  (`Examples/SwiftLatexDemo/Sources/SSEDemo.swift`). 패키지 API는 바뀌지 않았다.
+  - `SSELineSplitter` — 바이트를 SSE 줄로 나눈다. `URLSession.AsyncBytes.lines`는
+    **빈 줄을 건너뛰어** 이벤트 경계가 사라지므로 쓰지 않는다(실측). LF·CRLF·CR과
+    선두 BOM을 처리하고 한 줄 상한(64 KiB)으로 무한 버퍼링을 막는다.
+  - `SSEDecoder` — W3C EventSource 부분집합(`data` 누적, 주석, `[DONE]`)의 동기 상태 머신.
+    OpenAI `choices[0].delta.content`(문자열·content-part 배열)와 `choices[0].text`,
+    Anthropic `delta.text`, OpenAI Responses `delta`, 순수 텍스트 payload를 받고,
+    서버 오류 payload는 `failure` 이벤트로 올린다. 잘린 JSON 조각은 답변에 섞지 않는다.
+  - 엔드포인트가 비면 fixture를 SSE 프레임으로 만들어 5/20/60Hz로 흘리고(네트워크 불필요),
+    넣으면 `URLSession.bytes`로 실제 스트림을 읽는다(GET·바디 없음, `Content-Type` 검증,
+    누적 256 KiB 상한). 두 경로가 같은 분리기·디코더를 쓴다.
+  - **도착 속도와 화면 갱신 속도를 분리**했다. 도착한 델타를 모아 약 10Hz로만 반영한다 —
+    매 청크 갱신 + `scrollTo`는 스크롤 레이아웃을 그 빈도로 강제해 메인 스레드를 포화시키고,
+    렌더 게시가 매번 stale 판정을 받아 화면이 원문에 고착했다(실측: 20Hz에서 스트림이
+    끝날 때까지 렌더 미착지, 접근성 쿼리 응답 4초 이상).
+  - UIKit 화면 «SSE 실시간 렌더링 (UIKit)» — 같은 디코더·전송 로직을 UIKit 네이티브
+    `LatexMarkdownUIView`로 배선(`UIKitSSEDemo.swift`). 기존 화면은
+    «SSE 실시간 렌더링 (SwiftUI)»로 개명.
+  - 회귀 방지: `SSEDecoderTests`·`SSELineSplitterTests` 25건(바이트→줄→디코더 왕복,
+    빈 줄 보존, BOM, Character 경계 청크), UI 테스트
+    `testSSEDemoRendersWhileStreaming`(스트리밍 중 표 셀 렌더 착지),
+    `testSSEDemoStreamsAndStops`(중지 후 청크 누적 정지),
+    `testUIKitSSEDemoRendersWhileStreaming`(UIKit 렌더러 스트리밍 렌더).
+
+### 수정
+
+- **스트리밍 append가 더 이상 원문 fallback으로 되돌아가지 않는다.** 누적 문자열을
+  다시 넘길 때(새 markdown이 표시 중 문서의 prefix 확장) 렌더 모델이 이전 문서와
+  수식 이미지를 새 parse 게시까지 유지한다. 이전에는 매 갱신 문서 전체가
+  원문 ↔ 렌더를 오가며 출렁였다(SSE 데모 실측). 셀 재사용(다른 문자열로 교체)은
+  기존대로 즉시 fallback을 게시해 이전 문서가 한 프레임도 되살아나지 않는다.
+  캐시된 수식 raster는 1단계 게시에서 즉시 hydration한다(부분 hydration) — 이미
+  raster된 수식이 원문으로 되돌아가는 프레임도 함께 사라졌다.
+  두 렌더러(SwiftUI `LatexMarkdownView`, UIKit `LatexMarkdownUIView`) 공통
+  (`DEVELOPMENT.md` §4 계약 개정, `Docs/RENDERING_PERFORMANCE_PLAN.md` §9.5).
+
 ## [0.4.0] - 2026-08-25
 
 ### 추가
