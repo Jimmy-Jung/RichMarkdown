@@ -212,8 +212,8 @@ import UIKit
         #expect(zip(after, before).allSatisfy { $0 === $1 }, "값이 그대로면 블록 뷰도 그대로여야 한다")
     }
 
-    /// 스트리밍 append 경로. markdown이 바뀌면 model이 `document = nil`을 먼저 게시하므로
-    /// 원문 fallback 단계를 반드시 거친다. 그 단계에서 뷰 인스턴스를 버리면 재사용이 없다.
+    /// 스트리밍 append 경로. model이 이전 문서를 유지한 채 새 parse를 게시하므로
+    /// 앞쪽 블록의 뷰 인스턴스를 그대로 재사용해야 한다.
     @Test func keepsLeadingBlockViewsWhenAppendingParagraph() async throws {
         let view = LatexMarkdownUIView(markdown: "첫 문단\n\n둘째 문단")
         view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
@@ -401,32 +401,34 @@ import UIKit
         #expect(view.model.imageRequest != nil, "빈 이미지 사전으로도 완결 게시가 온다")
     }
 
-    /// 스트리밍 fallback 프레임은 `UITextView`를 새로 만들지 않는다
-    /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.5 부채 해소).
+    /// 스트리밍 append는 **fallback 프레임 없이** 이전 렌더를 유지한다.
     ///
-    /// 타이밍 근거: markdown setter 안에서 `model.submit`이 `objectWillChange`를 동기로
-    /// 발화하므로 coalesced rebuild Task가 worker kick Task보다 먼저 MainActor 큐에
-    /// 들어간다. 한 번의 yield 뒤에는 fallback 프레임이 이미 렌더되어 있고, 그 프레임을
-    /// 덮을 parse 게시의 rebuild는 아직 실행될 수 없다(추가 MainActor hop 필요).
-    @Test func reusesFallbackTextViewAcrossStreamingUpdates() async throws {
+    /// model이 append에서 document를 유지하므로(스트리밍 append 계약) 새 parse가 게시되기
+    /// 전의 rebuild는 기존 블록 뷰를 그대로 되돌려 놓는다 — 원문 텍스트로 되돌아가는
+    /// 프레임이 없다. 그 프레임이 있으면 스트리밍 화면 전체가 원문 ↔ 렌더를 오가며
+    /// 출렁인다(데모 실측).
+    @Test func keepsRenderedBlocksWithoutFallbackFrameAcrossStreamingAppend() async throws {
         let view = LatexMarkdownUIView(markdown: "첫 원문")
         view.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
-        // init은 fallback을 동기로 그린다 — 이 인스턴스가 재사용 대상이다.
-        let initialFallback = try #require(view.blockStack.arrangedSubviews.first)
         try await waitForRender(view)
+        let renderedBlock = try #require(view.blockStack.arrangedSubviews.first)
 
         view.markdown = "첫 원문\n\n둘째 문단"
         await Task.yield()
 
-        #expect(view.blockStack.arrangedSubviews.count == 1, "fallback은 원문 전체를 한 뷰로 보인다")
         #expect(
-            view.blockStack.arrangedSubviews.first === initialFallback,
-            "fallback 뷰 인스턴스를 재사용한다 — TextKit 스택을 다시 만들지 않는다"
+            view.blockStack.arrangedSubviews.first === renderedBlock,
+            "append 중에는 이전 렌더 블록이 그대로 보인다 — 원문 fallback 프레임이 없다"
         )
-        #expect(renderedText(in: view).contains("둘째 문단"), "fallback 내용은 최신 원문이다")
+        #expect(renderedText(in: view).contains("첫 원문"))
 
         try await waitForRender(view)
-        #expect(view.blockStack.arrangedSubviews.count == 2, "parse 후에는 블록 뷰로 교체된다")
+        #expect(view.blockStack.arrangedSubviews.count == 2, "parse 후에는 새 블록이 추가된다")
+        #expect(renderedText(in: view).contains("둘째 문단"))
+        #expect(
+            view.blockStack.arrangedSubviews.first === renderedBlock,
+            "append 전 블록 뷰는 parse 후에도 재사용된다"
+        )
     }
 
     /// 데모(UIKitChatDemo)의 뷰 캐시 안무 재현 — 버그 리포트: 화면 재진입 후 스크롤

@@ -13,6 +13,14 @@ package final class LatexRenderModel: ObservableObject {
         package let markdown: String
         package let parsesDollarMath: Bool
         package let wasTruncated: Bool
+
+        /// `other`가 이 identity의 **스트리밍 append**(같은 파싱 설정, markdown 확장)인가.
+        /// 잘린 입력은 표시 상한에서 prefix 관계가 깨지므로 제외한다.
+        package func isStreamingPrefix(of other: ParseIdentity) -> Bool {
+            parsesDollarMath == other.parsesDollarMath
+                && !wasTruncated && !other.wasTruncated
+                && other.markdown.hasPrefix(markdown)
+        }
     }
 
     package struct Request: Sendable, Equatable {
@@ -36,6 +44,17 @@ package final class LatexRenderModel: ObservableObject {
                 parsesDollarMath: parsesDollarMath,
                 wasTruncated: wasTruncated
             )
+        }
+
+        /// markdown/파싱 조건을 제외한 raster 설정(크기·색·scale·서체)이 같은가.
+        /// 스트리밍 append로 문서가 stale인 동안 이전 이미지를 계속 써도 되는지 판정한다 —
+        /// 수식 raster key는 latex source 기준이라 문서 안 위치와 무관하다.
+        package func matchesRasterConfiguration(of other: Request) -> Bool {
+            pointSize == other.pointSize
+                && colorRGBA == other.colorRGBA
+                && displayScale == other.displayScale
+                && mathFont == other.mathFont
+                && rastersDisplayMath == other.rastersDisplayMath
         }
 
         package init(
@@ -114,15 +133,26 @@ package final class LatexRenderModel: ObservableObject {
         generation += 1
 
         // Markdown/dollar parsing 조건이 바뀌면 cache 결과가 게시되기 전에는 이전 문서를
-        // 보이면 안 된다. 수식 설정만 바뀐 경우에는 parsed document를 유지하고 이미지
-        // 원문 fallback만 보인다.
+        // 보이면 안 된다 — 셀 재사용에서 다른 메시지의 문서가 한 프레임 되살아난다.
+        //
+        // 예외는 **스트리밍 append**다: 표시 중인 문서가 새 markdown의 prefix면 새 parse가
+        // 게시될 때까지 이전 렌더(문서 + 이미지)를 유지한다. 매 갱신 원문 fallback으로
+        // 되돌리면 화면 전체가 원문 ↔ 렌더를 오가며 출렁인다(데모 실측).
         if parseIdentityChanged {
             fallbackMarkdown = request.markdown
-            document = nil
-            parseIdentity = nil
+            let isStreamingAppend =
+                parseIdentity?.isStreamingPrefix(of: request.parseIdentity) == true
+            if !isStreamingAppend {
+                document = nil
+                parseIdentity = nil
+                mathImages = [:]
+                imageRequest = nil
+            }
+        } else {
+            // 수식 설정만 바뀐 경우: parsed document는 유지하고 이미지만 무효화한다.
+            mathImages = [:]
+            imageRequest = nil
         }
-        mathImages = [:]
-        imageRequest = nil
 
         // 캐시가 전부 있어도 여기서 동기로 게시하지 않는다(실측). 동기 게시는 셀이
         // 붙는 레이아웃 패스 안에서 리사이즈를 일으키고, UIKit의 contentOffset 보정이
@@ -170,18 +200,6 @@ package final class LatexRenderModel: ObservableObject {
         ParseCache.shared.store(entry)
     }
 
-    private func publishParsed(
-        _ parsed: ParsedDocument,
-        parseIdentity: ParseIdentity,
-        generation: Int
-    ) {
-        guard isCurrent(generation) else { return }
-        document = parsed
-        self.parseIdentity = parseIdentity
-        mathImages = [:]
-        imageRequest = nil
-    }
-
     private func publishImages(
         _ images: [MathSegment: RenderedMath],
         request: Request,
@@ -192,8 +210,11 @@ package final class LatexRenderModel: ObservableObject {
         imageRequest = request
     }
 
-    /// 수식 이미지가 전부 준비된 경우의 단일 게시. 중간 단계(원문 fallback)가 없어
-    /// 구독자의 뷰 재구성이 1회로 준다.
+    /// 문서와 그 시점에 준비된 이미지의 짝 게시.
+    ///
+    /// 전부 캐시돼 있으면 단일 게시로 끝난다(중간 단계 없음, 뷰 재구성 1회).
+    /// 일부만 캐시돼 있으면 **부분 hydration**으로 먼저 게시한다 — 이미 raster된 수식이
+    /// 원문으로 되돌아가는 프레임을 만들지 않고, 캐시에 없는 수식만 원문에서 시작한다.
     private func publishComplete(
         _ parsed: ParsedDocument,
         images: [MathSegment: RenderedMath],
@@ -222,20 +243,22 @@ package final class LatexRenderModel: ObservableObject {
         return request.rastersDisplayMath ? all : all.filter { !$0.kind.isDisplay }
     }
 
-    /// 필요한 수식 raster가 전부 캐시에 있을 때만 그 사전을 반환한다. 하나라도 없으면 nil.
-    /// 필요한 수식이 없으면(블록 수식 제외 후 잔여 0) 빈 사전 — 단일 게시로 이어진다.
+    /// 캐시에 이미 있는 raster와 아직 만들어야 하는 segment를 나눈다.
+    /// 필요한 수식이 없으면(블록 수식 제외 후 잔여 0) 둘 다 비어 단일 게시로 이어진다.
     private nonisolated static func cachedImages(
         for parsed: ParsedDocument,
         request: Request
-    ) -> [MathSegment: RenderedMath]? {
+    ) -> (images: [MathSegment: RenderedMath], missing: [MathSegment]) {
         var images: [MathSegment: RenderedMath] = [:]
+        var missing: [MathSegment] = []
         for segment in rasterSegments(for: parsed, request: request) {
-            guard let rendered = MathRenderService.shared.cachedImage(
-                for: renderKey(segment, request)
-            ) else { return nil }
-            images[segment] = rendered
+            if let rendered = MathRenderService.shared.cachedImage(for: renderKey(segment, request)) {
+                images[segment] = rendered
+            } else {
+                missing.append(segment)
+            }
         }
-        return images
+        return (images, missing)
     }
 
     private nonisolated static func renderKey(_ segment: MathSegment, _ request: Request) -> MathRenderKey {
@@ -286,28 +309,19 @@ package final class LatexRenderModel: ObservableObject {
 
         guard await model.isCurrent(job.generation) else { return }
 
-        // raster가 전부 캐시에 있으면 2단계 게시가 필요 없다 — 기다릴 것이 없으므로
-        // 원문 fallback 단계를 건너뛰고 한 번에 게시한다.
-        if let images = cachedImages(for: parsed, request: job.request) {
-            await model.publishComplete(
-                parsed,
-                images: images,
-                parseIdentity: job.request.parseIdentity,
-                request: job.request,
-                generation: job.generation
-            )
-            return
-        }
-
-        // 1단계 게시: 수식은 원문으로 먼저 보인다 (DEVELOPMENT.md §4).
-        await model.publishParsed(
+        // 1단계 게시: 캐시된 raster는 즉시 hydration하고, 없는 수식만 원문으로 시작한다.
+        // 전부 캐시에 있으면(스트리밍 append의 일반 경우) 이것이 단일 게시다.
+        var (images, missing) = cachedImages(for: parsed, request: job.request)
+        await model.publishComplete(
             parsed,
+            images: images,
             parseIdentity: job.request.parseIdentity,
+            request: job.request,
             generation: job.generation
         )
+        guard !missing.isEmpty else { return }
 
-        var images: [MathSegment: RenderedMath] = [:]
-        for segment in rasterSegments(for: parsed, request: job.request) {
+        for segment in missing {
             // 각 수식 block 사이에 generation 확인. stale이면 이후 raster·cache 삽입이 없다.
             guard await model.isCurrent(job.generation) else { return }
             if let rendered = await MathRenderService.shared.render(

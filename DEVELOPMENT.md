@@ -226,6 +226,8 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
 새 markdown + 환경값
   │
   ├─ MainActor: generation 증가, 최신 원문 fallback 즉시 표시
+  │             (스트리밍 append — 새 markdown이 표시 중 문서의 확장 — 는 예외:
+  │              새 parse 게시까지 이전 렌더를 유지한다. 2026-08-28 개정)
   ├─ 단일 worker: 실행 중 1개 + 최신 대기 1개만 유지
   ├─ non-MainActor RenderService: parse
   ├─ MainActor: generation 일치 시 수식을 원문으로 둔 ParsedDocument 게시
@@ -462,8 +464,9 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
     스크롤이 진행되지 않는다(UI 테스트가 왕복 스크롤에서 실패하며 드러났다).
     `isDragging`/`isDecelerating`을 확인하고 `scrollViewDidEndDragging`·
     `scrollViewDidEndDecelerating`에서 flush한다.
-  - 새 markdown의 parse가 끝나기 전에는 **이전 문서가 그대로 보인다**. 스트리밍에서는
-    의도된 동작(최신 원문 fallback)이지만 셀 재사용에서는 남의 메시지가 보이는 셈이다.
+  - 새 markdown의 parse가 끝나기 전에는 **이전 문서가 그대로 보인다**. 스트리밍
+    append에서는 의도된 동작(모델이 이전 렌더를 유지한다, §4 2026-08-28 개정)이지만
+    셀 재사용에서는 남의 메시지가 보이는 셈이다.
     데모는 첫 `onContentSizeChange`까지 뷰를 감춘다.
   - 기준 구현: `Examples/SwiftLatexDemo/Sources/UIKitChatDemo.swift`.
   - **메시지별 뷰를 캐시해 셀 간에 이동시키는 소비자는 늦은 `prepareForReuse`를

@@ -516,14 +516,18 @@ raster했고, UIKit 렌더러에서 블록 수식 raster 결과는 아무도 읽
 fallback 프레임(스트리밍)에서는 계층 조작도 없다. 폰트·색 속성은 매번 현재 값으로
 다시 만들므로 fallback 표시 중의 테마·trait 변경도 흡수된다.
 
-원래 검토했던 두 방안(model이 이전 문서를 유지, 뷰가 fallback을 한 프레임 지연)은
-채택하지 않았다 — §4 "최신 원문 fallback 즉시 표시" 계약과 §8.5-8(새 비동기 hop
-금지)에 걸린다는 판단 그대로다. 인스턴스 재사용은 두 계약을 건드리지 않는다.
+원래 검토했던 두 방안 중 «model이 이전 문서를 유지»를 **2026-08-28에 채택했다** —
+SSE 데모에서 fallback 프레임이 매 갱신 화면 전체를 원문 ↔ 렌더로 출렁이게 만드는 것이
+실측되어 §4 계약을 개정했다. 스트리밍 append(새 markdown이 표시 중 문서의 prefix
+확장)에서는 새 parse가 게시될 때까지 이전 렌더(문서 + 이미지)를 유지한다. 셀
+재사용(비-append 교체)은 여전히 fallback을 즉시 게시해 남의 메시지가 되살아나지
+않는다. 새 비동기 hop은 추가하지 않았다(§8.5-8 준수). 캐시된 수식 raster는 1단계
+게시에서 즉시 hydration한다(부분 hydration) — 이미 raster된 수식이 원문으로
+되돌아가는 프레임도 함께 사라졌다.
 
-**남는 상한**: fallback 프레임 자체와 텍스트 레이아웃 비용은 남는다 — 내용이 실제로
-바뀌므로 피할 수 없다. 사라진 것은 TextKit 스택 생성/파괴다. 이 상한이 P1 측정에서
-hitch 상위로 나오면 그때 §4 계약 개정을 검토한다.
+**남는 상한**: append가 아닌 교체와 최초 표시에는 fallback 프레임과 텍스트 레이아웃
+비용이 남는다. fallback 뷰 인스턴스 재사용은 그 경로에서 그대로 유효하다.
 
-회귀 방지: `reusesFallbackTextViewAcrossStreamingUpdates` — MainActor 큐 순서
-(coalesced rebuild Task가 worker kick Task보다 먼저 enqueue)로 fallback 프레임을
-결정적으로 관측해 인스턴스 identity를 확인한다.
+회귀 방지: `keepsRenderedBlocksWithoutFallbackFrameAcrossStreamingAppend` — append 직후
+yield 시점에 이전 렌더 블록 인스턴스가 계층에 그대로 붙어 있는지(원문 fallback 프레임
+부재)를 확인한다. 모델 계약은 `streamingAppendKeepsPreviousDocumentUntilNewParseLands`.
