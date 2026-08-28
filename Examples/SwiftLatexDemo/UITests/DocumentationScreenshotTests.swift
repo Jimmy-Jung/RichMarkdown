@@ -34,6 +34,7 @@ final class DocumentationScreenshotTests: XCTestCase {
 
         captureChatScreens(app)
         captureBlockEditor(app)
+        // SSE 화면은 정지컷 대신 GIF를 쓴다 — scripts/capture-sse-gifs.sh 참고.
         captureAttachmentDemo(app)
     }
 
