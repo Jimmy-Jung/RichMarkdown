@@ -222,7 +222,10 @@ public final class LatexMarkdownUIView: UIView {
         if let document = model.document {
             // 문서는 같아도 theme/color/scale 요청이 바뀌면 새 raster가 필요하다.
             // `imageRequest`가 일치할 때만 이전 bitmap을 쓴다.
-            let images = model.imageRequest == currentRequest ? model.mathImages : [:]
+            // markdown만 다른 stale 이미지(스트리밍 append)는 계속 쓴다 — raster key는
+            // latex source 기준이라 문서 안 위치와 무관하다. 색·폰트·scale이 바뀌면 버린다.
+            let images = model.imageRequest?.matchesRasterConfiguration(of: currentRequest) == true
+                ? model.mathImages : [:]
             rebuildBlocks(document.blocks, images: images)
         } else {
             // 최신 원문 fallback 즉시 표시 (DEVELOPMENT.md §4).

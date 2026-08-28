@@ -81,6 +81,29 @@ import Testing
         #expect(model.fallbackMarkdown == "최신 원문")
     }
 
+    /// 스트리밍 append 계약: 표시 중인 문서가 새 markdown의 prefix면 새 parse가 게시될
+    /// 때까지 이전 렌더(문서 + 이미지)를 유지한다. 매 갱신 fallback으로 되돌리면
+    /// 스트리밍 화면 전체가 원문 ↔ 렌더를 오가며 출렁인다.
+    @Test func streamingAppendKeepsPreviousDocumentUntilNewParseLands() async throws {
+        let model = LatexRenderModel()
+        let first = request(#"첫 문단 \(a+b\) 수식"#)
+        model.submit(first)
+        try await waitForIdle(model)
+        let original = try #require(model.document)
+        #expect(!model.mathImages.isEmpty)
+
+        model.submit(request(#"첫 문단 \(a+b\) 수식 그리고 이어지는 답변"#))
+
+        #expect(model.document == original, "append 중에는 이전 문서를 유지한다")
+        #expect(model.parseIdentity == first.parseIdentity)
+        #expect(!model.mathImages.isEmpty, "이전 수식 이미지도 유지한다")
+        #expect(model.fallbackMarkdown.contains("이어지는 답변"), "fallback 원문은 최신이다")
+
+        try await waitForIdle(model)
+        let updated = try #require(model.document)
+        #expect(flatText(updated).contains("이어지는 답변"), "새 parse가 게시되면 문서가 교체된다")
+    }
+
     @Test func renderConfigurationChangeKeepsMatchingDocumentAndClearsImages() async throws {
         let model = LatexRenderModel()
         let markdown = #"같은 문서 \(a+b\)"#

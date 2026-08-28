@@ -44,12 +44,18 @@ public struct LatexMarkdownView: View {
 
     @ViewBuilder
     private func content(for request: LatexRenderModel.Request) -> some View {
-        // `.task(id:)`는 body 뒤에 시작된다. 따라서 새 요청의 parse identity와 모델이
-        // 보유한 document identity가 다르면, 이전 문서 대신 현재 bounded fallback을 그린다.
-        if model.parseIdentity == request.parseIdentity, let document = model.document {
-            // 동일 문서라도 색·폰트·scale이 바뀐 새 raster가 아직 준비되지 않았으면
-            // 이전 bitmap을 섞지 않고 source fallback을 유지한다.
-            let images = model.imageRequest == request ? model.mathImages : [:]
+        // `.task(id:)`는 body 뒤에 시작된다. 모델 문서가 현재 요청과 같은 parse identity거나
+        // 그 **스트리밍 prefix**면 표시한다 — append 중에는 새 parse가 게시될 때까지 이전
+        // 렌더를 유지해 화면 전체가 원문 fallback으로 출렁이지 않게 한다. 다른 문서
+        // (셀 재사용)는 여전히 한 프레임도 되살아나지 않는다.
+        if let identity = model.parseIdentity,
+           identity == request.parseIdentity || identity.isStreamingPrefix(of: request.parseIdentity),
+           let document = model.document {
+            // 색·폰트·scale이 바뀐 새 raster가 준비되기 전에는 이전 bitmap을 섞지 않고
+            // source fallback을 유지한다. markdown만 다른 stale 이미지는 계속 쓴다 —
+            // 수식 raster는 문서 안 위치와 무관하다.
+            let images = model.imageRequest?.matchesRasterConfiguration(of: request) == true
+                ? model.mathImages : [:]
             VStack(alignment: .leading, spacing: 12) {
                 // identity는 렌더 시점의 위치 + content digest. 편집 사이 영속성은 약속하지 않는다.
                 ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
