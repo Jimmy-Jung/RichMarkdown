@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		065B0E2D6BDF2954E89322DE /* SwiftLatexDemoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3720B48E616842162C068B /* SwiftLatexDemoUITests.swift */; };
+		0979735F2AED7452A4FA10BB /* UIKitSSEDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 619505601F3101013376BB0A /* UIKitSSEDemo.swift */; };
 		22736D5F86C55E27C5B8294B /* AttachmentDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FA8EE82764E2F4A31DC8D52 /* AttachmentDemo.swift */; };
 		59D049FCCED9008404DC5230 /* SwiftLatexDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */; };
 		5B77B4C4F289D207A0D2B104 /* DemoComponentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9BB5C4759FC3B874645BF4 /* DemoComponentTests.swift */; };
 		68F8D704B08AC84E451F568C /* UIKitChatDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */; };
 		6CC3677B10BF7B930EB87E2C /* BlockKeyboardToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F373BDDAFDB3046397606CD3 /* BlockKeyboardToolbar.swift */; };
+		84537D07B3DFCD26196CD661 /* SSEDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72339623DC13A0A6C9FA4615 /* SSEDemo.swift */; };
 		9272DD4B52CB82F6428B73F9 /* SwiftLatexBlockEditor in Frameworks */ = {isa = PBXBuildFile; productRef = C9C5BD6F93587327F3B9C4B9 /* SwiftLatexBlockEditor */; };
 		95F76104E6870628CB8221D5 /* ChatDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */; };
 		9B28B0DBB6F029EE6716444C /* EditorDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E3BDC6D6F8B7C2FB873532 /* EditorDemo.swift */; };
@@ -44,7 +46,9 @@
 		0482252967BC6CF6284E112B /* BlockEditorDemoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorDemoUITests.swift; sourceTree = "<group>"; };
 		3A3720B48E616842162C068B /* SwiftLatexDemoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftLatexDemoUITests.swift; sourceTree = "<group>"; };
 		41D5AF6071E562518FEB6202 /* SwiftLatexDemoP2UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftLatexDemoP2UITests.swift; sourceTree = "<group>"; };
+		619505601F3101013376BB0A /* UIKitSSEDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIKitSSEDemo.swift; sourceTree = "<group>"; };
 		6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftLatexDemoApp.swift; sourceTree = "<group>"; };
+		72339623DC13A0A6C9FA4615 /* SSEDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEDemo.swift; sourceTree = "<group>"; };
 		8FA8EE82764E2F4A31DC8D52 /* AttachmentDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDemo.swift; sourceTree = "<group>"; };
 		9B28460BB08ECBE436D57FAA /* SwiftLatexDemoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SwiftLatexDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9FEA2AD826F43FCBB2F26ADB /* SwiftLatex */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftLatex; path = ../..; sourceTree = SOURCE_ROOT; };
@@ -120,8 +124,10 @@
 				F373BDDAFDB3046397606CD3 /* BlockKeyboardToolbar.swift */,
 				A62696F3CBE6CCEA7DEED3F9 /* ChatDemo.swift */,
 				A8E3BDC6D6F8B7C2FB873532 /* EditorDemo.swift */,
+				72339623DC13A0A6C9FA4615 /* SSEDemo.swift */,
 				6B1F2C24A5C8D985B0CDD2C8 /* SwiftLatexDemoApp.swift */,
 				C18EB36444C42B0EFD41A19F /* UIKitChatDemo.swift */,
+				619505601F3101013376BB0A /* UIKitSSEDemo.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -248,8 +254,10 @@
 				6CC3677B10BF7B930EB87E2C /* BlockKeyboardToolbar.swift in Sources */,
 				95F76104E6870628CB8221D5 /* ChatDemo.swift in Sources */,
 				9B28B0DBB6F029EE6716444C /* EditorDemo.swift in Sources */,
+				84537D07B3DFCD26196CD661 /* SSEDemo.swift in Sources */,
 				59D049FCCED9008404DC5230 /* SwiftLatexDemoApp.swift in Sources */,
 				68F8D704B08AC84E451F568C /* UIKitChatDemo.swift in Sources */,
+				0979735F2AED7452A4FA10BB /* UIKitSSEDemo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -382,7 +390,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.swiftlatex.SwiftLatexDemo;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -402,7 +410,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.swiftlatex.SwiftLatexDemo;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

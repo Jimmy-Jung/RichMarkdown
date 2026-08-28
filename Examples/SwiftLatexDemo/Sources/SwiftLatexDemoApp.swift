@@ -24,6 +24,12 @@ struct ContentView: View {
                 NavigationLink("AI 챗봇 (UIKit)") {
                     UIKitChatDemoView()
                 }
+                NavigationLink("SSE 실시간 렌더링 (SwiftUI)") {
+                    SSEDemoView()
+                }
+                NavigationLink("SSE 실시간 렌더링 (UIKit)") {
+                    UIKitSSEDemoView()
+                }
                 NavigationLink("라이브 편집 (분할 미리보기)") {
                     EditorDemoView()
                 }
