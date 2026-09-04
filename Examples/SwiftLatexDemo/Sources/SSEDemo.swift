@@ -312,7 +312,8 @@ enum SSEDemoError: LocalizedError {
 struct SSEDemoView: View {
     private static let bottomAnchor = "sseDemo.bottom"
 
-    @State private var answer = ""
+    /// 도착 속도와 화면 갱신을 분리하는 latest-wins 버퍼. trailing 게시로 마지막 조각도 화면에 오른다.
+    @StateObject private var buffer = LatexStreamingTextBuffer(interval: SSEDemoLimits.publishInterval)
     /// 라벨용 카운터. `answer.count`는 매 프레임 전체 grapheme 순회(O(n))라 쓰지 않는다.
     @State private var answerCharacters = 0
     @State private var answerBytes = 0
@@ -327,10 +328,6 @@ struct SSEDemoView: View {
     @State private var equationAlignment: EquationAlignmentOption = .leading
     @State private var preset = LatexThemePreset.fromLaunchArguments()
     @State private var scrollProxy: ScrollViewProxy?
-    /// 아직 화면에 반영하지 않은 델타와 청크 수. 스트림 루프가 게시 간격마다 비운다.
-    @State private var pendingText = ""
-    @State private var pendingChunks = 0
-    @State private var lastPublished: ContinuousClock.Instant?
     @FocusState private var endpointFocused: Bool
 
     private var theme: LatexTheme {
@@ -375,15 +372,16 @@ struct SSEDemoView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     statusRow
-                    if answer.isEmpty {
+                    if buffer.text.isEmpty {
                         Text(verbatim: "시작을 누르면 SSE 프레임이 도착하는 대로 렌더링합니다.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     } else {
-                        // README «스트리밍» 패턴 그대로: 누적 전체 문자열을 계속 넘긴다.
+                        // README «스트리밍» 패턴 그대로: 버퍼가 게시한 누적 전체 문자열을 넘긴다.
                         // 라이브러리가 스트리밍 append에서 이전 렌더를 유지하므로(모델의
                         // append 계약) 갱신마다 원문으로 되돌아가는 플래시가 없다.
-                        LatexMarkdownView(markdown: answer, parsesDollarMath: parsesDollarMath)
+                        LatexMarkdownView(markdown: buffer.text, parsesDollarMath: parsesDollarMath)
+                            .latexStreaming(isStreaming ? .default : nil)
                             .latexTheme(theme)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(14)
@@ -398,6 +396,9 @@ struct SSEDemoView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onAppear { scrollProxy = proxy }
+            .onReceive(buffer.$text.dropFirst()) { _ in
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            }
         }
     }
 
@@ -465,13 +466,10 @@ struct SSEDemoView: View {
     }
 
     private func start() {
-        answer = ""
+        buffer.reset()
         answerCharacters = 0
         answerBytes = 0
         chunkCount = 0
-        pendingText = ""
-        pendingChunks = 0
-        lastPublished = nil
         errorMessage = nil
         endpointFocused = false
         isStreaming = true
@@ -479,7 +477,7 @@ struct SSEDemoView: View {
     }
 
     private func stop() {
-        publishPending(force: true)
+        buffer.flush()
         isStreaming = false
         runID += 1
     }
@@ -560,50 +558,32 @@ struct SSEDemoView: View {
         _ = apply(decoder.finish())
     }
 
-    /// 디코더 이벤트를 버퍼에 넣고 게시 간격이 되면 화면에 반영한다. 스트림을 끝내야 하면 `true`.
+    /// 디코더 이벤트를 버퍼에 넣는다. 화면 갱신 빈도는 버퍼가 정한다. 스트림을 끝내야 하면 `true`.
     private func apply(_ event: SSEDecoder.Event?) -> Bool {
         switch event {
         case nil:
             return false
 
         case let .text(delta):
-            pendingText += delta
-            pendingChunks += 1
-            publishPending()
-            return answerBytes >= SSEDemoLimits.answerByteCap
+            chunkCount += 1
+            answerCharacters += delta.count
+            answerBytes += delta.utf8.count
+            buffer.append(delta)
+            if answerBytes >= SSEDemoLimits.answerByteCap {
+                buffer.flush()
+                errorMessage = "표시 상한(256 KiB)에 도달해 스트림을 끊었습니다."
+                return true
+            }
+            return false
 
         case let .failure(message):
-            publishPending(force: true)
+            buffer.flush()
             errorMessage = "서버가 오류를 보냈습니다: \(message)"
             return true
 
         case .done:
-            publishPending(force: true)
+            buffer.flush()
             return true
-        }
-    }
-
-    /// 모아 둔 델타를 트랜스크립트에 반영한다. 게시 간격 전이면 아무것도 하지 않는다.
-    ///
-    /// 렌더러에는 조각별 **누적 문자열**을 다시 넘긴다(라이브러리 계약). 다만 갱신 빈도는
-    /// 호출자가 정한다 — 여기서 합치지 않으면 렌더가 따라오지 못한다.
-    private func publishPending(force: Bool = false) {
-        guard !pendingText.isEmpty else { return }
-
-        let now = ContinuousClock.now
-        if !force, let lastPublished, now - lastPublished < SSEDemoLimits.publishInterval { return }
-
-        answer += pendingText
-        answerCharacters += pendingText.count
-        answerBytes += pendingText.utf8.count
-        chunkCount += pendingChunks
-        pendingText = ""
-        pendingChunks = 0
-        lastPublished = now
-        scrollProxy?.scrollTo(Self.bottomAnchor, anchor: .bottom)
-
-        if answerBytes >= SSEDemoLimits.answerByteCap {
-            errorMessage = "표시 상한(256 KiB)에 도달해 스트림을 끊었습니다."
         }
     }
 }

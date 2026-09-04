@@ -1,5 +1,6 @@
 // Created by JunyoungJung on 2026-08-28.
 
+import Combine
 import SwiftLatex
 import SwiftUI
 import UIKit
@@ -74,18 +75,21 @@ final class UIKitSSEDemoViewController: UIViewController {
 
     // 전송 상태 — `SSEDemoView`와 같은 필드 구성. 화면별 배선을 그대로 보여주는 데모라
     // 전송 루프도 그 화면과 동일하게 둔다.
-    private var answer = ""
+    /// 도착 속도와 화면 갱신을 분리하는 latest-wins 버퍼. 게시마다 `render(_:)`가 뷰를 갱신한다.
+    private let buffer = LatexStreamingTextBuffer(interval: SSEDemoLimits.publishInterval)
+    private var bufferCancellable: AnyCancellable?
     private var answerCharacters = 0
     private var answerBytes = 0
     private var chunkCount = 0
-    private var pendingText = ""
-    private var pendingChunks = 0
-    private var lastPublished: ContinuousClock.Instant?
     /// 재시작 신호. 시작·중지 모두 값을 올려 늦게 풀린 이전 Task가 상태를 덮지 못하게 한다.
     private var runID = 0
     private var streamTask: Task<Void, Never>?
     private var isStreaming = false {
-        didSet { updateControls() }
+        didSet {
+            updateControls()
+            // 스트리밍 표시(꼬리 페이드·미닫힌 마크 억제·in-place 갱신)는 스트림 동안만 켠다.
+            messageView.streaming = isStreaming ? .default : nil
+        }
     }
 
     private let scrollView = UIScrollView()
@@ -125,6 +129,20 @@ final class UIKitSSEDemoViewController: UIViewController {
         view.backgroundColor = .systemGroupedBackground
         buildTranscript()
         buildControls()
+        bufferCancellable = buffer.$text
+            .dropFirst()
+            .sink { [weak self] text in self?.render(text) }
+    }
+
+    /// 버퍼 게시마다 누적 전체 문자열을 다시 넘긴다(라이브러리 계약). 스트리밍 append라
+    /// 렌더러가 이전 렌더를 유지한 채 블록 뷰를 증분 재사용한다.
+    private func render(_ text: String) {
+        guard !text.isEmpty else { return }
+        placeholderLabel.isHidden = true
+        bubble.isHidden = false
+        messageView.markdown = text
+        updateStatus()
+        scrollToBottom()
     }
 
     /// 화면을 떠나면 스트림을 멈춘다. SwiftUI 화면의 `.task(id:)` 수명과 같은 의미다.
@@ -316,13 +334,10 @@ final class UIKitSSEDemoViewController: UIViewController {
     }
 
     private func start() {
-        answer = ""
+        buffer.reset()
         answerCharacters = 0
         answerBytes = 0
         chunkCount = 0
-        pendingText = ""
-        pendingChunks = 0
-        lastPublished = nil
         errorLabel.isHidden = true
         endpointField.resignFirstResponder()
         messageView.markdown = ""
@@ -339,7 +354,7 @@ final class UIKitSSEDemoViewController: UIViewController {
     }
 
     private func stop() {
-        publishPending(force: true)
+        buffer.flush()
         isStreaming = false
         runID += 1
         streamTask?.cancel()
@@ -410,54 +425,32 @@ final class UIKitSSEDemoViewController: UIViewController {
         _ = apply(decoder.finish())
     }
 
-    /// 디코더 이벤트를 버퍼에 넣고 게시 간격이 되면 화면에 반영한다. 스트림을 끝내야 하면 `true`.
+    /// 디코더 이벤트를 버퍼에 넣는다. 화면 갱신 빈도는 버퍼가 정한다. 스트림을 끝내야 하면 `true`.
     private func apply(_ event: SSEDecoder.Event?) -> Bool {
         switch event {
         case nil:
             return false
 
         case let .text(delta):
-            pendingText += delta
-            pendingChunks += 1
-            publishPending()
-            return answerBytes >= SSEDemoLimits.answerByteCap
+            chunkCount += 1
+            answerCharacters += delta.count
+            answerBytes += delta.utf8.count
+            buffer.append(delta)
+            if answerBytes >= SSEDemoLimits.answerByteCap {
+                buffer.flush()
+                showError("표시 상한(256 KiB)에 도달해 스트림을 끊었습니다.")
+                return true
+            }
+            return false
 
         case let .failure(message):
-            publishPending(force: true)
+            buffer.flush()
             showError("서버가 오류를 보냈습니다: \(message)")
             return true
 
         case .done:
-            publishPending(force: true)
+            buffer.flush()
             return true
-        }
-    }
-
-    /// 모아 둔 델타를 렌더 뷰에 반영한다. 게시 간격 전이면 아무것도 하지 않는다.
-    private func publishPending(force: Bool = false) {
-        guard !pendingText.isEmpty else { return }
-
-        let now = ContinuousClock.now
-        if !force, let lastPublished, now - lastPublished < SSEDemoLimits.publishInterval { return }
-
-        answer += pendingText
-        answerCharacters += pendingText.count
-        answerBytes += pendingText.utf8.count
-        chunkCount += pendingChunks
-        pendingText = ""
-        pendingChunks = 0
-        lastPublished = now
-
-        placeholderLabel.isHidden = true
-        bubble.isHidden = false
-        // 누적 전체 문자열을 다시 넘긴다(라이브러리 계약). 스트리밍 append라
-        // 렌더러가 이전 렌더를 유지한 채 블록 뷰를 증분 재사용한다.
-        messageView.markdown = answer
-        updateStatus()
-        scrollToBottom()
-
-        if answerBytes >= SSEDemoLimits.answerByteCap {
-            showError("표시 상한(256 KiB)에 도달해 스트림을 끊었습니다.")
         }
     }
 }
