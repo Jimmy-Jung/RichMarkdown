@@ -119,6 +119,9 @@ package final class LatexRenderModel: ObservableObject {
     private struct Job: Sendable {
         let generation: Int
         let request: Request
+        /// 표시 중인 문서의 스트리밍 append인가. append parse는 `ParseCache`에 넣지 않는다 —
+        /// tick마다 누적 원문 전체가 새 키가 되어 다른 셀의 항목을 밀어내고, 그 키는 다시 조회되지 않는다.
+        let isStreamingAppend: Bool
     }
 
     package init() {}
@@ -129,6 +132,8 @@ package final class LatexRenderModel: ObservableObject {
         // 게시(뷰 재구성)도 없어야 한다. 진행 중이면 그 작업이 곧 게시한다.
         guard request != lastRequest else { return }
         let parseIdentityChanged = request.parseIdentity != lastRequest?.parseIdentity
+        let isStreamingAppend = parseIdentityChanged
+            && parseIdentity?.isStreamingPrefix(of: request.parseIdentity) == true
         lastRequest = request
         generation += 1
 
@@ -140,8 +145,6 @@ package final class LatexRenderModel: ObservableObject {
         // 되돌리면 화면 전체가 원문 ↔ 렌더를 오가며 출렁인다(데모 실측).
         if parseIdentityChanged {
             fallbackMarkdown = request.markdown
-            let isStreamingAppend =
-                parseIdentity?.isStreamingPrefix(of: request.parseIdentity) == true
             if !isStreamingAppend {
                 document = nil
                 parseIdentity = nil
@@ -158,7 +161,11 @@ package final class LatexRenderModel: ObservableObject {
         // 붙는 레이아웃 패스 안에서 리사이즈를 일으키고, UIKit의 contentOffset 보정이
         // 스크롤 제스처 이동량을 매번 상쇄해 위로 스크롤이 얼어붙는다. worker 왕복
         // 뒤 `publishComplete`(단일 게시)로 합쳐지는 것으로 충분하다.
-        let job = Job(generation: generation, request: request)
+        let job = Job(
+            generation: generation,
+            request: request,
+            isStreamingAppend: isStreamingAppend
+        )
         let worker = ensureWorker()
         // generation high-water mark는 worker actor와 같은 turn에서 판정한다.
         // unstructured Task의 도착이 역순이어도 이전 job은 최신 pending을 덮지 못한다.
@@ -303,8 +310,11 @@ package final class LatexRenderModel: ObservableObject {
                 job.request.boundedInput,
                 parsesDollarMath: job.request.parsesDollarMath
             )
-            let entry = ParseCache.shared.preparedEntry(parsed, for: cacheKey)
-            await model.storeParsedDocumentIfCurrent(entry, generation: job.generation)
+            // 스트리밍 append는 저장하지 않는다. 스트림의 첫 제출(교체)만 캐시에 남긴다.
+            if !job.isStreamingAppend {
+                let entry = ParseCache.shared.preparedEntry(parsed, for: cacheKey)
+                await model.storeParsedDocumentIfCurrent(entry, generation: job.generation)
+            }
         }
 
         guard await model.isCurrent(job.generation) else { return }

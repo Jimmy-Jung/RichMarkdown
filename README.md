@@ -166,6 +166,33 @@ var body: some View {
 토큰 이벤트는 **최대 약 10Hz로 합쳐서** 전달한다. 그보다 잦게 갱신해도 내부
 coalescing이 흡수하지만(실행 1 + 대기 1), 불필요한 파싱을 줄이는 쪽이 낫다.
 
+`LatexStreamingTextBuffer`가 그 합치기를 대신한다. 간격(기본 100ms) 안의 갱신은 마지막 값만
+남기고, 간격이 끝나면 trailing 게시 1회로 흘려 보낸다 — 마지막 조각이 다음 조각까지 화면에
+못 오르는 일이 없다.
+
+```swift
+@StateObject private var buffer = LatexStreamingTextBuffer()   // interval: .milliseconds(100)
+@State private var isStreaming = false
+
+var body: some View {
+    LatexMarkdownView(markdown: buffer.text)
+        .latexStreaming(isStreaming ? .default : nil)
+        .task {
+            buffer.reset()
+            isStreaming = true
+            for try await chunk in client.stream(prompt) { buffer.append(chunk) }
+            buffer.flush()
+            isStreaming = false
+        }
+}
+```
+
+`.latexStreaming(_:)`은 스트리밍 중인 **메시지 뷰 하나**에 건다 — 컨테이너에 걸면 아래의 모든
+뷰가 스트리밍으로 표시된다. 켜져 있으면 마지막 문단의 끝 12 grapheme이 옅어지고(꼬리 페이드),
+아직 닫히지 않은 `**`·백틱·`\(`(dollar 옵션이면 `$`) opener는 closer가 올 때까지 숨긴다.
+스트림이 끝나면 `nil`을 넘겨 원래 렌더로 돌린다. UIKit은 `LatexMarkdownUIView.streaming`이 같은
+역할이며, 스트리밍 중에는 같은 종류의 텍스트 블록을 새로 만들지 않고 내용만 바꾼다.
+
 누적 갱신(새 문자열이 이전 문자열의 확장)에서는 새 parse가 게시될 때까지 **이전
 렌더를 유지한다** — 갱신마다 원문 텍스트로 되돌아가는 플래시가 없다. 같은 뷰에
 전혀 다른 문자열을 넣는 교체(셀 재사용)는 이전 문서를 한 프레임도 보이지 않고
@@ -610,6 +637,13 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
   baseline이 불안정하다). SwiftUI 렌더러는 first text baseline 정렬이다.
 - **범위(문자 구간) 단위 색·폰트 지정은 없다.** 테마는 요소 단위다. 굵게·기울임·
   취소선은 Markdown 원문이 정하고 소비 앱 API로는 지정할 수 없다.
+- **스트리밍 표시(`.latexStreaming`)의 미닫힌 마크 억제는 휴리스틱이다.** 파서가 `\*`·`\~`·
+  백틱 이스케이프를 디코딩해 넘기므로 literal과 구분되지 않고, 스트리밍 중에는 잠시 숨겨진다.
+  스트림이 끝나면(`nil`) 원문대로 보인다. `$`는 `parsesDollarMath`일 때 다음 문자가 숫자·공백이
+  아닌 경우만 대상이다(`$5` 유지). 꼬리 페이드 끝의 alpha 0.2는 대비 기준 미달이지만 12 grapheme
+  안의 일시 상태다. 표·코드 블록·수식 블록이 마지막이면 페이드하지 않는다.
+- UIKit 스트리밍 in-place 갱신은 최상위 문단·헤딩에 한한다. 리스트·인용 안의 tail 리프는
+  현행처럼 다시 만든다.
 - 인라인 코드는 감싼 블록 크기를 따르지 않고 `codeFont` 크기를 쓴다.
   헤딩 안의 인라인 코드도 `codeFont` 크기다.
 - **SwiftUI 렌더러 iOS 18+에서 인라인 코드가 있는 문단은 텍스트 선택이 빠진다.**

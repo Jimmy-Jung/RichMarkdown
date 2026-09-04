@@ -562,4 +562,83 @@ import UIKit
         #expect(attachmentCount(in: table) == 1, "표 셀의 인라인 수식도 hydration되어야 한다")
         #expect(!renderedText(in: table).contains("|"), "Markdown 표 원문을 그대로 표시하면 안 된다")
     }
+
+    // MARK: - 스트리밍 tail
+
+    private func foregroundAlpha(in textView: UITextView, at location: Int) -> CGFloat {
+        guard let attributed = textView.attributedText, attributed.length > location else { return -1 }
+        let color = attributed.attribute(.foregroundColor, at: location, effectiveRange: nil) as? UIColor
+        return color?.cgColor.alpha ?? -1
+    }
+
+    @Test func streamingTailFadesTrailingGraphemes() async throws {
+        let view = LatexMarkdownUIView(markdown: "앞 문단\n\n꼬리 문단은 열두 글자보다 충분히 길어서 앞부분은 원래 색을 유지한다")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let views = textViews(in: view)
+        #expect(views.count == 2)
+        #expect(foregroundAlpha(in: views[0], at: 0) == 1, "tail이 아닌 블록은 페이드하지 않는다")
+        #expect(foregroundAlpha(in: views[1], at: 0) == 1, "tail 앞부분은 원래 색이다")
+        let lastAlpha = foregroundAlpha(in: views[1], at: views[1].attributedText.length - 1)
+        #expect(lastAlpha > 0 && lastAlpha < 1, "마지막 grapheme은 옅어진다")
+
+        view.streaming = nil
+        try await waitForRender(view)
+        let tail = textViews(in: view)[1]
+        #expect(foregroundAlpha(in: tail, at: tail.attributedText.length - 1) == 1, "스트림이 끝나면 원래 색으로 돌아온다")
+    }
+
+    @Test func streamingTailHidesUnclosedStrongUntilStreamingEnds() async throws {
+        let view = LatexMarkdownUIView(markdown: "앞\n\n**굵게")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        #expect(!renderedText(in: view).contains("**"), "스트리밍 중 미닫힌 opener는 숨긴다")
+        #expect(renderedText(in: view).contains("굵게"))
+
+        view.streaming = nil
+        try await waitForRender(view)
+        #expect(renderedText(in: view).contains("**"), "스트림이 끝나면 원문대로 보인다")
+    }
+
+    @Test func streamingUpdatesTailTextViewInPlace() async throws {
+        let view = LatexMarkdownUIView(markdown: "첫 문단\n\n꼬리")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 2)
+        let tailBefore = view.blockStack.arrangedSubviews[1]
+
+        view.markdown = "첫 문단\n\n꼬리 문단이 더 길어졌다"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews[1] === tailBefore, "스트리밍 중 tail 문단은 같은 뷰의 내용만 바꾼다")
+        #expect(renderedText(in: view).contains("길어졌다"))
+
+        view.markdown = "첫 문단\n\n꼬리 문단이 더 길어졌다\n\n세 번째"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 3)
+        #expect(
+            view.blockStack.arrangedSubviews[1] === tailBefore,
+            "tail에서 벗어난 문단도 새로 만들지 않고 페이드만 걷어낸다"
+        )
+        let formerTail = try #require(view.blockStack.arrangedSubviews[1] as? UITextView)
+        #expect(foregroundAlpha(in: formerTail, at: formerTail.attributedText.length - 1) == 1)
+    }
+
+    @Test func streamingInstallsChipDecorationWhenInlineCodeCloses() async throws {
+        let view = LatexMarkdownUIView(markdown: "a `co")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        let textView = try #require(textViews(in: view).first as? LatexTextView)
+        #expect(textView.inlineCodeDecoration == nil)
+        #expect(!renderedText(in: view).contains("`"), "미닫힌 백틱은 숨긴다")
+
+        view.markdown = "a `code` b"
+        try await waitForRender(view)
+        #expect(textViews(in: view).first === textView, "같은 뷰를 유지한다")
+        #expect(textView.inlineCodeDecoration != nil, "백틱이 닫히면 칩 장식을 그 자리에서 설치한다")
+    }
 }

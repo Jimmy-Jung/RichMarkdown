@@ -363,6 +363,35 @@ import Testing
         #expect(text.contains(#"\(x+1\)"#), "masked AST가 아니라 원본 수식 source를 보존해야 한다")
     }
 
+    @Test func streamingAppendDoesNotStoreParseCacheEntry() async throws {
+        let model = LatexRenderModel()
+        let base = "스트리밍 캐시 검증 \(UUID().uuidString)"
+        model.submit(request(base))
+        try await waitForIdle(model)
+        #expect(
+            ParseCache.shared.document(markdown: base, parsesDollarMath: false) != nil,
+            "스트림의 첫 제출은 캐시한다"
+        )
+
+        let appended = base + " 그리고 이어지는 답변"
+        model.submit(request(appended))
+        try await waitForIdle(model)
+        let updated = try #require(model.document)
+        #expect(flatText(updated).contains("이어지는 답변"), "append parse는 게시된다")
+        #expect(
+            ParseCache.shared.document(markdown: appended, parsesDollarMath: false) == nil,
+            "append 요청은 누적 원문을 새 키로 저장하지 않는다"
+        )
+
+        let replaced = "전혀 다른 문서 \(UUID().uuidString)"
+        model.submit(request(replaced))
+        try await waitForIdle(model)
+        #expect(
+            ParseCache.shared.document(markdown: replaced, parsesDollarMath: false) != nil,
+            "교체 제출은 다시 캐시한다"
+        )
+    }
+
     private func flatText(_ document: ParsedDocument) -> String {
         document.blocks.map { block -> String in
             if case .paragraph(let runs) = block {
