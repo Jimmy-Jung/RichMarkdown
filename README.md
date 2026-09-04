@@ -3,10 +3,11 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.0%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.5.0 beta** — 스트리밍 표시 옵션(꼬리 페이드·미닫힌 마크 억제)과 `LatexStreamingTextBuffer`를
-> 추가하고, 스트리밍 append parse가 캐시를 오염시키지 않게 했다.
+> **0.6.0 beta** — `LatexDollarMathOptions`로 dollar 수식 범위를 조합한다. `.inlineDouble`을 켜면
+> 문장 안 `$$...$$`도 inline 수식이다(LLM 출력·서버 자막 데이터가 자주 쓰는 표기). 기존
+> `parsesDollarMath: Bool` API는 그대로 동작한다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
@@ -25,6 +26,13 @@ generation 관리를 공유한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
+
+## 0.6.0 베타 핵심
+
+- **`LatexDollarMathOptions`** — `[.single]`은 기존 `parsesDollarMath: true`와 같고, `.inlineDouble`을
+  더하면 문장 안 `$$...$$`를 inline 수식으로 해석한다. `LatexMarkdownView(markdown:dollarMath:)`,
+  `LatexMarkdownUIView.dollarMath`, `LatexInlineMathScanner.scan(_:dollarMath:)`. 스트리밍 미닫힌
+  마크 억제도 `$$` opener를 같은 규칙으로 숨긴다. paragraph 전체 `$$...$$`는 그대로 block 수식이다.
 
 ## 0.5.0 베타 핵심
 
@@ -87,7 +95,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.4 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.5.0")),
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.6.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
@@ -289,11 +297,18 @@ light 약 7.5:1 / dark 약 8.9:1이며 밑줄도 함께 그린다.
 ### 달러 수식 (opt-in)
 
 ```swift
-LatexMarkdownView(markdown: message, parsesDollarMath: true)
+LatexMarkdownView(markdown: message, parsesDollarMath: true)                       // == dollarMath: [.single]
+LatexMarkdownView(markdown: message, dollarMath: [.single, .inlineDouble])          // 문장 안 $$...$$도 inline
 ```
 
 기본값이 `false`인 이유는 통화 표기(`$5`)와 충돌하기 때문이다. 켜도 아래 규칙으로
 통화를 걸러낸다 — [수식 문법](#수식-문법) 참고.
+
+`.inlineDouble`은 `$$...$$`를 paragraph 전체가 아닌 문장 안에서도 inline 수식으로 본다.
+LLM 출력과 일부 콘텐츠 서버가 `총합($$f(1)$$)`처럼 쓰기 때문이다. `$...$`와 같은
+공백·숫자·줄바꿈 규칙을 따르므로 `$$5 and $$6`은 수식이 되지 않는다. UIKit은
+`LatexMarkdownUIView.dollarMath`, 원문 위치가 필요한 클라이언트는
+`LatexInlineMathScanner.scan(_:dollarMath:)`를 쓴다.
 
 ### UIKit
 
@@ -598,14 +613,19 @@ UIKit의 `LatexMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스
 - `\( ... \)` — 인라인. 한 logical line 안에서만 닫힌다.
 - `\[ ... \]` — block. 공백을 제외한 **paragraph 전체**가 감싸진 경우만.
 
-`parsesDollarMath: true`일 때 추가:
+`parsesDollarMath: true`(= `dollarMath: [.single]`)일 때 추가:
 
 - `$ ... $` — 인라인, `$$ ... $$` — block(paragraph 전체)
 - `\$`는 구분자가 아니다
 - 여는 `$` 바로 뒤, 닫는 `$` 바로 앞에 공백이 올 수 없다
 - 닫는 `$` 바로 뒤에 숫자가 올 수 없다 (`$x$5` → 텍스트)
 - 인라인 `$...$`는 줄바꿈을 넘지 않는다
-- `$$`를 `$`보다 먼저 판정한다
+- `$$`를 `$`보다 먼저 판정한다. 문장 안 `$$`는 `.inlineDouble`이 없으면 텍스트다
+
+`dollarMath: [.inlineDouble]`일 때 추가:
+
+- 문장 안 `$$ ... $$` — 인라인. 공백·숫자·줄바꿈 규칙은 `$...$`와 같다
+- paragraph 전체를 감싼 `$$ ... $$`는 여전히 block이다
 
 이 규칙으로 `$5`, `$5 and $10`은 수식이 되지 않는다. Pandoc과 동일하다고 주장하지
 않는다. 구현한 규칙과 fixture가 계약이다.
