@@ -5,6 +5,34 @@
 
 ## [Unreleased]
 
+### 추가
+
+- **스트리밍 표시 옵션 `LatexStreamingOptions`.** SwiftUI `.latexStreaming(_:)` modifier와 UIKit
+  `LatexMarkdownUIView.streaming` 프로퍼티로 스트리밍 중인 **메시지 뷰 하나**에만 건다(`nil` = 현행
+  렌더). parse 요청·cache key는 바꾸지 않으므로 스트림 종료 시 수식 이미지가 무효화되지 않는다.
+  - **꼬리 페이드**: tail 문단(마지막 리프 문단·헤딩)의 마지막 N grapheme(기본 12) alpha를 끝으로
+    갈수록 0.2까지 낮춰 도착 위치를 보인다. 마지막 grapheme은 길이와 무관하게 항상 0.2라 tick마다
+    흔들리지 않는다. break·수식·코드·링크에서 멈춘다.
+  - **미닫힌 인라인 마크 억제**: tail 문단 마지막 text run의 짝 없는 `**`·`*`·`~~`·백틱·`\(`
+    (그리고 `parsesDollarMath`일 때 `$`)를 closer가 도착할 때까지 숨긴다. swift-markdown이 literal로
+    내보내던 `**제가 선생님처` 같은 원문 노출이 사라진다. 문단 전체가 비는 억제는 건너뛴다.
+  - 두 렌더러가 `SwiftLatexCore.StreamingTail`(순수 함수)로 같은 결과를 그린다. 숨긴 마크는 접근성
+    라벨·인라인 코드 칩 판정에서도 빠진다.
+- **`LatexStreamingTextBuffer`.** 토큰 도착 속도와 화면 갱신을 분리하는 latest-wins 버퍼(기본
+  100ms). 간격 안 갱신은 마지막 값만 남기고 **trailing 게시 1회**로 흘려 보낸다 — 데모의 도착
+  이벤트 기반 throttle에 없던 마지막 조각 게시가 보장된다. `update`/`append`/`flush`/`reset`.
+
+### 수정
+
+- **스트리밍 append parse를 `ParseCache`에 넣지 않는다.** tick마다 누적 원문 전체가 새 키가 되어
+  (10Hz × 30초 ≈ 300건) 다른 셀의 항목을 밀어냈고, 그 키는 다시 조회되지 않았다. 스트림의 첫
+  제출(교체)만 저장한다. 회귀 방지: `streamingAppendDoesNotStoreParseCacheEntry`.
+- **UIKit 렌더러가 스트리밍 중 텍스트 블록을 in-place로 갱신한다.** 같은 종류(문단↔문단, 같은
+  레벨 헤딩)면 `LatexTextView` 인스턴스를 유지하고 attributed string만 바꾼다 — tick마다 TextKit
+  스택을 버리지 않고, tail만 바뀌는 일반적인 tick에서는 읽던 문단의 VoiceOver 포커스도 유지된다.
+  백틱이 나중에 닫히면 인라인 코드 칩
+  장식을 그 자리에서 설치한다. `streaming == nil`이면 기존 재사용 정책 그대로다.
+
 ## [0.4.1] - 2026-08-28
 
 ### 추가
@@ -282,7 +310,8 @@ SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는�
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
-[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.4.1...HEAD
+[0.4.1]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.4.1
 [0.4.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.4.0
 [0.3.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.3.0
 [0.2.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.2.0

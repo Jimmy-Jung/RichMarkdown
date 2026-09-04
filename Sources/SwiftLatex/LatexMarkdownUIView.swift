@@ -44,6 +44,15 @@ public final class LatexMarkdownUIView: UIView {
         }
     }
 
+    /// 스트리밍 표시 옵션. 꼬리 페이드·미닫힌 마크 억제·tail 텍스트 블록 in-place 갱신을 켠다.
+    /// parse 요청은 바꾸지 않으므로 `submit()`은 부르지 않는다. 스트림이 끝나면 `nil`로 되돌린다.
+    public var streaming: LatexStreamingOptions? {
+        didSet {
+            guard streaming != oldValue else { return }
+            scheduleRebuild()
+        }
+    }
+
     /// 블록 재구성으로 높이가 바뀔 때 호출된다.
     /// 수식 이미지 hydration은 최초 레이아웃 뒤에 오므로, 셀 재사용 환경에서는
     /// 여기서 셀의 self-sizing 재측정을 요청해야 한다.
@@ -72,6 +81,8 @@ public final class LatexMarkdownUIView: UIView {
         /// 이 블록이 수식 이미지 사전에서 찾아 쓴 개수. hydration 게시로 이 수가 바뀌면
         /// attributed string이 달라지므로 뷰를 다시 만들어야 한다.
         let mathImageCount: Int
+        /// 이 블록에 적용된 스트리밍 tail 옵션. tail이 아니게 되거나 스트림이 끝나면 다시 그린다.
+        let tail: LatexStreamingOptions?
     }
 
     /// 블록 뷰 재사용 판정용 겉모습 식별자.
@@ -261,28 +272,79 @@ public final class LatexMarkdownUIView: UIView {
         let appearance = currentAppearance
         // 폰트·색·scale이 바뀌면 모든 블록의 attributed string이 달라진다.
         let reusable = appearance == renderedAppearance ? renderedBlocks : []
+        let lastIndex = blocks.count - 1
 
-        var reusedCount = 0
-        while reusedCount < min(blocks.count, reusable.count) {
-            let block = blocks[reusedCount]
-            guard reusable[reusedCount].block == block,
-                  reusable[reusedCount].mathImageCount == mathImageCount(block, images: images)
-            else { break }
-            reusedCount += 1
-        }
+        var rendered: [RenderedBlock] = []
+        rendered.reserveCapacity(blocks.count)
+        // 앞에서부터 뷰 identity가 바뀌지 않은 연속 길이. `setBlockViews`는 이 구간의 계층을 건드리지 않는다.
+        var stableCount = 0
+        var stablePrefix = true
 
-        let fresh = blocks.dropFirst(reusedCount).map { block in
-            RenderedBlock(
-                block: block,
-                view: blockView(block, images: images),
-                mathImageCount: mathImageCount(block, images: images)
+        for (index, block) in blocks.enumerated() {
+            let tail = index == lastIndex ? streaming : nil
+            let mathCount = mathImageCount(block, images: images)
+
+            if index < reusable.count {
+                let previous = reusable[index]
+                if previous.block == block, previous.mathImageCount == mathCount, previous.tail == tail {
+                    rendered.append(previous)
+                    if stablePrefix { stableCount += 1 }
+                    continue
+                }
+                // 스트리밍 중에는 같은 종류의 텍스트 블록을 새로 만들지 않고 내용만 바꾼다.
+                // tick마다 `UITextView`를 버리지 않는다. 앞 블록이 모두 그대로인 일반적인 tick에서는
+                // 계층 조작이 없어 읽던 문단의 VoiceOver 포커스도 유지된다.
+                if streaming != nil,
+                   let textView = previous.view as? LatexTextView,
+                   updateTextBlock(textView, from: previous.block, to: block, images: images, tail: tail) {
+                    rendered.append(
+                        RenderedBlock(block: block, view: textView, mathImageCount: mathCount, tail: tail)
+                    )
+                    if stablePrefix { stableCount += 1 }
+                    continue
+                }
+            }
+
+            stablePrefix = false
+            rendered.append(
+                RenderedBlock(
+                    block: block,
+                    view: blockView(block, images: images, tail: tail),
+                    mathImageCount: mathCount,
+                    tail: tail
+                )
             )
         }
-        let rendered = Array(reusable.prefix(reusedCount)) + fresh
 
-        setBlockViews(rendered.map(\.view), reusedCount: reusedCount)
+        setBlockViews(rendered.map(\.view), reusedCount: stableCount)
         renderedBlocks = rendered
         renderedAppearance = appearance
+    }
+
+    /// 같은 종류(문단↔문단, 같은 레벨 헤딩)의 텍스트 블록이면 기존 뷰의 내용만 바꾸고 true.
+    private func updateTextBlock(
+        _ view: LatexTextView,
+        from previous: ParsedBlock,
+        to block: ParsedBlock,
+        images: [MathSegment: RenderedMath],
+        tail: LatexStreamingOptions?
+    ) -> Bool {
+        switch (previous, block) {
+        case (.paragraph, .paragraph(let runs)):
+            configure(view, runs: runs, images: images, font: bodyUIFont, tail: tail)
+            return true
+        case (.heading(let previousLevel, _), .heading(let level, let runs)) where previousLevel == level:
+            configure(
+                view,
+                runs: runs,
+                images: images,
+                font: theme.headingFont(level: level).resolvedUIFont(compatibleWith: traitCollection),
+                tail: tail
+            )
+            return true
+        default:
+            return false
+        }
     }
 
     /// 목표 배열로 `blockStack`을 맞춘다.
@@ -358,16 +420,21 @@ public final class LatexMarkdownUIView: UIView {
 
     // MARK: - Blocks
 
-    private func blockView(_ block: ParsedBlock, images: [MathSegment: RenderedMath]) -> UIView {
+    private func blockView(
+        _ block: ParsedBlock,
+        images: [MathSegment: RenderedMath],
+        tail: LatexStreamingOptions? = nil
+    ) -> UIView {
         switch block {
         case .paragraph(let runs):
-            return runsTextView(runs, images: images, font: bodyUIFont)
+            return runsTextView(runs, images: images, font: bodyUIFont, tail: tail)
 
         case .heading(let level, let runs):
             let view = runsTextView(
                 runs,
                 images: images,
-                font: theme.headingFont(level: level).resolvedUIFont(compatibleWith: traitCollection)
+                font: theme.headingFont(level: level).resolvedUIFont(compatibleWith: traitCollection),
+                tail: tail
             )
             view.accessibilityTraits.insert(.header)
             return view
@@ -387,7 +454,9 @@ public final class LatexMarkdownUIView: UIView {
 
             let row = UIStackView(arrangedSubviews: [
                 bar,
-                verticalStack(spacing: 8, children.map { blockView($0, images: images) }),
+                verticalStack(spacing: 8, children.enumerated().map { index, child in
+                    blockView(child, images: images, tail: index == children.count - 1 ? tail : nil)
+                }),
             ])
             row.axis = .horizontal
             row.spacing = 8
@@ -395,13 +464,25 @@ public final class LatexMarkdownUIView: UIView {
             return row
 
         case .unorderedList(let items):
-            return verticalStack(spacing: 4, items.map { item in
-                listRow(marker: "•", monospacedDigit: false, item: item, images: images)
+            return verticalStack(spacing: 4, items.enumerated().map { index, item in
+                listRow(
+                    marker: "•",
+                    monospacedDigit: false,
+                    item: item,
+                    images: images,
+                    tail: index == items.count - 1 ? tail : nil
+                )
             })
 
         case .orderedList(let start, let items):
             return verticalStack(spacing: 4, items.enumerated().map { index, item in
-                listRow(marker: "\(start + index).", monospacedDigit: true, item: item, images: images)
+                listRow(
+                    marker: "\(start + index).",
+                    monospacedDigit: true,
+                    item: item,
+                    images: images,
+                    tail: index == items.count - 1 ? tail : nil
+                )
             })
 
         case .table(let table):
@@ -420,7 +501,8 @@ public final class LatexMarkdownUIView: UIView {
         marker: String,
         monospacedDigit: Bool,
         item: [ParsedBlock],
-        images: [MathSegment: RenderedMath]
+        images: [MathSegment: RenderedMath],
+        tail: LatexStreamingOptions? = nil
     ) -> UIView {
         let label = UILabel()
         label.text = marker
@@ -431,7 +513,9 @@ public final class LatexMarkdownUIView: UIView {
 
         let row = UIStackView(arrangedSubviews: [
             label,
-            verticalStack(spacing: 4, item.map { blockView($0, images: images) }),
+            verticalStack(spacing: 4, item.enumerated().map { index, child in
+                blockView(child, images: images, tail: index == item.count - 1 ? tail : nil)
+            }),
         ])
         row.axis = .horizontal
         row.spacing = 8
@@ -618,39 +702,70 @@ public final class LatexMarkdownUIView: UIView {
     private func runsTextView(
         _ runs: [InlineRun],
         images: [MathSegment: RenderedMath],
-        font: UIFont
+        font: UIFont,
+        tail: LatexStreamingOptions? = nil
     ) -> LatexTextView {
+        let view = textView(NSAttributedString())
+        configure(view, runs: runs, images: images, font: font, tail: tail)
+        return view
+    }
+
+    /// 생성·in-place 갱신이 함께 쓰는 텍스트 블록 구성. tail이면 미닫힌 opener를 숨기고 꼬리를 페이드한다.
+    private func configure(
+        _ view: LatexTextView,
+        runs: [InlineRun],
+        images: [MathSegment: RenderedMath],
+        font: UIFont,
+        tail: LatexStreamingOptions?
+    ) {
+        let displayRuns = tail?.hidesUnclosedInlineMarks == true
+            ? StreamingTail.hidingUnclosedOpeners(runs, parsesDollarMath: parsesDollarMath)
+            : runs
+        let plan = StreamingTail.fadePlan(displayRuns, graphemeCount: tail?.tailFadeGraphemeCount ?? 0)
+
         let string = NSMutableAttributedString()
-        for run in runs {
+        for run in plan.head {
             string.append(attributed(run, images: images, font: font))
         }
-        let view = textView(string)
+        for piece in plan.tail {
+            var run = piece.run
+            run.content = .text(piece.text)
+            string.append(attributed(run, images: images, font: font, alpha: CGFloat(piece.alpha)))
+        }
+        view.attributedText = string
+        // 스트리밍 문단은 코드 없이 시작해 나중에 백틱이 닫힐 수 있다. 장식은 처음 필요할 때 설치한다.
+        if view.inlineCodeDecoration == nil, Self.containsInlineCodeChip(string) {
+            view.inlineCodeDecoration = InlineCodeDecorationView.install(on: view)
+        }
 
         // 수식이 든 문단의 접근성 표현: "수식: 원본 LaTeX"를 읽기 순서대로 제공한다.
         // 링크가 있는 문단은 덮어쓰지 않는다 — 개별 link semantics를 없애지 않기 위함 (§5).
+        // 숨긴 마크를 읽지 않도록 표시 run을 쓴다.
         var hasMath = false
         var hasLink = false
-        for run in runs {
+        for run in displayRuns {
             switch run.content {
             case .math: hasMath = true
             case .link: hasLink = true
             default: break
             }
         }
-        if hasMath && !hasLink {
-            view.spokenOverride = spokenText(runs)
-        }
-        return view
+        view.spokenOverride = hasMath && !hasLink ? spokenText(displayRuns) : nil
+        view.invalidateIntrinsicContentSize()
     }
 
     private func attributed(
         _ run: InlineRun,
         images: [MathSegment: RenderedMath],
-        font: UIFont
+        font: UIFont,
+        alpha: CGFloat = 1
     ) -> NSAttributedString {
         switch run.content {
         case .text(let string):
-            return NSAttributedString(string: string, attributes: baseAttributes(run, font: font))
+            return NSAttributedString(
+                string: string,
+                attributes: baseAttributes(run, font: font, alpha: alpha)
+            )
 
         case .code(let code):
             var attributes = baseAttributes(run, font: codeUIFont)
@@ -683,10 +798,16 @@ public final class LatexMarkdownUIView: UIView {
         }
     }
 
-    private func baseAttributes(_ run: InlineRun, font: UIFont) -> [NSAttributedString.Key: Any] {
+    private func baseAttributes(
+        _ run: InlineRun,
+        font: UIFont,
+        alpha: CGFloat = 1
+    ) -> [NSAttributedString.Key: Any] {
+        let textColor = UIColor(theme.textColor)
         var attributes: [NSAttributedString.Key: Any] = [
             .font: Self.styled(font, bold: run.bold, italic: run.italic),
-            .foregroundColor: UIColor(theme.textColor),
+            // 동적 색을 유지한 채 alpha만 낮춘다. 트레잇 변화는 AppearanceKey가 rebuild로 잡는다.
+            .foregroundColor: alpha < 1 ? textColor.withAlphaComponent(alpha) : textColor,
         ]
         if run.strikethrough {
             attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue

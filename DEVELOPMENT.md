@@ -278,6 +278,12 @@ API는 현재 메시지 전체 `String`을 받으며 증분 parser를 제공하�
 기준 기기/OS/configuration의 baseline, idle 시간, 실행/대기 상한을 정한다. 증분 파싱은
 확정된 성능 기준을 넘은 측정 근거가 있을 때만 검토한다.
 
+스트리밍 **표시** 상태(`LatexStreamingOptions`, 2026-09-04)는 `Request`·parse identity·cache key
+밖에 둔다. Request에 넣으면 스트림 종료가 "수식 설정 변경" 분기로 들어가 이미지가 무효화된다.
+꼬리 페이드와 미닫힌 opener 억제는 `SwiftLatexCore.StreamingTail`이 마지막 리프 문단의
+`[InlineRun]`을 표시 직전에 변환하는 순수 함수고, 두 렌더러가 같은 결과를 그린다. 게시 경로에
+hop을 더하지 않으며 스트리밍 append parse는 `ParseCache`에 저장하지 않는다(§6).
+
 ---
 
 ## 5. 렌더링과 플랫폼 계약
@@ -548,6 +554,12 @@ actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반
 UIKit 뷰는 false를 보내 display segment를 raster 대상에서 제외한다 — 블록 수식
 raster를 아무도 읽지 않는 낭비가 없다. SwiftUI 렌더러는 기본값이라 무변경.
 블록 수식만 있는 문서는 기다릴 raster가 없어 단일 게시(publishComplete)로 끝난다.
+
+parse cache(`ParseCache`, 내부)는 원문 전체 + dollar/truncation 플래그를 키로 `ParsedDocument`를
+`countLimit 256`/`16 MiB`에 보관한다. **스트리밍 append 요청은 저장하지 않는다**(2026-09-04) —
+tick마다 누적 원문이 새 키가 되어 다른 셀의 항목을 밀어내고 그 키는 다시 조회되지 않기 때문이다.
+스트림의 첫 제출(교체)만 저장되므로 오염은 스트림당 1~2건으로 묶인다. 최종 텍스트는 셀 재사용 시
+1회 재파싱한다.
 
 ---
 

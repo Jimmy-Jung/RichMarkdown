@@ -15,6 +15,7 @@ public struct LatexMarkdownView: View {
 
     @StateObject private var model = LatexRenderModel()
     @Environment(\.latexTheme) private var theme
+    @Environment(\.latexStreaming) private var streaming
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
     /// `@ScaledMetric(relativeTo:)`의 기준 style은 컴파일 시점 상수여서 style별
@@ -56,10 +57,19 @@ public struct LatexMarkdownView: View {
             // 수식 raster는 문서 안 위치와 무관하다.
             let images = model.imageRequest?.matchesRasterConfiguration(of: request) == true
                 ? model.mathImages : [:]
+            // 스트리밍 표시(꼬리 페이드·미닫힌 마크 억제)는 마지막 블록에만 전달한다.
+            let tail = streaming.map {
+                LatexStreamingTailContext(options: $0, parsesDollarMath: parsesDollarMath)
+            }
+            let lastIndex = document.blocks.count - 1
             VStack(alignment: .leading, spacing: 12) {
                 // identity는 렌더 시점의 위치 + content digest. 편집 사이 영속성은 약속하지 않는다.
-                ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
-                    LatexBlockView(block: block, images: images)
+                ForEach(Array(document.blocks.enumerated()), id: \.offset) { offset, block in
+                    LatexBlockView(
+                        block: block,
+                        images: images,
+                        tail: offset == lastIndex ? tail : nil
+                    )
                 }
             }
         } else {
@@ -109,15 +119,17 @@ public struct LatexMarkdownView: View {
 struct LatexBlockView: View {
     let block: ParsedBlock
     let images: [MathSegment: RenderedMath]
+    /// 스트리밍 tail 문맥. 컨테이너 블록은 마지막 자식에만 넘겨 리프 문단·헤딩에서 소비한다.
+    var tail: LatexStreamingTailContext? = nil
     @Environment(\.latexTheme) private var theme
 
     var body: some View {
         switch block {
         case .paragraph(let runs):
-            InlineRunsText(runs: runs, images: images, font: theme.bodyFont)
+            InlineRunsText(runs: runs, images: images, font: theme.bodyFont, tail: tail)
 
         case .heading(let level, let runs):
-            InlineRunsText(runs: runs, images: images, font: theme.headingFont(level: level))
+            InlineRunsText(runs: runs, images: images, font: theme.headingFont(level: level), tail: tail)
                 .accessibilityAddTraits(.isHeader)
 
         case .codeBlock(let language, let code):
@@ -132,24 +144,24 @@ struct LatexBlockView: View {
                     .fill(theme.quoteBar)
                     .frame(width: 4)
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-                        LatexBlockView(block: child, images: images)
+                    ForEach(Array(children.enumerated()), id: \.offset) { offset, child in
+                        LatexBlockView(
+                            block: child,
+                            images: images,
+                            tail: offset == children.count - 1 ? tail : nil
+                        )
                     }
                 }
             }
 
         case .unorderedList(let items):
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("•")
                             .latexFont(theme.bodyFont)
                             .foregroundStyle(theme.textColor)
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(Array(item.enumerated()), id: \.offset) { _, child in
-                                LatexBlockView(block: child, images: images)
-                            }
-                        }
+                        listItemStack(item, isLastItem: index == items.count - 1)
                     }
                 }
             }
@@ -162,11 +174,7 @@ struct LatexBlockView: View {
                             .latexFont(theme.bodyFont)
                             .monospacedDigit()
                             .foregroundStyle(theme.textColor)
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(Array(item.enumerated()), id: \.offset) { _, child in
-                                LatexBlockView(block: child, images: images)
-                            }
-                        }
+                        listItemStack(item, isLastItem: index == items.count - 1)
                     }
                 }
             }
@@ -179,6 +187,18 @@ struct LatexBlockView: View {
         }
     }
 
+    /// 리스트 항목의 블록 묶음. tail은 마지막 항목의 마지막 블록에만 닿는다.
+    private func listItemStack(_ item: [ParsedBlock], isLastItem: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(item.enumerated()), id: \.offset) { offset, child in
+                LatexBlockView(
+                    block: child,
+                    images: images,
+                    tail: isLastItem && offset == item.count - 1 ? tail : nil
+                )
+            }
+        }
+    }
 }
 
 private struct TableBlockView: View {
@@ -278,12 +298,21 @@ struct InlineRunsText: View {
     let images: [MathSegment: RenderedMath]
     /// 감싼 블록의 폰트. 문단은 `bodyFont`, 헤딩은 해당 레벨 폰트다.
     let font: LatexFont
+    /// 스트리밍 tail 문맥. nil이면 표시 변환 없음.
+    var tail: LatexStreamingTailContext? = nil
     @Environment(\.latexTheme) private var theme
     @Environment(\.latexFontScale) private var fontScale
 
     var body: some View {
         chipDecoratedText
-            .modifier(MathAccessibilityLabel(runs: runs))
+            .modifier(MathAccessibilityLabel(runs: displayRuns))
+    }
+
+    /// 표시용 run. 스트리밍 tail이면 미닫힌 opener를 숨긴 결과다.
+    /// 칩 판정·접근성 라벨도 이 run을 써서 숨긴 마크가 읽히거나 칩 경로를 고르지 않게 한다.
+    private var displayRuns: [InlineRun] {
+        guard let tail, tail.options.hidesUnclosedInlineMarks else { return runs }
+        return StreamingTail.hidingUnclosedOpeners(runs, parsesDollarMath: tail.parsesDollarMath)
     }
 
     /// iOS 18+는 `TextRenderer`로 인라인 코드 칩(둥근 배경+테두리)을 그린다.
@@ -307,15 +336,23 @@ struct InlineRunsText: View {
     }
 
     private var hasInlineCode: Bool {
-        runs.contains { run in
+        displayRuns.contains { run in
             if case .code = run.content { return true }
             return false
         }
     }
 
     private var combinedText: Text {
-        runs.reduce(Text(verbatim: "")) { partial, run in
+        let plan = StreamingTail.fadePlan(
+            displayRuns,
+            graphemeCount: tail?.options.tailFadeGraphemeCount ?? 0
+        )
+        let head = plan.head.reduce(Text(verbatim: "")) { partial, run in
             partial + text(for: run)
+        }
+        // 꼬리 조각은 grapheme 하나씩 alpha만 다르고 나머지 스타일은 원 run을 따른다.
+        return plan.tail.reduce(head) { partial, piece in
+            partial + styled(Text(emphasized(base(piece.text, alpha: piece.alpha), piece.run)), piece.run)
         }
     }
 
@@ -370,9 +407,9 @@ struct InlineRunsText: View {
     /// `theme.bodyFont`가 본문 글자에 닿지 않고, 소비 앱이 바깥에 건 `.font(_:)`가
     /// 우연히 새어 들어온다. 모든 텍스트 run은 여기서 값을 실어
     /// UIKit 렌더러(`LatexMarkdownUIView`)와 같은 규칙을 갖는다.
-    private func base(_ string: String) -> AttributedString {
+    private func base(_ string: String, alpha: Double = 1) -> AttributedString {
         var attributed = AttributedString(string)
-        attributed.foregroundColor = theme.textColor
+        attributed.foregroundColor = alpha < 1 ? theme.textColor.opacity(alpha) : theme.textColor
         attributed.font = font.resolvedFont(scaledBy: fontScale.factor(for: font.relativeTo))
         return attributed
     }

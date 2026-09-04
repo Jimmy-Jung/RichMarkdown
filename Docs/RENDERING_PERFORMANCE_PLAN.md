@@ -531,3 +531,17 @@ SSE 데모에서 fallback 프레임이 매 갱신 화면 전체를 원문 ↔ �
 회귀 방지: `keepsRenderedBlocksWithoutFallbackFrameAcrossStreamingAppend` — append 직후
 yield 시점에 이전 렌더 블록 인스턴스가 계층에 그대로 붙어 있는지(원문 fallback 프레임
 부재)를 확인한다. 모델 계약은 `streamingAppendKeepsPreviousDocumentUntilNewParseLands`.
+
+### 9.6 [해소] 스트리밍 parse cache 오염과 tail 블록 churn (2026-09-04)
+
+**오염**: 매 tick의 누적 원문이 `ParseCache`의 새 키가 되어(50 KiB × 10Hz × 30초 ≈ 300건,
+cost 3×bytes) `countLimit 256`/`16 MiB`를 넘겨 다른 셀의 항목을 전량 밀어냈다. append 요청은
+저장하지 않는다(`LatexRenderModel.Job.isStreamingAppend`). 회귀 방지:
+`streamingAppendDoesNotStoreParseCacheEntry`.
+
+**churn**: tail 문단은 tick마다 `ParsedBlock` 값이 바뀌어 `LatexTextView`를 새로 만들었다.
+`streaming != nil`이면 같은 종류의 텍스트 블록은 인스턴스를 유지하고 attributed string만 바꾼다
+(`updateTextBlock`). 새 문단이 붙어 tail에서 벗어난 블록도 같은 경로로 페이드만 걷어낸다.
+회귀 방지: `streamingUpdatesTailTextViewInPlace`, `streamingInstallsChipDecorationWhenInlineCodeCloses`.
+`streaming == nil` 경로는 `keepsPlainBlockViewAcrossMathHydration`이 지킨다.
+**남는 상한**: 리스트·인용 안의 tail 리프는 중첩 스택이라 재생성한다.
