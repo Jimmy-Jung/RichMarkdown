@@ -204,6 +204,9 @@ code / HTML / Link / Image 금지 범위
   - 닫는 `$` 바로 뒤에 숫자가 올 수 없다.
   - inline `$...$`는 줄바꿈을 넘지 않는다.
   - `$$`를 `$`보다 먼저 판정한다.
+- opt-in `.inlineDouble`(`DollarMathOptions`, 0.6.0)은 문장 안 `$$...$$`를 inline 수식으로 본다.
+  공백·숫자·줄바꿈 규칙은 `$...$`와 같고, paragraph 전체를 감싼 `$$...$$`는 여전히 block이다.
+  `.single` 없이 `.inlineDouble`만 켜면 `$...$`는 텍스트로 남는다.
 
 “Pandoc과 완전히 동일”하다고 표현하지 않는다. 구현한 규칙과 fixture가 실제 계약이다.
 

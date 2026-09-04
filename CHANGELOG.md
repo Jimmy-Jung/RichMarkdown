@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-04
+
+### 추가
+
+- **`LatexDollarMathOptions`.** dollar 수식 범위를 OptionSet으로 조합한다. `.single`은 기존
+  `parsesDollarMath: true`(inline `$...$` + paragraph 전체 `$$...$$`)와 같고, **`.inlineDouble`**을
+  더하면 **문장 안 `$$...$$`도 inline 수식**으로 해석한다 — LLM 출력과 콘텐츠 서버 데이터가
+  `총합($$f(1)$$)`처럼 쓰는 표기다. 공백·숫자·줄바꿈 규칙은 `$...$`와 같아 `$$5 and $$6`은 텍스트로
+  남고, paragraph 전체를 감싼 `$$...$$`는 그대로 block 수식이다.
+  - SwiftUI `LatexMarkdownView(markdown:dollarMath:)`, UIKit `LatexMarkdownUIView.dollarMath`(및
+    `init(markdown:dollarMath:theme:)`), `LatexInlineMathScanner.scan(_:dollarMath:excluding:)`.
+  - 기존 `parsesDollarMath: Bool` API는 모두 유지된다(`[.single]`로 대응). `LatexMarkdownUIView.parsesDollarMath`는
+    `dollarMath`의 `.single` 비트를 읽고 쓴다.
+  - 스트리밍 미닫힌 마크 억제(`.latexStreaming`)는 `.inlineDouble`일 때 tail의 짝 없는 `$$` opener도 숨긴다.
+  - parse cache key가 옵션 조합을 구분한다. 회귀 방지: `MathScannerFixtureTests` inline `$$` 6건,
+    `StreamingTailTests.doubleDollarOpenerIsHiddenOnlyWithInlineDoubleOption`, `DollarMathOptionsTests`.
+
 ## [0.5.0] - 2026-09-04
 
 ### 추가
