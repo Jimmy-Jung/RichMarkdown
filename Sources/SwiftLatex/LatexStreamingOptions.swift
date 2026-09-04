@@ -20,10 +20,10 @@ public struct LatexStreamingOptions: Sendable, Equatable {
     public static let `default` = LatexStreamingOptions()
 }
 
-/// tail 블록에만 전달되는 표시 문맥. `parsesDollarMath`는 `$` opener 판정에 쓴다.
+/// tail 블록에만 전달되는 표시 문맥. `dollarMath`는 `$`·`$$` opener 판정에 쓴다.
 struct LatexStreamingTailContext: Equatable {
     let options: LatexStreamingOptions
-    let parsesDollarMath: Bool
+    let dollarMath: LatexDollarMathOptions
 }
 
 private struct LatexStreamingKey: EnvironmentKey {

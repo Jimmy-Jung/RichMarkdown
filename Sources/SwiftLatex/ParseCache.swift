@@ -15,7 +15,7 @@ final class ParseCache: @unchecked Sendable {
     /// cache key는 worker에서 미리 만든 뒤 MainActor의 generation-guarded store에 전달한다.
     /// `NSString`는 immutable이므로 그 경계에서만 Sendable 검사를 면제한다.
     struct Key: @unchecked Sendable {
-        fileprivate let value: NSString
+        let value: NSString
         fileprivate let sourceByteCount: Int
     }
 
@@ -58,7 +58,16 @@ final class ParseCache: @unchecked Sendable {
     /// `preparedEntry(_:for:)`, `store(_:)`만 사용한다. 따라서 raw oversized markdown은
     /// MainActor cache path에 없다.
     func key(markdown: String, parsesDollarMath: Bool, wasTruncated: Bool) -> Key {
-        let prefix = "\(parsesDollarMath ? "$" : "-")\(wasTruncated ? "T" : "-")\u{1F}"
+        key(
+            markdown: markdown,
+            dollarMath: LatexDollarMathOptions(parsesDollarMath: parsesDollarMath),
+            wasTruncated: wasTruncated
+        )
+    }
+
+    /// dollar 옵션 조합마다 결과가 다르므로 rawValue를 key 접두에 넣는다.
+    func key(markdown: String, dollarMath: LatexDollarMathOptions, wasTruncated: Bool) -> Key {
+        let prefix = "\(dollarMath.rawValue)\(wasTruncated ? "T" : "-")\u{1F}"
         return Key(value: (prefix + markdown) as NSString, sourceByteCount: markdown.utf8.count)
     }
 

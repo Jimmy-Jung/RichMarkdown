@@ -11,6 +11,10 @@ import Testing
         SwiftLatexParser.parse(markdown: markdown, parsesDollarMath: dollar)
     }
 
+    private func parse(_ markdown: String, dollarMath: DollarMathOptions) -> ParsedDocument {
+        SwiftLatexParser.parse(markdown: markdown, dollarMath: dollarMath)
+    }
+
     private func firstParagraphRuns(_ document: ParsedDocument) -> [InlineRun] {
         for block in document.blocks {
             if case .paragraph(let runs) = block { return runs }
@@ -57,6 +61,56 @@ import Testing
         let doc = parse(#"이건 \[x+y\] 인라인 위치다."#)
         #expect(doc.allMathSegments.isEmpty)
         #expect(doc.diagnostics.contains { $0.kind == .nonParagraphDisplayDelimiter })
+    }
+
+    // MARK: - inline $$ ... $$ (opt-in .inlineDouble)
+
+    @Test func inlineDoubleDollarStaysPlainWithoutOptIn() {
+        let doc = parse("총합($$f(1)$$) 및 상수항($$f(0)$$)", dollarMath: [.single])
+        #expect(doc.allMathSegments.isEmpty)
+        #expect(plainText(of: firstParagraphRuns(doc)) == "총합($$f(1)$$) 및 상수항($$f(0)$$)")
+    }
+
+    @Test func inlineDoubleDollarParsesMidParagraphWhenOptedIn() {
+        let doc = parse("총합($$f(1)$$) 및 상수항($$f(0)$$)을 구한다.", dollarMath: [.single, .inlineDouble])
+        let segments = doc.allMathSegments
+        #expect(segments.map(\.kind) == [.inlineDoubleDollar, .inlineDoubleDollar])
+        #expect(segments.map(\.latex) == ["f(1)", "f(0)"])
+        #expect(segments.allSatisfy { !$0.kind.isDisplay })
+        #expect(plainText(of: firstParagraphRuns(doc)) == "총합($$f(1)$$) 및 상수항($$f(0)$$)을 구한다.")
+    }
+
+    @Test func inlineDoubleDollarWorksWithoutSingleDollar() {
+        let doc = parse("가격은 $5, 식은 $$x^2$$", dollarMath: [.inlineDouble])
+        #expect(doc.allMathSegments.map(\.latex) == ["x^2"])
+    }
+
+    @Test func inlineDoubleDollarFollowsSpacingDigitAndLineRules() {
+        let options: DollarMathOptions = [.single, .inlineDouble]
+        #expect(parse("$$5 and $$6", dollarMath: options).allMathSegments.isEmpty)
+        #expect(parse("값 $$ x $$ 값", dollarMath: options).allMathSegments.isEmpty)
+        #expect(parse("값 $$x$$5", dollarMath: options).allMathSegments.isEmpty)
+        #expect(parse("열림 $$a\nb$$ 닫힘", dollarMath: options).allMathSegments.isEmpty)
+        #expect(parse(#"이스케이프 \$$x$$"#, dollarMath: options).allMathSegments.isEmpty)
+    }
+
+    @Test func paragraphWideDoubleDollarStaysDisplayWithInlineDoubleEnabled() {
+        let doc = parse("본문\n\n$$ E = mc^2 $$\n\n다음", dollarMath: [.single, .inlineDouble])
+        #expect(doc.blocks.contains { block in
+            if case .blockMath(let seg) = block {
+                return seg.kind == .displayDollar && seg.latex == "E = mc^2"
+            }
+            return false
+        })
+        #expect(doc.allMathSegments.count == 1)
+    }
+
+    @Test func inlineDoubleDollarRespectsCodeBarrierAndSingleDollarCoexists() {
+        let options: DollarMathOptions = [.single, .inlineDouble]
+        #expect(parse("코드 `$$x$$` 안", dollarMath: options).allMathSegments.isEmpty)
+        let mixed = parse("단일 $a$ 와 이중 $$b$$", dollarMath: options)
+        #expect(mixed.allMathSegments.map(\.kind) == [.inlineDollar, .inlineDoubleDollar])
+        #expect(mixed.allMathSegments.map(\.latex) == ["a", "b"])
     }
 
     // MARK: - escape (연속 backslash 홀짝)

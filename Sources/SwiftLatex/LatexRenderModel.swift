@@ -11,13 +11,13 @@ package final class LatexRenderModel: ObservableObject {
     /// 수식 raster 설정은 포함하지 않으므로 테마/색/scale 변경 때 문서를 유지할 수 있다.
     package struct ParseIdentity: Sendable, Equatable {
         package let markdown: String
-        package let parsesDollarMath: Bool
+        package let dollarMath: LatexDollarMathOptions
         package let wasTruncated: Bool
 
         /// `other`가 이 identity의 **스트리밍 append**(같은 파싱 설정, markdown 확장)인가.
         /// 잘린 입력은 표시 상한에서 prefix 관계가 깨지므로 제외한다.
         package func isStreamingPrefix(of other: ParseIdentity) -> Bool {
-            parsesDollarMath == other.parsesDollarMath
+            dollarMath == other.dollarMath
                 && !wasTruncated && !other.wasTruncated
                 && other.markdown.hasPrefix(markdown)
         }
@@ -27,7 +27,7 @@ package final class LatexRenderModel: ObservableObject {
         /// 과대 원문을 보관하지 않는 canonical bounded input이다.
         package let boundedInput: InputLimits.BoundedInput
         package var markdown: String { boundedInput.text }
-        package let parsesDollarMath: Bool
+        package let dollarMath: LatexDollarMathOptions
         package let pointSize: CGFloat
         package let colorRGBA: UInt32
         package let displayScale: CGFloat
@@ -41,7 +41,7 @@ package final class LatexRenderModel: ObservableObject {
         package var parseIdentity: ParseIdentity {
             ParseIdentity(
                 markdown: markdown,
-                parsesDollarMath: parsesDollarMath,
+                dollarMath: dollarMath,
                 wasTruncated: wasTruncated
             )
         }
@@ -68,7 +68,27 @@ package final class LatexRenderModel: ObservableObject {
         ) {
             self.init(
                 boundedInput: InputLimits.bound(markdown),
-                parsesDollarMath: parsesDollarMath,
+                dollarMath: LatexDollarMathOptions(parsesDollarMath: parsesDollarMath),
+                pointSize: pointSize,
+                colorRGBA: colorRGBA,
+                displayScale: displayScale,
+                mathFont: mathFont,
+                rastersDisplayMath: rastersDisplayMath
+            )
+        }
+
+        package init(
+            boundedInput: InputLimits.BoundedInput,
+            parsesDollarMath: Bool,
+            pointSize: CGFloat,
+            colorRGBA: UInt32,
+            displayScale: CGFloat,
+            mathFont: LatexMathFont = .latinModern,
+            rastersDisplayMath: Bool = true
+        ) {
+            self.init(
+                boundedInput: boundedInput,
+                dollarMath: LatexDollarMathOptions(parsesDollarMath: parsesDollarMath),
                 pointSize: pointSize,
                 colorRGBA: colorRGBA,
                 displayScale: displayScale,
@@ -81,7 +101,7 @@ package final class LatexRenderModel: ObservableObject {
         /// model/worker/cache 모두 이 canonical form만 보관한다.
         package init(
             boundedInput: InputLimits.BoundedInput,
-            parsesDollarMath: Bool,
+            dollarMath: LatexDollarMathOptions,
             pointSize: CGFloat,
             colorRGBA: UInt32,
             displayScale: CGFloat,
@@ -89,7 +109,7 @@ package final class LatexRenderModel: ObservableObject {
             rastersDisplayMath: Bool = true
         ) {
             self.boundedInput = boundedInput
-            self.parsesDollarMath = parsesDollarMath
+            self.dollarMath = dollarMath
             self.pointSize = pointSize
             self.colorRGBA = colorRGBA
             self.displayScale = displayScale
@@ -299,7 +319,7 @@ package final class LatexRenderModel: ObservableObject {
 
         let cacheKey = ParseCache.shared.key(
             markdown: job.request.markdown,
-            parsesDollarMath: job.request.parsesDollarMath,
+            dollarMath: job.request.dollarMath,
             wasTruncated: job.request.wasTruncated
         )
         let parsed: ParsedDocument
@@ -308,7 +328,7 @@ package final class LatexRenderModel: ObservableObject {
         } else {
             parsed = SwiftLatexParser.parse(
                 job.request.boundedInput,
-                parsesDollarMath: job.request.parsesDollarMath
+                dollarMath: job.request.dollarMath.core
             )
             // 스트리밍 append는 저장하지 않는다. 스트림의 첫 제출(교체)만 캐시에 남긴다.
             if !job.isStreamingAppend {

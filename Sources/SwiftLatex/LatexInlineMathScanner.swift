@@ -27,12 +27,25 @@ public enum LatexInlineMathScanner {
         parsesDollarMath: Bool = false,
         excluding excludedRanges: [NSRange] = []
     ) -> [LatexInlineMathSpan] {
+        scan(
+            source,
+            dollarMath: LatexDollarMathOptions(parsesDollarMath: parsesDollarMath),
+            excluding: excludedRanges
+        )
+    }
+
+    /// - Parameter dollarMath: `.inlineDouble`이 있으면 문장 안 `$$...$$`도 인라인 수식으로 찾는다.
+    public static func scan(
+        _ source: String,
+        dollarMath: LatexDollarMathOptions,
+        excluding excludedRanges: [NSRange] = []
+    ) -> [LatexInlineMathSpan] {
         guard source.utf8.count <= InputLimits.maxInputUTF8Bytes else { return [] }
 
         let bytes = Array(source.utf8)
         let spans = SwiftLatexParser.scanInlineMathSpans(
             markdown: source,
-            parsesDollarMath: parsesDollarMath,
+            dollarMath: dollarMath.core,
             excludingUTF8Ranges: excludedRanges.compactMap { utf8Range($0, in: source) }
         )
 
