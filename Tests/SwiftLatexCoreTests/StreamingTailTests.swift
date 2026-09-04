@@ -63,6 +63,26 @@ import Testing
         #expect(hidden("$5 and $10", dollar: true) == "$5 and $10")
     }
 
+    @Test func doubleDollarOpenerIsHiddenOnlyWithInlineDoubleOption() {
+        func hiddenText(_ markdown: String, _ options: DollarMathOptions) -> String {
+            let document = SwiftLatexParser.parse(markdown: markdown, dollarMath: options)
+            var parsed: [InlineRun] = []
+            for block in document.blocks {
+                if case .paragraph(let runs) = block { parsed = runs; break }
+            }
+            return plainText(StreamingTail.hidingUnclosedOpeners(parsed, dollarMath: options))
+        }
+        #expect(hiddenText("총합($$f(1", [.single, .inlineDouble]) == "총합(f(1")
+        #expect(hiddenText("총합($$f(1", [.single]) == "총합($$f(1")
+        #expect(hiddenText("가격 $$5", [.single, .inlineDouble]) == "가격 $$5")
+        #expect(hiddenText("공백 $$ x", [.single, .inlineDouble]) == "공백 $$ x")
+        #expect(hiddenText("닫힘 $$x$$ 뒤", [.single, .inlineDouble]) == "닫힘 $$x$$ 뒤")
+        #expect(
+            StreamingTail.strippingUnclosedOpeners(from: "앞 $$a$$ 뒤 $$b", dollarMath: [.inlineDouble])
+                == "앞 $$a$$ 뒤 b"
+        )
+    }
+
     @Test func escapesAndLoneBackslash() {
         #expect(hidden(#"이스케이프 \$5 유지"#, dollar: true).contains("$5"))
         #expect(hidden(#"끝에 백슬래시 \"#) == "끝에 백슬래시 ")

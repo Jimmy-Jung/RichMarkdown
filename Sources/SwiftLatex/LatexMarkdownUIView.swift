@@ -30,8 +30,15 @@ public final class LatexMarkdownUIView: UIView {
         }
     }
 
+    /// opt-in dollar 수식 범위. 바뀌면 다시 파싱한다.
+    public var dollarMath: LatexDollarMathOptions {
+        didSet { if dollarMath != oldValue { submit() } }
+    }
+
+    /// `dollarMath`의 `.single` 비트. 기존 Bool API 호환.
     public var parsesDollarMath: Bool {
-        didSet { if parsesDollarMath != oldValue { submit() } }
+        get { dollarMath.contains(.single) }
+        set { dollarMath = newValue ? dollarMath.union(.single) : dollarMath.subtracting(.single) }
     }
 
     public var theme: LatexTheme {
@@ -115,7 +122,16 @@ public final class LatexMarkdownUIView: UIView {
 
     public init(markdown: String = "", parsesDollarMath: Bool = false, theme: LatexTheme = .default) {
         self.boundedMarkdown = InputLimits.bound(markdown)
-        self.parsesDollarMath = parsesDollarMath
+        self.dollarMath = LatexDollarMathOptions(parsesDollarMath: parsesDollarMath)
+        self.theme = theme
+        super.init(frame: .zero)
+        setUp()
+    }
+
+    /// dollar 수식 범위를 조합해 켠다. `[.single, .inlineDouble]`이면 문장 안 `$$...$$`도 inline 수식이다.
+    public init(markdown: String = "", dollarMath: LatexDollarMathOptions, theme: LatexTheme = .default) {
+        self.boundedMarkdown = InputLimits.bound(markdown)
+        self.dollarMath = dollarMath
         self.theme = theme
         super.init(frame: .zero)
         setUp()
@@ -183,7 +199,7 @@ public final class LatexMarkdownUIView: UIView {
     private var currentRequest: LatexRenderModel.Request {
         LatexRenderModel.Request(
             boundedInput: boundedMarkdown,
-            parsesDollarMath: parsesDollarMath,
+            dollarMath: dollarMath,
             pointSize: bodyUIFont.pointSize,
             colorRGBA: UIColor(theme.textColor).resolvedColor(with: traitCollection).rgbaValue,
             displayScale: displayScale,
@@ -719,7 +735,7 @@ public final class LatexMarkdownUIView: UIView {
         tail: LatexStreamingOptions?
     ) {
         let displayRuns = tail?.hidesUnclosedInlineMarks == true
-            ? StreamingTail.hidingUnclosedOpeners(runs, parsesDollarMath: parsesDollarMath)
+            ? StreamingTail.hidingUnclosedOpeners(runs, dollarMath: dollarMath.core)
             : runs
         let plan = StreamingTail.fadePlan(displayRuns, graphemeCount: tail?.tailFadeGraphemeCount ?? 0)
 

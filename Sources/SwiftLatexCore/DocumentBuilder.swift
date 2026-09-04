@@ -6,14 +6,25 @@ import Markdown
 /// → byte-length-preserving mask → 2차 파싱 → ParsedDocument.
 package enum SwiftLatexParser {
     package static func parse(markdown: String, parsesDollarMath: Bool) -> ParsedDocument {
-        parse(InputLimits.bound(markdown), parsesDollarMath: parsesDollarMath)
+        parse(markdown: markdown, dollarMath: DollarMathOptions(parsesDollarMath: parsesDollarMath))
+    }
+
+    package static func parse(markdown: String, dollarMath: DollarMathOptions) -> ParsedDocument {
+        parse(InputLimits.bound(markdown), dollarMath: dollarMath)
+    }
+
+    package static func parse(
+        _ boundedInput: InputLimits.BoundedInput,
+        parsesDollarMath: Bool
+    ) -> ParsedDocument {
+        parse(boundedInput, dollarMath: DollarMathOptions(parsesDollarMath: parsesDollarMath))
     }
 
     /// UI ingress에서 한 번 제한한 입력을 재검사 없이 파싱한다.
     /// `wasTruncated`는 원문 제한 상태이므로 결과에 그대로 보존한다.
     package static func parse(
         _ boundedInput: InputLimits.BoundedInput,
-        parsesDollarMath: Bool
+        dollarMath: DollarMathOptions
     ) -> ParsedDocument {
         let signpostState = SwiftLatexSignposts.parse.beginInterval("parse")
         defer { SwiftLatexSignposts.parse.endInterval("parse", signpostState) }
@@ -26,7 +37,7 @@ package enum SwiftLatexParser {
             text: text,
             bytes: bytes,
             lineMap: lineMap,
-            parsesDollarMath: parsesDollarMath
+            dollarMath: dollarMath
         )
 
         // 보호 버퍼로 2차 파싱. byte 길이가 같아 range를 원문에 그대로 쓴다.
@@ -50,12 +61,24 @@ package enum SwiftLatexParser {
         parsesDollarMath: Bool,
         excludingUTF8Ranges: [Range<Int>] = []
     ) -> [ProtectedMathSpan] {
+        scanInlineMathSpans(
+            markdown: markdown,
+            dollarMath: DollarMathOptions(parsesDollarMath: parsesDollarMath),
+            excludingUTF8Ranges: excludingUTF8Ranges
+        )
+    }
+
+    package static func scanInlineMathSpans(
+        markdown: String,
+        dollarMath: DollarMathOptions,
+        excludingUTF8Ranges: [Range<Int>] = []
+    ) -> [ProtectedMathSpan] {
         let bytes = Array(markdown.utf8)
         let scan = scanMath(
             text: markdown,
             bytes: bytes,
             lineMap: UTF8LineMap(utf8: bytes),
-            parsesDollarMath: parsesDollarMath,
+            dollarMath: dollarMath,
             additionalForbiddenRanges: excludingUTF8Ranges
         )
         return scan.spans.filter { !$0.kind.isDisplay }
@@ -65,7 +88,7 @@ package enum SwiftLatexParser {
         text: String,
         bytes: [UInt8],
         lineMap: UTF8LineMap,
-        parsesDollarMath: Bool,
+        dollarMath: DollarMathOptions,
         additionalForbiddenRanges: [Range<Int>] = []
     ) -> MathScanner.Result {
         // 1차 파싱은 code/HTML/link/image 금지 문맥과 paragraph 범위만 수집한다.
@@ -79,7 +102,7 @@ package enum SwiftLatexParser {
             forbiddenRanges: collector.forbiddenRanges,
             softRanges: collector.softRanges,
             paragraphRanges: collector.paragraphRanges,
-            parsesDollarMath: parsesDollarMath
+            dollarMath: dollarMath
         ).scan()
     }
 }

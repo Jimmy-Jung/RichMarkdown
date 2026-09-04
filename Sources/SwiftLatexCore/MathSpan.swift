@@ -6,13 +6,27 @@ package enum MathKind: Sendable, Hashable {
     case displayBracket   // \[ ... \]  (공백 제외 paragraph 전체일 때만)
     case inlineDollar     // $ ... $    (opt-in)
     case displayDollar    // $$ ... $$  (opt-in, paragraph 전체)
+    case inlineDoubleDollar // $$ ... $$ (opt-in .inlineDouble, 문장 안)
 
     package var isDisplay: Bool {
         switch self {
         case .displayBracket, .displayDollar: return true
-        case .inlineParen, .inlineDollar: return false
+        case .inlineParen, .inlineDollar, .inlineDoubleDollar: return false
         }
     }
+}
+
+/// opt-in dollar 수식 범위. DEVELOPMENT.md §3 delimiter 규칙.
+package struct DollarMathOptions: OptionSet, Sendable, Hashable {
+    package let rawValue: UInt8
+    package init(rawValue: UInt8) { self.rawValue = rawValue }
+
+    /// `$...$` inline과 paragraph 전체 `$$...$$` block. 기존 `parsesDollarMath: true`와 같다.
+    package static let single = DollarMathOptions(rawValue: 1 << 0)
+    /// 문장 안 `$$...$$`를 inline 수식으로 해석한다.
+    package static let inlineDouble = DollarMathOptions(rawValue: 1 << 1)
+
+    package init(parsesDollarMath: Bool) { self = parsesDollarMath ? [.single] : [] }
 }
 
 /// 보호 버퍼로 마스킹되는 수식 span. 원문 UTF-8 range와 delimiter 포함 source를 보존한다.
@@ -33,7 +47,7 @@ package struct ProtectedMathSpan: Sendable, Hashable {
         let dropCount: (leading: Int, trailing: Int)
         switch kind {
         case .inlineParen, .displayBracket: dropCount = (2, 2)
-        case .displayDollar: dropCount = (2, 2)
+        case .displayDollar, .inlineDoubleDollar: dropCount = (2, 2)
         case .inlineDollar: dropCount = (1, 1)
         }
         var s = source

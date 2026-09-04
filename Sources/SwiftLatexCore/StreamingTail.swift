@@ -40,8 +40,15 @@ package enum StreamingTail {
         _ runs: [InlineRun],
         parsesDollarMath: Bool
     ) -> [InlineRun] {
+        hidingUnclosedOpeners(runs, dollarMath: DollarMathOptions(parsesDollarMath: parsesDollarMath))
+    }
+
+    package static func hidingUnclosedOpeners(
+        _ runs: [InlineRun],
+        dollarMath: DollarMathOptions
+    ) -> [InlineRun] {
         guard let last = runs.last, case .text(let string) = last.content else { return runs }
-        let stripped = strippingUnclosedOpeners(from: string, parsesDollarMath: parsesDollarMath)
+        let stripped = strippingUnclosedOpeners(from: string, dollarMath: dollarMath)
         guard stripped != string else { return runs }
 
         var result = runs
@@ -60,6 +67,10 @@ package enum StreamingTail {
     /// Strong·code·math로 바꿨으므로, 남은 opener는 대부분 미매칭이다. 예외(`\(\)`, `$5 and $10`)만
     /// "뒤에 closer 없음" 검사로 걸러낸다.
     static func strippingUnclosedOpeners(from string: String, parsesDollarMath: Bool) -> String {
+        strippingUnclosedOpeners(from: string, dollarMath: DollarMathOptions(parsesDollarMath: parsesDollarMath))
+    }
+
+    static func strippingUnclosedOpeners(from string: String, dollarMath: DollarMathOptions) -> String {
         let chars = Array(string)
         var kept: [Character] = []
         kept.reserveCapacity(chars.count)
@@ -67,6 +78,7 @@ package enum StreamingTail {
         // closer 존재 여부는 마지막 위치 사전계산으로 O(1)에 판정한다. tail 문단은 tick마다
         // 전체를 다시 스캔하므로 `$`·백틱이 많은 문단에서 O(n²)로 미끄러지지 않게 한다.
         let lastDollar = chars.lastIndex(of: "$")
+        let lastDoubleDollar = lastStart(ofSequence: ["$", "$"], in: chars)
         let lastCloseParen = lastStart(ofSequence: ["\\", ")"], in: chars)
         let lastBacktickRunStart = lastBacktickRunStarts(in: chars)
 
@@ -136,13 +148,30 @@ package enum StreamingTail {
                 continue
             }
 
-            if current == "$", parsesDollarMath {
-                let next = character(at: index + 1)
-                let opensMath = next.map { !$0.isWhitespace && !$0.isNumber && $0 != "$" } ?? true
-                let hasLaterDollar = lastDollar.map { $0 > index } ?? false
-                if opensMath, !hasLaterDollar {
-                    index += 1
+            if current == "$", !dollarMath.isEmpty {
+                // `$$` opener는 `.inlineDouble`일 때만 미닫힌 마크다. 그 외 `$$`는 그대로 둔다.
+                if character(at: index + 1) == "$" {
+                    if dollarMath.contains(.inlineDouble) {
+                        let after = character(at: index + 2)
+                        let opensMath = after.map { !$0.isWhitespace && !$0.isNumber && $0 != "$" } ?? true
+                        let hasLaterDoubleDollar = lastDoubleDollar.map { $0 >= index + 2 } ?? false
+                        if opensMath, !hasLaterDoubleDollar {
+                            index += 2
+                            continue
+                        }
+                    }
+                    kept.append(contentsOf: chars[index..<(index + 2)])
+                    index += 2
                     continue
+                }
+                if dollarMath.contains(.single) {
+                    let next = character(at: index + 1)
+                    let opensMath = next.map { !$0.isWhitespace && !$0.isNumber } ?? true
+                    let hasLaterDollar = lastDollar.map { $0 > index } ?? false
+                    if opensMath, !hasLaterDollar {
+                        index += 1
+                        continue
+                    }
                 }
                 kept.append(current)
                 index += 1

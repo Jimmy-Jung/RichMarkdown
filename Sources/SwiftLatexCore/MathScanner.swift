@@ -23,7 +23,21 @@ package struct MathScanner: Sendable {
     /// 정렬·병합된 soft range (link/image 전체 범위).
     private let softRanges: [Range<Int>]
     private let paragraphRanges: [Range<Int>]
-    private let parsesDollarMath: Bool
+    private let dollarMath: DollarMathOptions
+
+    package init(
+        bytes: [UInt8],
+        forbiddenRanges: [Range<Int>],
+        softRanges: [Range<Int>] = [],
+        paragraphRanges: [Range<Int>],
+        dollarMath: DollarMathOptions
+    ) {
+        self.bytes = bytes
+        self.hardRanges = Self.merged(forbiddenRanges)
+        self.softRanges = Self.merged(softRanges)
+        self.paragraphRanges = paragraphRanges
+        self.dollarMath = dollarMath
+    }
 
     package init(
         bytes: [UInt8],
@@ -32,11 +46,13 @@ package struct MathScanner: Sendable {
         paragraphRanges: [Range<Int>],
         parsesDollarMath: Bool
     ) {
-        self.bytes = bytes
-        self.hardRanges = Self.merged(forbiddenRanges)
-        self.softRanges = Self.merged(softRanges)
-        self.paragraphRanges = paragraphRanges
-        self.parsesDollarMath = parsesDollarMath
+        self.init(
+            bytes: bytes,
+            forbiddenRanges: forbiddenRanges,
+            softRanges: softRanges,
+            paragraphRanges: paragraphRanges,
+            dollarMath: DollarMathOptions(parsesDollarMath: parsesDollarMath)
+        )
     }
 
     package func scan() -> Result {
@@ -98,7 +114,7 @@ package struct MathScanner: Sendable {
         }
 
         // $$ ... $$ (opt-in). $$는 $보다 먼저 판정한다.
-        if parsesDollarMath,
+        if !dollarMath.isEmpty,
            bytes[s] == UInt8(ascii: "$"), bytes[s + 1] == UInt8(ascii: "$"), !isBackslashEscaped(at: s) {
             guard e - s >= 5,
                   bytes[e - 2] == UInt8(ascii: "$"), bytes[e - 1] == UInt8(ascii: "$"),
@@ -154,13 +170,20 @@ package struct MathScanner: Sendable {
                 i += 2
                 continue
             }
-            if parsesDollarMath, b == UInt8(ascii: "$"), !isBackslashEscaped(at: i) {
-                // $$를 $보다 먼저 판정: inline 위치의 $$ 토큰은 수식이 아니다.
+            if !dollarMath.isEmpty, b == UInt8(ascii: "$"), !isBackslashEscaped(at: i) {
+                // $$를 $보다 먼저 판정한다. inline 위치의 $$는 `.inlineDouble`일 때만 수식이다.
                 if i + 1 < segment.upperBound, bytes[i + 1] == UInt8(ascii: "$") {
+                    if dollarMath.contains(.inlineDouble),
+                       let span = inlineDoubleDollarSpan(openingAt: i, segment: segment) {
+                        spans.append(span)
+                        i = span.originalUTF8Range.upperBound
+                        continue
+                    }
                     i += 2
                     continue
                 }
-                if let span = inlineDollarSpan(openingAt: i, segment: segment) {
+                if dollarMath.contains(.single),
+                   let span = inlineDollarSpan(openingAt: i, segment: segment) {
                     spans.append(span)
                     i = span.originalUTF8Range.upperBound
                     continue
@@ -234,6 +257,31 @@ package struct MathScanner: Sendable {
                     continue
                 }
                 return makeSpan(range: open..<(close + 1), kind: .inlineDollar)
+            }
+            candidate = close + 1
+        }
+        return nil
+    }
+
+    /// `$$ ... $$` — 문장 안 inline 수식(opt-in `.inlineDouble`). `$...$`와 같은 공백·숫자·줄바꿈 규칙.
+    /// paragraph 전체를 감싼 `$$`는 block 단계에서 먼저 잡히므로 여기 오지 않는다.
+    private func inlineDoubleDollarSpan(openingAt open: Int, segment: Range<Int>) -> ProtectedMathSpan? {
+        guard !insideSoftRange(open) else { return nil }
+        let contentStart = open + 2
+        let lineEnd = endOfLine(from: contentStart, limit: segment.upperBound)
+        guard contentStart < lineEnd, !isSpaceOrTab(bytes[contentStart]) else { return nil }
+
+        var candidate = contentStart
+        while let close = firstDollarDollar(in: candidate..<lineEnd) {
+            let end = close + 2
+            let validBefore = close > contentStart && !isSpaceOrTab(bytes[close - 1])
+            let validAfter = end >= lineEnd || !isASCIIDigit(bytes[end])
+            if validBefore && validAfter {
+                guard softRangesAllow(span: open..<end, content: contentStart..<close) else {
+                    candidate = end
+                    continue
+                }
+                return makeSpan(range: open..<end, kind: .inlineDoubleDollar)
             }
             candidate = close + 1
         }

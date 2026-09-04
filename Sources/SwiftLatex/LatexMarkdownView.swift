@@ -11,7 +11,7 @@ public struct LatexMarkdownView: View {
     /// public ingress에서 한 번 제한한 canonical 입력. 원문 전체를 View 수명 동안
     /// 보관하지 않아 large markdown이 SwiftUI state에 남지 않는다.
     private let boundedMarkdown: InputLimits.BoundedInput
-    private let parsesDollarMath: Bool
+    private let dollarMath: LatexDollarMathOptions
 
     @StateObject private var model = LatexRenderModel()
     @Environment(\.latexTheme) private var theme
@@ -28,8 +28,13 @@ public struct LatexMarkdownView: View {
     @ScaledMetric(relativeTo: .caption) private var captionScale: CGFloat = 1
 
     public init(markdown: String, parsesDollarMath: Bool = false) {
+        self.init(markdown: markdown, dollarMath: LatexDollarMathOptions(parsesDollarMath: parsesDollarMath))
+    }
+
+    /// dollar 수식 범위를 조합해 켠다. `[.single, .inlineDouble]`이면 문장 안 `$$...$$`도 inline 수식이다.
+    public init(markdown: String, dollarMath: LatexDollarMathOptions) {
         self.boundedMarkdown = InputLimits.bound(markdown)
-        self.parsesDollarMath = parsesDollarMath
+        self.dollarMath = dollarMath
     }
 
     public var body: some View {
@@ -59,7 +64,7 @@ public struct LatexMarkdownView: View {
                 ? model.mathImages : [:]
             // 스트리밍 표시(꼬리 페이드·미닫힌 마크 억제)는 마지막 블록에만 전달한다.
             let tail = streaming.map {
-                LatexStreamingTailContext(options: $0, parsesDollarMath: parsesDollarMath)
+                LatexStreamingTailContext(options: $0, dollarMath: dollarMath)
             }
             let lastIndex = document.blocks.count - 1
             VStack(alignment: .leading, spacing: 12) {
@@ -98,7 +103,7 @@ public struct LatexMarkdownView: View {
     private var currentRequest: LatexRenderModel.Request {
         LatexRenderModel.Request(
             boundedInput: boundedMarkdown,
-            parsesDollarMath: parsesDollarMath,
+            dollarMath: dollarMath,
             pointSize: mathPointSize,
             colorRGBA: resolvedTextColorRGBA,
             displayScale: displayScale,
@@ -312,7 +317,7 @@ struct InlineRunsText: View {
     /// 칩 판정·접근성 라벨도 이 run을 써서 숨긴 마크가 읽히거나 칩 경로를 고르지 않게 한다.
     private var displayRuns: [InlineRun] {
         guard let tail, tail.options.hidesUnclosedInlineMarks else { return runs }
-        return StreamingTail.hidingUnclosedOpeners(runs, parsesDollarMath: tail.parsesDollarMath)
+        return StreamingTail.hidingUnclosedOpeners(runs, dollarMath: tail.dollarMath.core)
     }
 
     /// iOS 18+는 `TextRenderer`로 인라인 코드 칩(둥근 배경+테두리)을 그린다.
