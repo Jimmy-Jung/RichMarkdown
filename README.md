@@ -3,10 +3,10 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.1%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.4.1 beta** — 스트리밍 append가 이전 렌더를 유지하도록 렌더 계약을 고치고,
-> SSE 실시간 렌더링 데모(SwiftUI·UIKit)를 추가했다.
+> **0.5.0 beta** — 스트리밍 표시 옵션(꼬리 페이드·미닫힌 마크 억제)과 `LatexStreamingTextBuffer`를
+> 추가하고, 스트리밍 append parse가 캐시를 오염시키지 않게 했다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
@@ -26,7 +26,17 @@ generation 관리를 공유한다.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
 
-## 0.4.1 베타 핵심
+## 0.5.0 베타 핵심
+
+- **스트리밍 표시 옵션** — `.latexStreaming(_:)`(SwiftUI) / `LatexMarkdownUIView.streaming`(UIKit).
+  마지막 문단의 끝 12 grapheme이 옅어지고, 아직 닫히지 않은 `**`·백틱·`\(`(dollar 옵션이면
+  `$`) opener는 closer가 올 때까지 숨긴다. parse 요청·cache key는 바꾸지 않는다.
+- **`LatexStreamingTextBuffer`** — 100ms latest-wins 버퍼. trailing 게시로 마지막 조각도
+  화면에 오른다. 호출자가 직접 10Hz 합치기를 구현할 필요가 없다.
+- **스트리밍 append parse는 캐시에 넣지 않는다** — tick마다 새 키가 다른 셀의 항목을 밀어내던
+  오염을 없앴다. UIKit은 스트리밍 중 같은 종류의 텍스트 블록을 새로 만들지 않고 내용만 바꾼다.
+
+### 0.4.1
 
 - **스트리밍 append가 이전 렌더를 유지** — 누적 문자열을 다시 넘길 때마다 문서
   전체가 원문 텍스트로 되돌아갔다가 재렌더되던 플래시를 없앴다. 새 markdown이
@@ -77,7 +87,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.4 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.4.1")),
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.5.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
