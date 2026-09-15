@@ -74,8 +74,9 @@ struct CodeBlockExtensionDemoView: View {
                 LatexMarkdownView(markdown: Self.sample, parsesDollarMath: true)
                     .latexTheme(preset.theme)
                     .latexCodeBlocks(options)
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
+                    .padding(DemoLayout.horizontalMargin)
+                    .frame(maxWidth: .infinity)
             }
             .accessibilityIdentifier("codeblock.swiftui")
         case .uiKit:
@@ -223,19 +224,20 @@ final class CodeBlockExtensionUIKitController: UIViewController {
         view.addSubview(scrollView)
 
         let guide = scrollView.contentLayoutGuide
+        // 본문 열은 화면 폭이 아니라 읽기 폭에서 멈춘다 (DemoLayout). 가이드는 스크롤 뷰가 아니라
+        // 컨트롤러 뷰에 둔다 — 스크롤 뷰 자체 앵커는 콘텐츠 좌표로 해석돼 의도가 흐려진다.
+        let column = view.addReadableColumnGuide()
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             messageView.topAnchor.constraint(equalTo: guide.topAnchor, constant: 16),
-            messageView.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
-            messageView.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
             messageView.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -16),
-            messageView.widthAnchor.constraint(
-                equalTo: scrollView.frameLayoutGuide.widthAnchor,
-                constant: -32
-            ),
+            messageView.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            messageView.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+            // 세로 스크롤만 한다. 콘텐츠 폭 = 뷰포트 폭으로 고정해 가로 스크롤과 폭 모호성을 없앤다.
+            guide.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
     }
 }

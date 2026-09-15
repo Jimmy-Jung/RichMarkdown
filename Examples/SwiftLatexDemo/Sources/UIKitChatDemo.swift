@@ -329,10 +329,11 @@ final class AssistantMessageCell: UICollectionViewCell {
         root.alignment = .fill
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
+        let column = contentView.addReadableColumnGuide()
         NSLayoutConstraint.activate([
             root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            root.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: column.trailingAnchor),
             root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
         ])
     }
@@ -433,6 +434,7 @@ final class UserMessageCell: UICollectionViewCell {
 
         bubble.addSubview(label)
         contentView.addSubview(bubble)
+        let column = contentView.addReadableColumnGuide()
         NSLayoutConstraint.activate([
             label.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 10),
             label.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: 14),
@@ -441,9 +443,9 @@ final class UserMessageCell: UICollectionViewCell {
 
             bubble.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             bubble.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-            bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            bubble.trailingAnchor.constraint(equalTo: column.trailingAnchor),
             bubble.leadingAnchor.constraint(
-                greaterThanOrEqualTo: contentView.leadingAnchor, constant: 56
+                greaterThanOrEqualTo: column.leadingAnchor, constant: 40
             ),
         ])
     }

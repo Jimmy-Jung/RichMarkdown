@@ -90,8 +90,9 @@ struct EditorDemoView: View {
         ScrollView {
             LatexMarkdownView(markdown: markdown, parsesDollarMath: parsesDollarMath)
                 .latexTheme(theme)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
+                .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
+                .padding(DemoLayout.horizontalMargin)
+                .frame(maxWidth: .infinity)
         }
         .frame(maxHeight: .infinity)
         .scrollDismissesKeyboard(.interactively)
