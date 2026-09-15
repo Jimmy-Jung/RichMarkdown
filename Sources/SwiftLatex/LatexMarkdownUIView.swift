@@ -51,6 +51,15 @@ public final class LatexMarkdownUIView: UIView {
         }
     }
 
+    /// 코드 블록 확장(신택스 하이라이터·다이어그램 렌더러). 기본값은 확장 없음이다.
+    /// parse 요청은 바꾸지 않으므로 `submit()`은 부르지 않는다.
+    public var codeBlocks: LatexCodeBlockOptions = .none {
+        didSet {
+            guard codeBlocks != oldValue else { return }
+            scheduleRebuild()
+        }
+    }
+
     /// 스트리밍 표시 옵션. 꼬리 페이드·미닫힌 마크 억제·tail 텍스트 블록 in-place 갱신을 켠다.
     /// parse 요청은 바꾸지 않으므로 `submit()`은 부르지 않는다. 스트림이 끝나면 `nil`로 되돌린다.
     public var streaming: LatexStreamingOptions? {
@@ -104,6 +113,8 @@ public final class LatexMarkdownUIView: UIView {
         let codeFont: UIFont
         let textColorRGBA: UInt32
         let displayScale: CGFloat
+        /// 하이라이터·다이어그램 렌더러 교체는 코드 블록 뷰를 다시 만들어야 반영된다.
+        let codeBlocks: LatexCodeBlockOptions
     }
 
     private var renderedBlocks: [RenderedBlock] = []
@@ -390,7 +401,8 @@ public final class LatexMarkdownUIView: UIView {
             bodyFont: bodyUIFont,
             codeFont: codeUIFont,
             textColorRGBA: UIColor(theme.textColor).resolvedColor(with: traitCollection).rgbaValue,
-            displayScale: displayScale
+            displayScale: displayScale,
+            codeBlocks: codeBlocks
         )
     }
 
@@ -637,6 +649,28 @@ public final class LatexMarkdownUIView: UIView {
         header.layoutMargins = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
         header.backgroundColor = UIColor(theme.codeHeaderBackground)
 
+        let container = UIStackView(arrangedSubviews: [header, codeBlockBody(language: language, code: code)])
+        container.axis = .vertical
+        container.alignment = .fill
+        container.layer.cornerRadius = 8
+        container.clipsToBounds = true
+        return container
+    }
+
+    /// 코드 블록 본문. 담당 다이어그램 렌더러가 있으면 그 뷰로 대체하고, 없으면
+    /// 지금까지와 같은 가로 스크롤 monospace 텍스트다. 헤더(언어 라벨·복사)는 양쪽 공통이다.
+    private func codeBlockBody(language: String?, code: String) -> UIView {
+        if let diagram = codeBlocks.diagramRenderer(for: language) {
+            let view = diagram.makeUIView(source: code, theme: theme) { [weak self] in
+                guard let self else { return }
+                // 다이어그램 높이는 렌더가 끝나야 정해진다. 셀 self-sizing을 다시 돌린다.
+                self.invalidateIntrinsicContentSize()
+                self.scheduleContentSizeChange()
+            }
+            view.backgroundColor = UIColor(theme.codeBlockBackground)
+            return view
+        }
+
         let body = textView(NSAttributedString(string: code, attributes: [
             .font: codeUIFont,
             .foregroundColor: UIColor(theme.textColor),
@@ -645,13 +679,34 @@ public final class LatexMarkdownUIView: UIView {
 
         let scroll = horizontalScroll(content: body, contentSize: Self.fittingSize(body))
         scroll.backgroundColor = UIColor(theme.codeBlockBackground)
+        applyHighlight(to: body, code: code, language: language)
+        return scroll
+    }
 
-        let container = UIStackView(arrangedSubviews: [header, scroll])
-        container.axis = .vertical
-        container.alignment = .fill
-        container.layer.cornerRadius = 8
-        container.clipsToBounds = true
-        return container
+    /// 색 범위가 도착하면 같은 글자·같은 폰트 위에 색만 덮는다.
+    ///
+    /// 레이아웃 크기는 이 시점에 이미 확정돼 있고 색만 바뀌므로 `horizontalScroll`의 고정
+    /// 크기 제약을 다시 계산할 필요가 없다 — 코드 블록이 늘었다 줄었다 하지 않는다.
+    private func applyHighlight(to view: LatexTextView, code: String, language: String?) {
+        guard let highlighter = codeBlocks.highlighter, let language, !code.isEmpty else { return }
+        let colors = theme.syntax
+        let font = codeUIFont
+        let textColor = UIColor(theme.textColor)
+        view.highlightTask = Task { @MainActor [weak view] in
+            let spans = await highlighter.spans(for: code, language: language)
+            // 미지원 언어·실패는 빈 배열이다. 그대로 plain을 유지한다.
+            // 뷰가 재사용으로 다른 코드를 담고 있으면 늦게 온 색을 적용하지 않는다.
+            guard !Task.isCancelled, !spans.isEmpty,
+                  let view, view.attributedText.string == code
+            else { return }
+            view.attributedText = LatexHighlightSegments.attributed(
+                code: code,
+                spans: spans,
+                colors: colors,
+                font: font,
+                textColor: textColor
+            )
+        }
     }
 
     /// 블록 수식은 raster가 아니라 SwiftMath의 공개 벡터 뷰로 그린다.
@@ -1037,6 +1092,14 @@ final class LatexTextView: UITextView {
     }
 
     var inlineCodeDecoration: InlineCodeDecorationView?
+
+    /// 이 뷰의 코드 블록 색 범위를 기다리는 작업. 스트리밍은 tick마다 tail 블록 뷰를 새로
+    /// 만들므로, 버려진 뷰의 토큰화가 하이라이터 큐에 쌓이지 않게 여기서 취소한다.
+    var highlightTask: Task<Void, Never>? {
+        didSet { oldValue?.cancel() }
+    }
+
+    deinit { highlightTask?.cancel() }
 
     override var accessibilityValue: String? {
         get { spokenOverride == nil ? super.accessibilityValue : nil }

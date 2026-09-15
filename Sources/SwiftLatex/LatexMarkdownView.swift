@@ -528,6 +528,16 @@ struct CodeBlockView: View {
     let language: String?
     let code: String
     @Environment(\.latexTheme) private var theme
+    @Environment(\.latexCodeBlocks) private var codeBlocks
+
+    /// 도착한 색 범위와 그 범위를 만든 원문. 스트리밍으로 원문이 바뀌면 이전 범위는 버린다 —
+    /// 위치가 밀린 색을 한 프레임도 보여 주지 않는다.
+    @State private var highlight: HighlightState?
+
+    private struct HighlightState {
+        let code: String
+        let spans: [LatexHighlightSpan]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -543,16 +553,57 @@ struct CodeBlockView: View {
             .padding(.horizontal, 12)
             .background(theme.codeHeaderBackground)
 
+            blockBody(diagram: codeBlocks.diagramRenderer(for: language))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// 다이어그램 렌더러가 담당하는 언어면 본문을 그 뷰로 대체한다. 헤더(언어 라벨·복사)는
+    /// 그대로 두어 원문을 항상 가져갈 수 있다.
+    @ViewBuilder
+    private func blockBody(diagram: (any LatexDiagramRendering)?) -> some View {
+        if let diagram {
+            diagram.makeSwiftUIView(source: code, theme: theme)
+                .background(theme.codeBlockBackground)
+        } else {
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(verbatim: code)
+                Text(attributedCode)
                     .latexFont(theme.codeFont)
                     .foregroundStyle(theme.textColor)
                     .textSelection(.enabled)
                     .padding(12)
             }
             .background(theme.codeBlockBackground)
+            // 색은 늦게 와도 된다. 먼저 plain으로 그리고 범위가 도착하면 색만 바꾼다 —
+            // 글자·폰트가 그대로라 코드 블록 크기는 달라지지 않는다.
+            .task(id: highlightIdentity) { await loadHighlight() }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// 색 범위 요청을 결정하는 입력. 언어와 원문이 바뀔 때만 다시 토큰화한다.
+    private var highlightIdentity: String {
+        // U+0001은 Markdown info string에도 코드 원문에도 나타나지 않아 구분자로 안전하다.
+        "\(language ?? "")\u{1}\(code)"
+    }
+
+    private var attributedCode: AttributedString {
+        guard let highlight, highlight.code == code else { return AttributedString(code) }
+        return LatexHighlightSegments.attributedString(
+            code: code,
+            spans: highlight.spans,
+            colors: theme.syntax
+        )
+    }
+
+    private func loadHighlight() async {
+        guard let highlighter = codeBlocks.highlighter, let language, !code.isEmpty else {
+            highlight = nil
+            return
+        }
+        let spans = await highlighter.spans(for: code, language: language)
+        // 미지원 언어·실패는 빈 배열이다. 그대로 plain을 유지한다.
+        guard !Task.isCancelled, !spans.isEmpty else { return }
+        highlight = HighlightState(code: code, spans: spans)
     }
 }
 
