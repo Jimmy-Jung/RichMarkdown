@@ -23,8 +23,8 @@ echo "작업 디렉터리: $work"
 
 echo "build-for-testing…"
 xcodebuild build-for-testing \
-    -project Examples/SwiftLatexDemo/SwiftLatexDemo.xcodeproj \
-    -scheme SwiftLatexDemo \
+    -project Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj \
+    -scheme RichMarkdownDemo \
     -destination "platform=iOS Simulator,id=$udid" \
     > "$work/build.log" 2>&1
 
@@ -36,10 +36,10 @@ capture() {
     mkdir -p "$frames"
 
     xcodebuild test-without-building \
-        -project Examples/SwiftLatexDemo/SwiftLatexDemo.xcodeproj \
-        -scheme SwiftLatexDemo \
+        -project Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj \
+        -scheme RichMarkdownDemo \
         -destination "platform=iOS Simulator,id=$udid" \
-        -only-testing:"SwiftLatexDemoUITests/SwiftLatexDemoUITests/$test_name" \
+        -only-testing:"RichMarkdownDemoUITests/RichMarkdownDemoUITests/$test_name" \
         > "$log" 2>&1 &
     local runner=$!
 
