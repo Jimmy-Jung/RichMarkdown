@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-15
+
 ### 변경
 
 - **패키지 이름을 `SwiftLatex`에서 `RichMarkdown`으로 바꿨다.** Markdown이 본체이고 LaTeX 수식은
@@ -18,8 +20,7 @@
     `LatexSyntaxColors`·`LatexSyntaxHighlighting`·`LatexDiagramRendering`은 `Latex` 대신 `RichMarkdown`을 붙인다.
   - SwiftUI modifier: `.latexTheme(_:)` → `.richMarkdownTheme(_:)`, `.latexStreaming(_:)` →
     `.richMarkdownStreaming(_:)`, `.latexCodeBlocks(_:)` → `.richMarkdownCodeBlocks(_:)`.
-  - 옛 이름은 `@available(*, deprecated, renamed:)` 별칭(`Sources/RichMarkdown/Deprecated.swift`)으로
-    0.8.x 동안 컴파일된다. 0.9.0에서 제거한다.
+  - 옛 이름의 호환 별칭은 두지 않는다. 0.7.0 이하 사용자는 위 대응표대로 한 번에 바꾼다.
   - 수식 도메인 타입은 이름이 LaTeX를 뜻하므로 그대로다: `LatexEquationUIView`·`LatexEquationAlignment`·
     `LatexDollarMathOptions`·`LatexInlineMathScanner`·`LatexInlineMathSpan`·`LatexMathFont`.
   - 문자열 식별자도 바뀌었다: signpost subsystem `dev.swiftlatex` → `dev.richmarkdown`, 블록 편집기
@@ -436,7 +437,8 @@ SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는�
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
-[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.7.0...HEAD
+[Unreleased]: https://github.com/Jimmy-Jung/RichMarkdown/compare/0.7.1...HEAD
+[0.7.1]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.7.1
 [0.7.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.7.0
 [0.6.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.6.0
 [0.5.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.5.0

@@ -3,11 +3,7 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.0%20beta-yellow.svg)](CHANGELOG.md)
-
-> **이름 변경** — 이 패키지의 이전 이름은 `SwiftLatex`다. 다음 릴리스(0.8.0)부터 product·모듈·타입
-> 접두사가 `RichMarkdown`이고, 옛 타입 이름은 deprecated 별칭으로 한 버전 동안 컴파일된다.
-> 대응표는 [CHANGELOG.md](CHANGELOG.md)의 Unreleased 항목.
+[![Version](https://img.shields.io/badge/version-0.7.1%20beta-yellow.svg)](CHANGELOG.md)
 
 > **0.7.0 beta** — 코드 블록 확장점 `RichMarkdownCodeBlockOptions`. `RichMarkdownHighlight`(Prism +
 > JavaScriptCore)와 `RichMarkdownMermaid`(공식 Mermaid + WKWebView)를 **opt-in product**로 추가했다.
@@ -118,7 +114,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.8.0")),
+    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.7.1")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["RichMarkdown"]),
