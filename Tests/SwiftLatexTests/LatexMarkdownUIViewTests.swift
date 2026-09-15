@@ -54,6 +54,13 @@ import UIKit
         textViews(in: view).compactMap(\.text).joined()
     }
 
+    private func copyButtons(in view: UIView) -> [LatexCopyButton] {
+        var found: [LatexCopyButton] = []
+        if let button = view as? LatexCopyButton { found.append(button) }
+        for subview in view.subviews { found.append(contentsOf: copyButtons(in: subview)) }
+        return found
+    }
+
     @Test func rendersBlocksAndHydratesInlineMathAsAttachment() async throws {
         let view = LatexMarkdownUIView(markdown: #"# 제목\#n\#n인라인 \(a+b\) 수식"#)
         view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
@@ -624,6 +631,78 @@ import UIKit
         )
         let formerTail = try #require(view.blockStack.arrangedSubviews[1] as? UITextView)
         #expect(foregroundAlpha(in: formerTail, at: formerTail.attributedText.length - 1) == 1)
+    }
+
+    // MARK: - 스트리밍 in-place: 구조 블록 (2026-09-15 iPad Pro 실측 — 표 스트리밍 구간 hitch 집중)
+
+    /// 같은 언어의 코드 블록은 tick마다 UITextView·복사 버튼·스크롤 컨테이너를 다시 만들지 않는다.
+    @Test func streamingUpdatesTailCodeBlockInPlace() async throws {
+        let view = LatexMarkdownUIView(markdown: "앞 문단\n\n```swift\nlet a")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 2)
+        let codeBefore = view.blockStack.arrangedSubviews[1]
+        let bodyBefore = try #require(textViews(in: codeBefore).first)
+
+        view.markdown = "앞 문단\n\n```swift\nlet a = 1"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews[1] === codeBefore, "같은 언어의 코드 블록은 본문만 바꾼다")
+        #expect(textViews(in: codeBefore).first === bodyBefore, "본문 UITextView도 그대로다")
+        #expect(renderedText(in: codeBefore).contains("let a = 1"))
+        #expect(copyButtons(in: codeBefore).first?.payload == "let a = 1", "복사 원문도 함께 바뀐다")
+
+        view.markdown = "앞 문단\n\n```python\nlet a = 1"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews[1] !== codeBefore, "언어가 바뀌면 새로 만든다")
+    }
+
+    /// 열·행 수가 같은 표는 바뀐 셀만 다시 채운다. 행이 늘어나는 tick에만 표를 새로 만든다.
+    @Test func streamingUpdatesTailTableCellsInPlace() async throws {
+        let view = LatexMarkdownUIView(markdown: "| 항목 | 값 |\n| --- | --- |\n| 하나 | 1")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 1)
+        let tableBefore = view.blockStack.arrangedSubviews[0]
+        let cellsBefore = textViews(in: tableBefore)
+        #expect(cellsBefore.count == 4)
+
+        view.markdown = "| 항목 | 값 |\n| --- | --- |\n| 하나 | 12"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews[0] === tableBefore, "행 수가 같으면 표 뷰를 유지한다")
+        #expect(
+            zip(textViews(in: tableBefore), cellsBefore).allSatisfy { $0 === $1 },
+            "셀 UITextView 인스턴스도 유지한다"
+        )
+        #expect(renderedText(in: tableBefore).contains("12"))
+
+        view.markdown = "| 항목 | 값 |\n| --- | --- |\n| 하나 | 12 |\n| 둘 | 3"
+        try await waitForRender(view)
+        #expect(textViews(in: view.blockStack.arrangedSubviews[0]).count == 6, "행이 늘면 표를 새로 만든다")
+        #expect(renderedText(in: view).contains("둘"))
+    }
+
+    /// 항목 수가 같은 목록은 마지막 항목의 문단만 갱신한다.
+    @Test func streamingUpdatesTailListItemInPlace() async throws {
+        let view = LatexMarkdownUIView(markdown: "- 하나\n- 둘")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 1)
+        let listBefore = view.blockStack.arrangedSubviews[0]
+        let itemsBefore = textViews(in: listBefore)
+        #expect(itemsBefore.count == 2)
+
+        view.markdown = "- 하나\n- 둘째"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews[0] === listBefore, "항목 수가 같으면 목록 뷰를 유지한다")
+        #expect(zip(textViews(in: listBefore), itemsBefore).allSatisfy { $0 === $1 })
+        #expect(renderedText(in: listBefore).contains("둘째"))
+
+        view.markdown = "- 하나\n- 둘째\n- 셋"
+        try await waitForRender(view)
+        #expect(textViews(in: view.blockStack.arrangedSubviews[0]).count == 3, "항목이 늘면 목록을 새로 만든다")
     }
 
     @Test func streamingInstallsChipDecorationWhenInlineCodeCloses() async throws {
