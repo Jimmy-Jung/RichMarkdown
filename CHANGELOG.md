@@ -5,6 +5,28 @@
 
 ## [Unreleased]
 
+### 변경
+
+- **패키지 이름을 `SwiftLatex`에서 `RichMarkdown`으로 바꿨다.** Markdown이 본체이고 LaTeX 수식은
+  코드 하이라이트·Mermaid 다이어그램과 같은 확장 기능 하나이므로 이름을 실제 범위에 맞췄다.
+  - product: `SwiftLatex` → `RichMarkdown`, `SwiftLatexBlockEditor` → `RichMarkdownBlockEditor`,
+    `SwiftLatexHighlight` → `RichMarkdownHighlight`, `SwiftLatexMermaid` → `RichMarkdownMermaid`.
+    Package.swift 의존성과 `import` 문을 함께 바꾼다.
+  - 브랜드 접두사 타입: `LatexMarkdownView` → `RichMarkdownView`, `LatexMarkdownUIView` → `RichMarkdownUIView`.
+    `LatexTheme`·`LatexFont`·`LatexFontWeight`·`LatexTextStyle`·`LatexStreamingOptions`·
+    `LatexStreamingTextBuffer`·`LatexCodeBlockOptions`·`LatexHighlightSpan`·`LatexHighlightKind`·
+    `LatexSyntaxColors`·`LatexSyntaxHighlighting`·`LatexDiagramRendering`은 `Latex` 대신 `RichMarkdown`을 붙인다.
+  - SwiftUI modifier: `.latexTheme(_:)` → `.richMarkdownTheme(_:)`, `.latexStreaming(_:)` →
+    `.richMarkdownStreaming(_:)`, `.latexCodeBlocks(_:)` → `.richMarkdownCodeBlocks(_:)`.
+  - 옛 이름은 `@available(*, deprecated, renamed:)` 별칭(`Sources/RichMarkdown/Deprecated.swift`)으로
+    0.8.x 동안 컴파일된다. 0.9.0에서 제거한다.
+  - 수식 도메인 타입은 이름이 LaTeX를 뜻하므로 그대로다: `LatexEquationUIView`·`LatexEquationAlignment`·
+    `LatexDollarMathOptions`·`LatexInlineMathScanner`·`LatexInlineMathSpan`·`LatexMathFont`.
+  - 문자열 식별자도 바뀌었다: signpost subsystem `dev.swiftlatex` → `dev.richmarkdown`, 블록 편집기
+    pasteboard type `com.swiftlatex.block-document` → `com.richmarkdown.block-document`, 데모 번들 ID
+    접두사 `dev.swiftlatex` → `dev.richmarkdown`, Mermaid WebView 요소 id 접두사(`index.html` SHA-256 갱신).
+  - 이 항목보다 아래의 이력은 당시 이름 그대로 둔다.
+
 ## [0.7.0] - 2026-09-15
 
 ### 추가

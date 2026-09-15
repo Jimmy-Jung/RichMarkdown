@@ -1,20 +1,24 @@
-# SwiftLatex
+# RichMarkdown
 
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.7.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.7.0 beta** — 코드 블록 확장점 `LatexCodeBlockOptions`. `SwiftLatexHighlight`(Prism +
-> JavaScriptCore)와 `SwiftLatexMermaid`(공식 Mermaid + WKWebView)를 **opt-in product**로 추가했다.
-> 주입하지 않으면 코드 블록은 지금까지와 같고, `SwiftLatex` 코어는 여전히 WebView도
+> **이름 변경** — 이 패키지의 이전 이름은 `SwiftLatex`다. 다음 릴리스(0.8.0)부터 product·모듈·타입
+> 접두사가 `RichMarkdown`이고, 옛 타입 이름은 deprecated 별칭으로 한 버전 동안 컴파일된다.
+> 대응표는 [CHANGELOG.md](CHANGELOG.md)의 Unreleased 항목.
+
+> **0.7.0 beta** — 코드 블록 확장점 `RichMarkdownCodeBlockOptions`. `RichMarkdownHighlight`(Prism +
+> JavaScriptCore)와 `RichMarkdownMermaid`(공식 Mermaid + WKWebView)를 **opt-in product**로 추가했다.
+> 주입하지 않으면 코드 블록은 지금까지와 같고, `RichMarkdown` 코어는 여전히 WebView도
 > JavaScript 런타임도 링크하지 않는다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
 LLM 채팅 메시지를 네이티브로 렌더하는 Swift Package. Markdown, GFM 표, 인라인/블록
-LaTeX 수식, 코드 블록을 하나의 뷰로 표시한다. SwiftUI는 `LatexMarkdownView`,
-UIKit은 네이티브 `LatexMarkdownUIView`를 쓴다 — 두 뷰는 같은 파서·수식 raster·
+LaTeX 수식, 코드 블록을 하나의 뷰로 표시한다. SwiftUI는 `RichMarkdownView`,
+UIKit은 네이티브 `RichMarkdownUIView`를 쓴다 — 두 뷰는 같은 파서·수식 raster·
 generation 관리를 공유한다.
 
 ```
@@ -31,15 +35,15 @@ generation 관리를 공유한다.
 
 ## 0.7.0 베타 핵심
 
-- **코드 블록 확장** — `LatexCodeBlockOptions` 주입 하나로 코드 블록에 색을 입히거나
+- **코드 블록 확장** — `RichMarkdownCodeBlockOptions` 주입 하나로 코드 블록에 색을 입히거나
   다이어그램으로 바꾼다. 두 엔진 모두 **opt-in product**라 쓰지 않는 앱은 링크하지 않는다.
 
   | product | 엔진 | 코드 블록 동작 |
   |---|---|---|
-  | `SwiftLatexHighlight` | Prism 1.30.0 + JavaScriptCore | 문법 16종의 UTF-16 범위에 색 역할 부여 |
-  | `SwiftLatexMermaid` | Mermaid 11.17.2 + WKWebView | ` ```mermaid ` 블록을 공식 다이어그램으로 교체 |
+  | `RichMarkdownHighlight` | Prism 1.30.0 + JavaScriptCore | 문법 16종의 UTF-16 범위에 색 역할 부여 |
+  | `RichMarkdownMermaid` | Mermaid 11.17.2 + WKWebView | ` ```mermaid ` 블록을 공식 다이어그램으로 교체 |
 
-  색은 `LatexTheme.syntax`가 정하고, 실패·미지원 언어는 원문 코드 블록으로 되돌린다.
+  색은 `RichMarkdownTheme.syntax`가 정하고, 실패·미지원 언어는 원문 코드 블록으로 되돌린다.
   자세한 내용은 [코드 블록 확장](#코드-블록-확장-하이라이팅과-다이어그램)과
   [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md).
 - **iPad 실기기 계측과 스트리밍 개선** — UIKit 렌더러가 스트리밍 중 표·코드·목록·인용 블록을
@@ -49,16 +53,16 @@ generation 관리를 공유한다.
 ## 0.6.0 베타 핵심
 
 - **`LatexDollarMathOptions`** — `[.single]`은 기존 `parsesDollarMath: true`와 같고, `.inlineDouble`을
-  더하면 문장 안 `$$...$$`를 inline 수식으로 해석한다. `LatexMarkdownView(markdown:dollarMath:)`,
-  `LatexMarkdownUIView.dollarMath`, `LatexInlineMathScanner.scan(_:dollarMath:)`. 스트리밍 미닫힌
+  더하면 문장 안 `$$...$$`를 inline 수식으로 해석한다. `RichMarkdownView(markdown:dollarMath:)`,
+  `RichMarkdownUIView.dollarMath`, `LatexInlineMathScanner.scan(_:dollarMath:)`. 스트리밍 미닫힌
   마크 억제도 `$$` opener를 같은 규칙으로 숨긴다. paragraph 전체 `$$...$$`는 그대로 block 수식이다.
 
 ## 0.5.0 베타 핵심
 
-- **스트리밍 표시 옵션** — `.latexStreaming(_:)`(SwiftUI) / `LatexMarkdownUIView.streaming`(UIKit).
+- **스트리밍 표시 옵션** — `.richMarkdownStreaming(_:)`(SwiftUI) / `RichMarkdownUIView.streaming`(UIKit).
   마지막 문단의 끝 12 grapheme이 옅어지고, 아직 닫히지 않은 `**`·백틱·`\(`(dollar 옵션이면
   `$`) opener는 closer가 올 때까지 숨긴다. parse 요청·cache key는 바꾸지 않는다.
-- **`LatexStreamingTextBuffer`** — 100ms latest-wins 버퍼. trailing 게시로 마지막 조각도
+- **`RichMarkdownStreamingTextBuffer`** — 100ms latest-wins 버퍼. trailing 게시로 마지막 조각도
   화면에 오른다. 호출자가 직접 10Hz 합치기를 구현할 필요가 없다.
 - **스트리밍 append parse는 캐시에 넣지 않는다** — tick마다 새 키가 다른 셀의 항목을 밀어내던
   오염을 없앴다. UIKit은 스트리밍 중 같은 종류의 텍스트 블록을 새로 만들지 않고 내용만 바꾼다.
@@ -81,8 +85,8 @@ generation 관리를 공유한다.
 
 ## 스크린샷
 
-`Examples/SwiftLatexDemo`의 실제 화면. iPhone 16 Pro / iOS 18.6에서 촬영했다.
-정지컷은 `SwiftLatexDemoUITests/DocumentationScreenshotTests`로 (실행법은 해당 파일 주석),
+`Examples/RichMarkdownDemo`의 실제 화면. iPhone 16 Pro / iOS 18.6에서 촬영했다.
+정지컷은 `RichMarkdownDemoUITests/DocumentationScreenshotTests`로 (실행법은 해당 파일 주석),
 SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 
 | 인라인·블록 수식 | Markdown 요소 |
@@ -103,7 +107,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 | SSE 실시간 렌더링 (SwiftUI) | SSE 실시간 렌더링 (UIKit) |
 |---|---|
 | ![SSE 프레임이 도착하는 대로 렌더되는 SwiftUI 스트리밍 데모](Docs/screenshots/07-sse-swiftui.gif) | ![같은 스트림을 UIKit 렌더러로 배선한 스트리밍 데모](Docs/screenshots/08-sse-uikit.gif) |
-| 5Hz SSE 프레임이 도착하는 대로 누적 문자열을 다시 넘긴다. 스트리밍 append가 이전 렌더를 유지해 원문 플래시 없이 새 블록이 이어 붙는다 | 같은 스트림을 UIKit `LatexMarkdownUIView`로 배선. 스트리밍 append에서 블록 뷰를 증분 재사용한다 |
+| 5Hz SSE 프레임이 도착하는 대로 누적 문자열을 다시 넘긴다. 스트리밍 append가 이전 렌더를 유지해 원문 플래시 없이 새 블록이 이어 붙는다 | 같은 스트림을 UIKit `RichMarkdownUIView`로 배선. 스트리밍 append에서 블록 뷰를 증분 재사용한다 |
 
 ---
 
@@ -114,18 +118,18 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.7.0")),
+    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.8.0")),
 ],
 targets: [
-    .target(name: "MyApp", dependencies: ["SwiftLatex"]),
+    .target(name: "MyApp", dependencies: ["RichMarkdown"]),
 ]
 ```
 
 Notion 스타일 블록 편집기가 필요하면 별도 product를 추가한다
-([블록 편집기](#블록-편집기-swiftlatexblockeditor) 참고).
+([블록 편집기](#블록-편집기-richmarkdownblockeditor) 참고).
 
 ```swift
-.target(name: "MyApp", dependencies: ["SwiftLatex", "SwiftLatexBlockEditor"]),
+.target(name: "MyApp", dependencies: ["RichMarkdown", "RichMarkdownBlockEditor"]),
 ```
 
 코드 블록 확장도 opt-in product다. 필요한 것만 추가한다
@@ -133,9 +137,9 @@ Notion 스타일 블록 편집기가 필요하면 별도 product를 추가한다
 
 ```swift
 .target(name: "MyApp", dependencies: [
-    "SwiftLatex",
-    "SwiftLatexHighlight",  // Prism + JavaScriptCore, 리소스 약 100 KB
-    "SwiftLatexMermaid",    // 공식 Mermaid + WKWebView, 리소스 약 3.4 MB
+    "RichMarkdown",
+    "RichMarkdownHighlight",  // Prism + JavaScriptCore, 리소스 약 100 KB
+    "RichMarkdownMermaid",    // 공식 Mermaid + WKWebView, 리소스 약 3.4 MB
 ]),
 ```
 
@@ -151,13 +155,13 @@ Xcode에서는 File → Add Package Dependencies에 저장소 URL을 넣는다.
 ### SwiftUI
 
 ```swift
-import SwiftLatex
+import RichMarkdown
 
 struct MessageView: View {
     let markdown: String
 
     var body: some View {
-        LatexMarkdownView(markdown: markdown)
+        RichMarkdownView(markdown: markdown)
     }
 }
 ```
@@ -166,11 +170,11 @@ struct MessageView: View {
 
 | API | 설명 |
 |---|---|
-| `LatexMarkdownView(markdown:parsesDollarMath:)` | 렌더 뷰. `parsesDollarMath` 기본값 `false` |
-| `.latexTheme(_:)` | 색·폰트를 바꾸는 View modifier |
-| `LatexTheme` | 요소별 색 8종 + 폰트 7종 + 수식 서체 |
-| `LatexFont` | 폰트 지정값 (서체·Dynamic Type 기준·크기·굵기) |
-| `LatexTextStyle` / `LatexFontWeight` | Dynamic Type 기준 스타일, 굵기 |
+| `RichMarkdownView(markdown:parsesDollarMath:)` | 렌더 뷰. `parsesDollarMath` 기본값 `false` |
+| `.richMarkdownTheme(_:)` | 색·폰트를 바꾸는 View modifier |
+| `RichMarkdownTheme` | 요소별 색 8종 + 폰트 7종 + 수식 서체 |
+| `RichMarkdownFont` | 폰트 지정값 (서체·Dynamic Type 기준·크기·굵기) |
+| `RichMarkdownTextStyle` / `RichMarkdownFontWeight` | Dynamic Type 기준 스타일, 굵기 |
 | `LatexMathFont` | 수식 서체 12종 |
 | `Color.accessibleLink` | 대비 기준을 넘는 기본 링크 색 |
 | `Color.inlineCodeAccent` | 대비 기준을 넘는 기본 인라인 코드 텍스트 색 |
@@ -182,7 +186,7 @@ struct MessageView: View {
 ScrollView {
     LazyVStack(alignment: .leading, spacing: 16) {
         ForEach(messages) { message in
-            LatexMarkdownView(markdown: message.text)
+            RichMarkdownView(markdown: message.text)
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.secondarySystemGroupedBackground))
@@ -196,7 +200,7 @@ ScrollView {
 뷰는 주어진 폭을 가득 채운다. iPad·가로 모드처럼 넓은 화면에서 문단·코드 블록·다이어그램이
 화면 전폭으로 늘어나지 않게 하는 것은 소비 앱의 컨테이너 몫이다. Notion(708px)·GitHub(1012px)처럼
 읽기 폭을 두려면 상한 프레임과 가운데 정렬 프레임을 겹친다. UIKit은 `readableContentGuide`나
-같은 규칙의 `UILayoutGuide`에 `LatexMarkdownUIView`를 붙인다 (데모 `DemoLayout` 참고).
+같은 규칙의 `UILayoutGuide`에 `RichMarkdownUIView`를 붙인다 (데모 `DemoLayout` 참고).
 
 ```swift
 LazyVStack(alignment: .leading, spacing: 16) { /* … */ }
@@ -214,7 +218,7 @@ LazyVStack(alignment: .leading, spacing: 16) { /* … */ }
 @State private var answer = ""
 
 var body: some View {
-    LatexMarkdownView(markdown: answer)
+    RichMarkdownView(markdown: answer)
         .task {
             for try await chunk in client.stream(prompt) {
                 answer += chunk          // 누적 문자열을 그대로 다시 넘긴다
@@ -226,17 +230,17 @@ var body: some View {
 토큰 이벤트는 **최대 약 10Hz로 합쳐서** 전달한다. 그보다 잦게 갱신해도 내부
 coalescing이 흡수하지만(실행 1 + 대기 1), 불필요한 파싱을 줄이는 쪽이 낫다.
 
-`LatexStreamingTextBuffer`가 그 합치기를 대신한다. 간격(기본 100ms) 안의 갱신은 마지막 값만
+`RichMarkdownStreamingTextBuffer`가 그 합치기를 대신한다. 간격(기본 100ms) 안의 갱신은 마지막 값만
 남기고, 간격이 끝나면 trailing 게시 1회로 흘려 보낸다 — 마지막 조각이 다음 조각까지 화면에
 못 오르는 일이 없다.
 
 ```swift
-@StateObject private var buffer = LatexStreamingTextBuffer()   // interval: .milliseconds(100)
+@StateObject private var buffer = RichMarkdownStreamingTextBuffer()   // interval: .milliseconds(100)
 @State private var isStreaming = false
 
 var body: some View {
-    LatexMarkdownView(markdown: buffer.text)
-        .latexStreaming(isStreaming ? .default : nil)
+    RichMarkdownView(markdown: buffer.text)
+        .richMarkdownStreaming(isStreaming ? .default : nil)
         .task {
             buffer.reset()
             isStreaming = true
@@ -247,10 +251,10 @@ var body: some View {
 }
 ```
 
-`.latexStreaming(_:)`은 스트리밍 중인 **메시지 뷰 하나**에 건다 — 컨테이너에 걸면 아래의 모든
+`.richMarkdownStreaming(_:)`은 스트리밍 중인 **메시지 뷰 하나**에 건다 — 컨테이너에 걸면 아래의 모든
 뷰가 스트리밍으로 표시된다. 켜져 있으면 마지막 문단의 끝 12 grapheme이 옅어지고(꼬리 페이드),
 아직 닫히지 않은 `**`·백틱·`\(`(dollar 옵션이면 `$`) opener는 closer가 올 때까지 숨긴다.
-스트림이 끝나면 `nil`을 넘겨 원래 렌더로 돌린다. UIKit은 `LatexMarkdownUIView.streaming`이 같은
+스트림이 끝나면 `nil`을 넘겨 원래 렌더로 돌린다. UIKit은 `RichMarkdownUIView.streaming`이 같은
 역할이며, 스트리밍 중에는 같은 종류의 텍스트 블록을 새로 만들지 않고 내용만 바꾼다.
 
 누적 갱신(새 문자열이 이전 문자열의 확장)에서는 새 parse가 게시될 때까지 **이전
@@ -259,7 +263,7 @@ var body: some View {
 즉시 원문 fallback으로 넘어간다.
 
 SSE(`text/event-stream`) 배선 예시는 데모의 **SSE 실시간 렌더링** 화면
-(`Examples/SwiftLatexDemo/Sources/SSEDemo.swift`)에 있다. 프레임 디코더는
+(`Examples/RichMarkdownDemo/Sources/SSEDemo.swift`)에 있다. 프레임 디코더는
 `URLSession.bytes`와 로컬 시뮬레이션이 함께 쓰는 동기 상태 머신이다.
 
 측정값(Debug, iPhone 16 Pro / iOS 18.6 simulator): 50 KiB 입력 parse p50 119ms,
@@ -270,9 +274,9 @@ p95 129–230ms. 10Hz로 30초 갱신 후 마지막 입력에서 idle까지 25�
 색과 폰트 모두 **요소 단위**다. 범위(문자 구간) 단위 지정은 없다.
 
 ```swift
-LatexMarkdownView(markdown: message)
-    .latexTheme(
-        LatexTheme(
+RichMarkdownView(markdown: message)
+    .richMarkdownTheme(
+        RichMarkdownTheme(
             textColor: .primary,
             linkColor: .accessibleLink,
             codeBlockBackground: Color(.secondarySystemBackground),
@@ -281,13 +285,13 @@ LatexMarkdownView(markdown: message)
             inlineCodeBorder: Color(.separator),
             quoteBar: Color(.systemGray3),
             codeHeaderBackground: Color(.tertiarySystemBackground),
-            bodyFont: LatexFont(relativeTo: .body),
-            heading1Font: LatexFont(relativeTo: .title1, weight: .bold),
-            heading2Font: LatexFont(relativeTo: .title2, weight: .bold),
-            heading3Font: LatexFont(relativeTo: .title3, weight: .semibold),
-            heading4Font: LatexFont(relativeTo: .headline),
-            codeFont: LatexFont(design: .monospaced, relativeTo: .body),
-            codeLabelFont: LatexFont(design: .monospaced, relativeTo: .caption),
+            bodyFont: RichMarkdownFont(relativeTo: .body),
+            heading1Font: RichMarkdownFont(relativeTo: .title1, weight: .bold),
+            heading2Font: RichMarkdownFont(relativeTo: .title2, weight: .bold),
+            heading3Font: RichMarkdownFont(relativeTo: .title3, weight: .semibold),
+            heading4Font: RichMarkdownFont(relativeTo: .headline),
+            codeFont: RichMarkdownFont(design: .monospaced, relativeTo: .body),
+            codeLabelFont: RichMarkdownFont(design: .monospaced, relativeTo: .caption),
             mathFont: .latinModern
         )
     )
@@ -303,7 +307,7 @@ WCAG AA(4.5:1)를 넘는다. 칩을 원하지 않으면 `inlineCodeBorder`를 `.
 
 | 렌더러 | 방식 |
 |---|---|
-| UIKit `LatexMarkdownUIView` | `.inlineCodeChip` attribute + `InlineCodeDecorationView`(TextKit 2 segment 좌표, `CAShapeLayer`) |
+| UIKit `RichMarkdownUIView` | `.inlineCodeChip` attribute + `InlineCodeDecorationView`(TextKit 2 segment 좌표, `CAShapeLayer`) |
 | SwiftUI iOS 18+ | `TextRenderer`로 같은 규격의 칩. 한 줄 안에서 폰트 fallback으로 갈라진 run은 rect를 병합 |
 | SwiftUI iOS 16·17 | 사각 `backgroundColor` + 강조색 fallback (`Text` run은 둥근 칩을 그릴 수 없다) |
 
@@ -317,16 +321,16 @@ WCAG AA(4.5:1)를 넘는다. 칩을 원하지 않으면 `inlineCodeBorder`를 `.
 | `codeLabelFont` | 코드 블록 헤더의 언어 라벨 |
 | `mathFont` | 수식 서체 (raster cache key에 포함) |
 
-`LatexFont`는 `Font`/`UIFont`가 아니라 `Sendable` 값이다. 두 타입 사이에 손실 없는
+`RichMarkdownFont`는 `Font`/`UIFont`가 아니라 `Sendable` 값이다. 두 타입 사이에 손실 없는
 변환이 없고 `UIFont`가 `Sendable`이 아니라서 중간 표현을 둔다. 두 렌더러가 같은 값에서
 각자 폰트를 만든다.
 
 ```swift
 // 커스텀 서체. 앱이 등록한 이름을 쓴다. 못 찾으면 시스템 서체로 물러난다.
-LatexFont(design: .custom(name: "Georgia"), relativeTo: .body)
+RichMarkdownFont(design: .custom(name: "Georgia"), relativeTo: .body)
 
 // 크기 고정 + 굵기. size가 nil이면 relativeTo의 기본 크기를 쓴다.
-LatexFont(relativeTo: .title1, size: 34, weight: .heavy)
+RichMarkdownFont(relativeTo: .title1, size: 34, weight: .heavy)
 ```
 
 `size`를 줘도 Dynamic Type 스케일은 `relativeTo` 기준으로 계속 적용된다.
@@ -339,8 +343,8 @@ light 약 7.5:1 / dark 약 8.9:1이며 밑줄도 함께 그린다.
 ### 달러 수식 (opt-in)
 
 ```swift
-LatexMarkdownView(markdown: message, parsesDollarMath: true)                       // == dollarMath: [.single]
-LatexMarkdownView(markdown: message, dollarMath: [.single, .inlineDouble])          // 문장 안 $$...$$도 inline
+RichMarkdownView(markdown: message, parsesDollarMath: true)                       // == dollarMath: [.single]
+RichMarkdownView(markdown: message, dollarMath: [.single, .inlineDouble])          // 문장 안 $$...$$도 inline
 ```
 
 기본값이 `false`인 이유는 통화 표기(`$5`)와 충돌하기 때문이다. 켜도 아래 규칙으로
@@ -349,16 +353,16 @@ LatexMarkdownView(markdown: message, dollarMath: [.single, .inlineDouble])      
 `.inlineDouble`은 `$$...$$`를 paragraph 전체가 아닌 문장 안에서도 inline 수식으로 본다.
 LLM 출력과 일부 콘텐츠 서버가 `총합($$f(1)$$)`처럼 쓰기 때문이다. `$...$`와 같은
 공백·숫자·줄바꿈 규칙을 따르므로 `$$5 and $$6`은 수식이 되지 않는다. UIKit은
-`LatexMarkdownUIView.dollarMath`, 원문 위치가 필요한 클라이언트는
+`RichMarkdownUIView.dollarMath`, 원문 위치가 필요한 클라이언트는
 `LatexInlineMathScanner.scan(_:dollarMath:)`를 쓴다.
 
 ### UIKit
 
-`LatexMarkdownUIView`는 SwiftUI 호스팅 래퍼가 아니다. `UIView` 하위 클래스로
+`RichMarkdownUIView`는 SwiftUI 호스팅 래퍼가 아니다. `UIView` 하위 클래스로
 블록을 `UIStackView`에, 인라인 수식을 `NSTextAttachment`로 직접 배치한다.
 
 ```swift
-let view = LatexMarkdownUIView(markdown: message, parsesDollarMath: false)
+let view = RichMarkdownUIView(markdown: message, parsesDollarMath: false)
 view.theme = .default
 ```
 
@@ -375,12 +379,12 @@ let equationView = LatexEquationUIView(latex: #"\int_0^1 x^2 \, dx"#)
 
 일반적인 피드에서는 셀이 재사용될 때 `markdown`을 새 메시지로 설정하면 된다. 다만
 현재 세션의 메시지 ID가 고정되어 있고 이미 완성된 답변을 자주 다시 보여 주는 경우에는
-소비 앱이 `message.id → LatexMarkdownUIView`를 보관한 뒤 같은 뷰를 다시 부착할 수 있다.
+소비 앱이 `message.id → RichMarkdownUIView`를 보관한 뒤 같은 뷰를 다시 부착할 수 있다.
 `UIView`는 한 번에 하나의 superview만 가질 수 있으므로, 기존 셀의 제약을 deactivate하고
 분리한 뒤 새 bubble에 pin해야 한다. 테마·달러 수식 설정·Dynamic Type·display scale이
 바뀌면 해당 캐시는 무효화한다. 무한 피드에서는 뷰를 무제한 보관하지 말고 상한을 둔다.
 
-`Examples/SwiftLatexDemo`의 **AI 챗봇 (UIKit)**이 이 전략을 보여 준다. 이는 패키지 API가
+`Examples/RichMarkdownDemo`의 **AI 챗봇 (UIKit)**이 이 전략을 보여 준다. 이는 패키지 API가
 아니며 메시지 수명과 메모리 예산은 소비 앱이 결정한다. 옮겨 적을 때 실측으로 확인된
 두 지점을 지켜야 한다.
 
@@ -398,7 +402,7 @@ let equationView = LatexEquationUIView(latex: #"\int_0^1 x^2 \, dx"#)
 
 ```swift
 let registration = UICollectionView.CellRegistration<UICollectionViewCell, String> { cell, _, message in
-    let view = LatexMarkdownUIView(markdown: message)
+    let view = RichMarkdownUIView(markdown: message)
     view.onContentSizeChange = { [weak cell] in cell?.invalidateIntrinsicContentSize() }
     cell.contentView.addSubview(view)
     // view를 contentView 4변에 pin
@@ -415,7 +419,7 @@ SwiftUI 뷰를 호스팅해서 쓰는 경로도 그대로 유지된다.
 ```swift
 let registration = UICollectionView.CellRegistration<UICollectionViewListCell, String> { cell, _, message in
     cell.contentConfiguration = UIHostingConfiguration {
-        LatexMarkdownView(markdown: message)
+        RichMarkdownView(markdown: message)
     }
 }
 ```
@@ -426,7 +430,7 @@ let registration = UICollectionView.CellRegistration<UICollectionViewListCell, S
 일반 화면:
 
 ```swift
-let host = UIHostingController(rootView: LatexMarkdownView(markdown: message))
+let host = UIHostingController(rootView: RichMarkdownView(markdown: message))
 addChild(host)
 view.addSubview(host.view)
 host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -441,26 +445,26 @@ host.didMove(toParent: self)
 
 ### 코드 블록 확장: 하이라이팅과 다이어그램
 
-`LatexCodeBlockOptions` 하나를 주입하면 코드 블록 표시가 바뀐다. 주입하지 않으면
+`RichMarkdownCodeBlockOptions` 하나를 주입하면 코드 블록 표시가 바뀐다. 주입하지 않으면
 지금까지와 같은 plain monospace다.
 
 ```swift
-import SwiftLatex
-import SwiftLatexHighlight
-import SwiftLatexMermaid
+import RichMarkdown
+import RichMarkdownHighlight
+import RichMarkdownMermaid
 
-let options = LatexCodeBlockOptions(
+let options = RichMarkdownCodeBlockOptions(
     highlighter: PrismHighlighter.shared,      // ```swift 등에 색
     diagram: MermaidDiagramRenderer.shared     // ```mermaid → 다이어그램
 )
 
 // SwiftUI
-LatexMarkdownView(markdown: message)
-    .latexTheme(.default)
-    .latexCodeBlocks(options)
+RichMarkdownView(markdown: message)
+    .richMarkdownTheme(.default)
+    .richMarkdownCodeBlocks(options)
 
 // UIKit
-let view = LatexMarkdownUIView(markdown: message)
+let view = RichMarkdownUIView(markdown: message)
 view.codeBlocks = options
 ```
 
@@ -471,9 +475,9 @@ JavaScriptCore에서 실행하고(WebView를 쓰지 않는다), `MermaidDiagramR
 **색**은 테마가 정한다. 다른 테마 값처럼 역할 단위다.
 
 ```swift
-var theme = LatexTheme.default
+var theme = RichMarkdownTheme.default
 theme.syntax.keyword = .purple
-theme.syntax.comment = LatexSyntaxColors.dynamic(light: 0x6B_72_80, dark: 0x9C_A3_AF)
+theme.syntax.comment = RichMarkdownSyntaxColors.dynamic(light: 0x6B_72_80, dark: 0x9C_A3_AF)
 ```
 
 **지원 문법 16종**: swift, javascript(js), typescript(ts), jsx, tsx, python(py), json,
@@ -490,7 +494,7 @@ css, markup(html/xml/svg). 목록에 없는 언어는 색 없이 원문으로 �
 
 설계, 번들 출처와 SHA-256, 표시 한계는 [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md)에 있다.
 
-### 블록 편집기 (SwiftLatexBlockEditor)
+### 블록 편집기 (RichMarkdownBlockEditor)
 
 Notion 스타일 블록 문서 편집기. 논리 블록(`제목·목록·할 일·인용·코드·수식`)은
 모델이 유지하고, 화면에는 하나의 TextKit 2 `UITextView`만 노출해 UIKit 기본
@@ -498,7 +502,7 @@ Notion 스타일 블록 문서 편집기. 논리 블록(`제목·목록·할 일
 처리와 수식 attachment ↔ 원문 전환의 선택 경계 보정을 포함한다.
 
 ```swift
-import SwiftLatexBlockEditor
+import RichMarkdownBlockEditor
 import SwiftUI
 
 struct NoteEditorScreen: View {
@@ -539,14 +543,14 @@ struct NoteEditorScreen: View {
 - **키보드 툴바는 앱 책임** — `makeInputAccessory:`로 `BlockEditorInputAccessory`
   준수 뷰를 주입한다. 데모의 `BlockKeyboardToolbar`가 레퍼런스 구현이다.
 - **구조 보존 복사/붙여넣기** — 전체 선택 복사 시 markdown과 함께
-  `com.swiftlatex.block-document` pasteboard payload를 게시한다.
+  `com.richmarkdown.block-document` pasteboard payload를 게시한다.
 - `InlineMarkdownCodec`은 LaTeX 구간(`\(...\)`, `$...$`)을 보호하는 인라인
   markdown 파서로 단독 재사용할 수 있다.
 
 ### 데모 앱
 
 ```bash
-cd Examples/SwiftLatexDemo && xcodegen generate && open SwiftLatexDemo.xcodeproj
+cd Examples/RichMarkdownDemo && xcodegen generate && open RichMarkdownDemo.xcodeproj
 ```
 
 루트 목록의 **AI 챗봇 (SwiftUI)**와 **AI 챗봇 (UIKit)**에서 같은 fixture를 비교한다.
@@ -557,7 +561,7 @@ cd Examples/SwiftLatexDemo && xcodegen generate && open SwiftLatexDemo.xcodeproj
 스트리밍 확인 화면 2개.
 
 - **SSE 실시간 렌더링 (SwiftUI)** — `text/event-stream` 프레임을 받아 누적 문자열을
-  `LatexMarkdownView`에 계속 넘기는 화면. 엔드포인트 칸이 비어 있으면 fixture를 SSE
+  `RichMarkdownView`에 계속 넘기는 화면. 엔드포인트 칸이 비어 있으면 fixture를 SSE
   프레임으로 만들어 5/20/60Hz로 로컬에서 흘린다(네트워크 불필요). 프레임 payload는
   OpenAI 호환(`choices[0].delta.content`)이며 디코더는 `choices[0].text`,
   Anthropic `delta.text`, 순수 텍스트 payload, 오류 payload도 함께 받는다.
@@ -574,23 +578,23 @@ cd Examples/SwiftLatexDemo && xcodegen generate && open SwiftLatexDemo.xcodeproj
     응답 `Content-Type`이 `text/event-stream`이 아니면 거부한다.
 
 - **SSE 실시간 렌더링 (UIKit)** — 같은 디코더·전송 로직을 UIKit 네이티브
-  `LatexMarkdownUIView`로 배선한 화면. `onContentSizeChange`로 자동 스크롤을 걸고,
+  `RichMarkdownUIView`로 배선한 화면. `onContentSizeChange`로 자동 스크롤을 걸고,
   스트리밍 append에서 블록 뷰 증분 재사용(0.3.0 성능 작업)이 그대로 동작하는지 확인한다.
 
-- **라이브 편집 (분할 미리보기)** — `TextEditor` 입력이 곧바로 `LatexMarkdownView`로
+- **라이브 편집 (분할 미리보기)** — `TextEditor` 입력이 곧바로 `RichMarkdownView`로
   흘러 타이핑으로 coalescing 동작을 확인하는 화면.
 
 UIKit 화면 2개가 함께 들어 있다.
 
-- **UIKit 네이티브** — `LatexMarkdownUIView`를 재사용 셀에 직접 넣은 화면.
+- **UIKit 네이티브** — `RichMarkdownUIView`를 재사용 셀에 직접 넣은 화면.
   메시지 ID별 완성 뷰를 다시 부착해 재방문 스크롤 비용을 줄인다. 테마 프리셋
   (기본 / 큰 글자 / Serif / 색 강조)을 메뉴에서 바꿔 폰트·색·수식 서체를 확인한다.
-  `-swiftlatexPreset Serif` launch argument로 특정 프리셋에서 시작할 수 있다.
+  `-richmarkdownPreset Serif` launch argument로 특정 프리셋에서 시작할 수 있다.
 - **UIKit UIHostingConfiguration** — SwiftUI 뷰를 호스팅하는 셀 예제.
 
 블록 편집기 product 화면 2개.
 
-- **블록 편집 (Notion 스타일)** — `SwiftLatexBlockEditor`의 `BlockDocumentTextEditor`
+- **블록 편집 (Notion 스타일)** — `RichMarkdownBlockEditor`의 `BlockDocumentTextEditor`
   + `BlockEditorModel`을 배선한 편집 화면. 키보드 툴바 주입
   (`BlockEditorInputAccessory`) 레퍼런스.
 - **수식 Attachment (읽기 전용)** — 블록 에디터 없이 `EquationTextAttachment`를
@@ -684,7 +688,7 @@ inline/display mode, display scale이다. cost는 이미지 pixel byte(현재 �
 | 표 | 32열 / 512셀 | 초과하면 읽을 수 있는 plain text로 낮춤 |
 
 수치는 내부 구현이며 공개 설정으로 노출하지 않는다.
-UIKit의 `LatexMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스트를 반환한다.
+UIKit의 `RichMarkdownUIView.markdown` getter도 이 제한된 canonical 텍스트를 반환한다.
 
 ---
 
@@ -755,12 +759,12 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
 - 원격 이미지, Mermaid, 신택스 하이라이팅, 편집, macOS UI는 v1 비목표다.
 - 여러 블록을 가로지르는 연속 범위 선택은 지원하지 않는다(블록 단위 시스템 선택).
 - 링크·이미지 Markdown 문법 **내부**의 LaTeX는 해석하지 않는다.
-- 공개 parser/AST는 없다. `SwiftLatexCore`는 내부 target이다.
+- 공개 parser/AST는 없다. `RichMarkdownCore`는 내부 target이다.
 - UIKit 렌더러는 리스트 마커를 baseline이 아니라 top 정렬한다(중첩 스택의
   baseline이 불안정하다). SwiftUI 렌더러는 first text baseline 정렬이다.
 - **범위(문자 구간) 단위 색·폰트 지정은 없다.** 테마는 요소 단위다. 굵게·기울임·
   취소선은 Markdown 원문이 정하고 소비 앱 API로는 지정할 수 없다.
-- **스트리밍 표시(`.latexStreaming`)의 미닫힌 마크 억제는 휴리스틱이다.** 파서가 `\*`·`\~`·
+- **스트리밍 표시(`.richMarkdownStreaming`)의 미닫힌 마크 억제는 휴리스틱이다.** 파서가 `\*`·`\~`·
   백틱 이스케이프를 디코딩해 넘기므로 literal과 구분되지 않고, 스트리밍 중에는 잠시 숨겨진다.
   스트림이 끝나면(`nil`) 원문대로 보인다. `$`는 `parsesDollarMath`일 때 다음 문자가 숫자·공백이
   아닌 경우만 대상이다(`$5` 유지). 꼬리 페이드 끝의 alpha 0.2는 대비 기준 미달이지만 12 grapheme
@@ -775,7 +779,7 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
 - **SwiftUI 렌더러 iOS 18+에서 인라인 코드가 있는 문단은 텍스트 선택이 빠진다.**
   `.textSelection(.enabled)`이 커스텀 `TextRenderer`(칩 드로잉)를 우회하므로(실측,
   수식자 순서 무관) 그 문단만 선택 대신 칩을 택한다. 다른 문단은 그대로 선택된다.
-  선택과 칩을 모두 원하면 UIKit `LatexMarkdownUIView`를 쓴다.
+  선택과 칩을 모두 원하면 UIKit `RichMarkdownUIView`를 쓴다.
 - 칩은 좌우 2pt 바깥으로 넓혀 그린다. 행 맨 앞(x=0)의 인라인 코드는 컨테이너
   경계에서 그만큼 잘릴 수 있다.
 - `.custom` 서체에서는 `weight` 지정이 무시될 수 있다(서체가 해당 굵기를 갖고 있어야 한다).
@@ -804,20 +808,20 @@ P0에서 실제 실행으로 고정한 명령 (CI simulator: iPhone 16 Pro, iOS 
 
 ```bash
 # Foundation-only Core를 host에서 우선 검증
-swift build --target SwiftLatexCore
+swift build --target RichMarkdownCore
 
-# 전체 unit test — test action을 가진 package scheme은 `SwiftLatex-Package`다.
-# 같은 이름의 `SwiftLatex` scheme은 library product 빌드 전용이라 test action이 없다.
+# 전체 unit test — test action을 가진 package scheme은 `RichMarkdown-Package`다.
+# 같은 이름의 `RichMarkdown` scheme은 library product 빌드 전용이라 test action이 없다.
 xcodebuild test \
-  -scheme SwiftLatex-Package \
+  -scheme RichMarkdown-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -enableCodeCoverage YES
 
 # UIKit lifecycle/UI test
 xcodebuild test \
-  -project Examples/SwiftLatexDemo/SwiftLatexDemo.xcodeproj \
-  -scheme SwiftLatexDemo \
-  -testPlan SwiftLatexDemo \
+  -project Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj \
+  -scheme RichMarkdownDemo \
+  -testPlan RichMarkdownDemo \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6'
 ```
 
@@ -830,10 +834,10 @@ scripts/ci-test.sh
 스트리밍 30초 전체 측정 (기본은 CI용 5초):
 
 ```bash
-TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test \
-  -scheme SwiftLatex-Package \
+TEST_RUNNER_RICHMARKDOWN_STREAM_SECONDS=30 xcodebuild test \
+  -scheme RichMarkdown-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
-  -only-testing:SwiftLatexTests/StreamingBaselineTests
+  -only-testing:RichMarkdownTests/StreamingBaselineTests
 ```
 
 원칙:
@@ -850,9 +854,9 @@ TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test \
 버그 리포트와 PR을 환영한다. 다음을 지켜 주면 리뷰가 빠르다.
 
 - `scripts/ci-test.sh`가 통과해야 한다(Core coverage 80% gate 포함).
-- 파서 동작을 바꾸면 `Tests/SwiftLatexCoreTests`에 fixture를 추가한다. 이 저장소에서는
+- 파서 동작을 바꾸면 `Tests/RichMarkdownCoreTests`에 fixture를 추가한다. 이 저장소에서는
   구현한 규칙과 fixture가 계약이다.
-- 렌더 동작을 바꾸면 `Examples/SwiftLatexDemo` 챗봇 화면에서 눈으로 확인한다.
+- 렌더 동작을 바꾸면 `Examples/RichMarkdownDemo` 챗봇 화면에서 눈으로 확인한다.
   실제로 이 방법으로 기울임·취소선 유실과 Markdown escape 버그를 찾았다.
 - 새 기능 제안은 [DEVELOPMENT.md](DEVELOPMENT.md)의 비목표 목록을 먼저 확인한다.
 
@@ -869,9 +873,9 @@ TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test \
 번들된 JavaScript (SPM 의존성이 아니라 소스에 포함한 고정 버전):
 
 - [Prism 1.30.0](https://github.com/PrismJS/prism) — MIT License
-  (`Sources/SwiftLatexHighlight/Resources/Prism/PRISM-LICENSE.txt`, `SwiftLatexHighlight` product)
+  (`Sources/RichMarkdownHighlight/Resources/Prism/PRISM-LICENSE.txt`, `RichMarkdownHighlight` product)
 - [Mermaid 11.17.2](https://github.com/mermaid-js/mermaid) — MIT License. 번들된 전이 의존성
-  64개 패키지의 고지는 `Sources/SwiftLatexMermaid/Resources/WebAssets/MERMAID-THIRD-PARTY-NOTICES.txt`
-  (`SwiftLatexMermaid` product)
+  64개 패키지의 고지는 `Sources/RichMarkdownMermaid/Resources/WebAssets/MERMAID-THIRD-PARTY-NOTICES.txt`
+  (`RichMarkdownMermaid` product)
 
 원본 주소와 SHA-256은 [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md)에 기록했다.
