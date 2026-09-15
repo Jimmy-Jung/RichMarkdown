@@ -19,6 +19,8 @@ let package = Package(
         .library(name: "SwiftLatex", targets: ["SwiftLatex"]),
         // Notion 스타일 블록 편집기. 렌더 라이브러리와 관심사가 달라 별도 product다.
         .library(name: "SwiftLatexBlockEditor", targets: ["SwiftLatexBlockEditor"]),
+        // 코드 블록 확장. opt-in product다 — 코어는 JavaScriptCore를 링크하지 않는다.
+        .library(name: "SwiftLatexHighlight", targets: ["SwiftLatexHighlight"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-markdown.git", exact: "0.4.0"),
@@ -44,6 +46,16 @@ let package = Package(
             name: "SwiftLatexBlockEditor",
             dependencies: ["SwiftLatex"]
         ),
+        // Prism v1.30.0 + JavaScriptCore. 번들 문법 원본과 SHA-256은
+        // Docs/CODE_BLOCK_EXTENSIONS.md에 기록한다.
+        // `.process`가 아니라 `.copy`를 쓴다: Prism 문법은 이름으로 찾는 스크립트라
+        // 빌드 단계가 파일명을 바꾸거나 최적화하면 로드 순서가 깨진다.
+        .target(
+            name: "SwiftLatexHighlight",
+            dependencies: ["SwiftLatex"],
+            resources: [.copy("Resources/Prism")],
+            linkerSettings: [.linkedFramework("JavaScriptCore")]
+        ),
         .testTarget(
             name: "SwiftLatexCoreTests",
             dependencies: ["SwiftLatexCore"]
@@ -56,6 +68,11 @@ let package = Package(
         .testTarget(
             name: "SwiftLatexBlockEditorTests",
             dependencies: ["SwiftLatexBlockEditor"]
+        ),
+        // JavaScriptCore 의존 테스트. iOS Simulator의 package scheme에서만 실행한다.
+        .testTarget(
+            name: "SwiftLatexHighlightTests",
+            dependencies: ["SwiftLatexHighlight"]
         ),
     ]
 )
