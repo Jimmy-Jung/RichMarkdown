@@ -17,12 +17,17 @@ targets:
         product: SwiftLatex
       - package: SwiftLatex
         product: SwiftLatexBlockEditor
+      # 코드 블록 확장은 opt-in product다. 데모는 둘 다 연결해 켜고 끄며 비교한다.
+      - package: SwiftLatex
+        product: SwiftLatexHighlight
+      - package: SwiftLatex
+        product: SwiftLatexMermaid
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: "0.6.0"
+        MARKETING_VERSION: "0.7.0"
         CODE_SIGN_STYLE: Automatic
   SwiftLatexDemoUITests:
     type: bundle.ui-testing
