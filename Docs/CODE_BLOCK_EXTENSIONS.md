@@ -2,57 +2,57 @@
 
 - 작성자: JunyoungJung
 - 작성일: 2026-09-14 (KST)
-- 상태: 구현 완료. `SwiftLatexHighlight`·`SwiftLatexMermaid` 두 opt-in product로 배포한다.
+- 상태: 구현 완료. `RichMarkdownHighlight`·`RichMarkdownMermaid` 두 opt-in product로 배포한다.
 
 ## 1. 무엇이 바뀌었나
 
 `DEVELOPMENT.md §1`의 비목표에는 「신택스 하이라이팅」, 「Mermaid」, 「WebView」가 들어 있었다.
 두 가지 실제 요구가 생겨 이 경계를 바꾼다. 다만 **코어의 경계는 그대로 둔다**.
 
-- `SwiftLatex` product는 여전히 WebKit도 JavaScriptCore도 링크하지 않는다.
-  코어에 추가된 것은 프로토콜 2개와 주입 지점 1개뿐이다 (`LatexCodeBlockOptions`).
+- `RichMarkdown` product는 여전히 WebKit도 JavaScriptCore도 링크하지 않는다.
+  코어에 추가된 것은 프로토콜 2개와 주입 지점 1개뿐이다 (`RichMarkdownCodeBlockOptions`).
 - 실제 엔진은 각각 별도 product에 있다. 필요 없는 앱은 의존하지 않고, 3 MB가 넘는
   `mermaid.bundle.js`도 링크되지 않는다.
 
 | product | 엔진 | 링크되는 시스템 프레임워크 | 번들 리소스 |
 |---|---|---|---:|
-| `SwiftLatex` | — | UIKit / SwiftUI | 0 |
-| `SwiftLatexHighlight` | Prism 1.30.0 | JavaScriptCore | 약 100 KB |
-| `SwiftLatexMermaid` | Mermaid 11.17.2 | WebKit | 약 3.4 MB |
+| `RichMarkdown` | — | UIKit / SwiftUI | 0 |
+| `RichMarkdownHighlight` | Prism 1.30.0 | JavaScriptCore | 약 100 KB |
+| `RichMarkdownMermaid` | Mermaid 11.17.2 | WebKit | 약 3.4 MB |
 
 이 문서는 **WKWebView로 공식 Mermaid를 실행하는 경로**를 기록한다.
 
 ## 2. 사용법
 
 ```swift
-import SwiftLatex
-import SwiftLatexHighlight
-import SwiftLatexMermaid
+import RichMarkdown
+import RichMarkdownHighlight
+import RichMarkdownMermaid
 
-let options = LatexCodeBlockOptions(
+let options = RichMarkdownCodeBlockOptions(
     highlighter: PrismHighlighter.shared,
     diagram: MermaidDiagramRenderer.shared
 )
 
 // SwiftUI
-LatexMarkdownView(markdown: message)
-    .latexTheme(.default)
-    .latexCodeBlocks(options)
+RichMarkdownView(markdown: message)
+    .richMarkdownTheme(.default)
+    .richMarkdownCodeBlocks(options)
 
 // UIKit
-let view = LatexMarkdownUIView(markdown: message)
+let view = RichMarkdownUIView(markdown: message)
 view.codeBlocks = options
 ```
 
 둘 중 하나만 주입해도 된다. 주입하지 않으면 코드 블록은 지금까지와 같은 plain monospace다.
 
-색은 `LatexTheme.syntax`(`LatexSyntaxColors`)가 정한다. 다른 테마 값과 마찬가지로
+색은 `RichMarkdownTheme.syntax`(`RichMarkdownSyntaxColors`)가 정한다. 다른 테마 값과 마찬가지로
 **역할 단위**이며 문자 구간 단위 지정은 제공하지 않는다.
 
 ```swift
-var theme = LatexTheme.default
+var theme = RichMarkdownTheme.default
 theme.syntax.keyword = .purple
-theme.syntax.comment = LatexSyntaxColors.dynamic(light: 0x6B_72_80, dark: 0x9C_A3_AF)
+theme.syntax.comment = RichMarkdownSyntaxColors.dynamic(light: 0x6B_72_80, dark: 0x9C_A3_AF)
 ```
 
 ## 3. 설계
@@ -112,22 +112,22 @@ WKWebView를 window에 붙이기 전에 `loadFileURL`을 호출하면 콘텐츠 
 
 ### 3.6 UIKit 렌더러를 SwiftUI에 올릴 때 (실측)
 
-`LatexMarkdownUIView`를 `UIViewRepresentable`로 감싸 SwiftUI `ScrollView`에 넣으면
+`RichMarkdownUIView`를 `UIViewRepresentable`로 감싸 SwiftUI `ScrollView`에 넣으면
 다이어그램이 보이지 않는다. 다이어그램 높이는 렌더가 끝난 뒤에 정해지는데
 `UIViewRepresentable`은 그 뒤의 intrinsic content size 변화를 따라오지 않아 뷰가 0 높이로
 접힌다. 둘 중 하나를 쓴다.
 
 - 전용 `UIScrollView`를 가진 `UIViewControllerRepresentable`로 감싼다
-  (`Examples/SwiftLatexDemo`의 `CodeBlockExtensionUIKitController`, 다른 UIKit 데모와 같은 방식).
+  (`Examples/RichMarkdownDemo`의 `CodeBlockExtensionUIKitController`, 다른 UIKit 데모와 같은 방식).
 - 또는 `onContentSizeChange`에서 측정한 높이를 SwiftUI state로 올려 `.frame(height:)`에 건다.
 
-SwiftUI `LatexMarkdownView`는 이 문제가 없다 — `MermaidDiagramView`가 안에서 같은 방식으로
+SwiftUI `RichMarkdownView`는 이 문제가 없다 — `MermaidDiagramView`가 안에서 같은 방식으로
 높이를 올린다.
 
 ## 4. Prism 번들
 
 - 고정 버전: [Prism v1.30.0](https://github.com/PrismJS/prism/releases/tag/v1.30.0)
-- 라이선스: MIT. 원문은 `Sources/SwiftLatexHighlight/Resources/Prism/PRISM-LICENSE.txt`.
+- 라이선스: MIT. 원문은 `Sources/RichMarkdownHighlight/Resources/Prism/PRISM-LICENSE.txt`.
 - 원본을 수정하지 않고 포함했다. `native-tokenize.js`만 이 저장소가 작성한 브리지다.
 - 로드 순서가 곧 의존 관계다: `core → clike → markup → css → javascript → jsx →
   typescript → tsx → …`. `extend`로 부모 문법을 참조하므로 순서를 바꾸면 안 된다.
@@ -200,21 +200,21 @@ Prism 토큰은 문법마다 이름이 다르다. 표시에 쓰는 역할은 7�
 
 ## 5. Mermaid 번들
 
-- 고정 버전: Mermaid `11.17.2` (`Sources/SwiftLatexMermaid/Web/package-lock.json`)
+- 고정 버전: Mermaid `11.17.2` (`Sources/RichMarkdownMermaid/Web/package-lock.json`)
 - 번들러: esbuild `0.28.2`, `format: 'iife'`, `target: 'safari16'`, `legalComments: 'eof'`
 - 서드파티 고지: `Resources/WebAssets/MERMAID-THIRD-PARTY-NOTICES.txt` (64개 패키지)
 
 | 번들 파일 | 바이트 | SHA-256 |
 | --- | ---: | --- |
 | `mermaid.bundle.js` | 3453031 | `244a929a547cfa38252ef9cabb90052e5f477070c4308a1d09c2c01695fb8615` |
-| `index.html` | 3072 | `fb646925c9f12d10a50bb089bf55f3079063f8a5bb062b3dc6cd5bde30cb3499` |
+| `index.html` | 3074 | `dfbda0c67eaee17b7f7e39f3919d695298f85a19451db3fead8f1f5cf29b628a` |
 
 ### 5.1 번들 다시 만들기
 
 Node.js가 필요하다. 이 Mac에서는 `node_modules`를 저장소 안에 만들지 않는다.
 
 ```sh
-cd Sources/SwiftLatexMermaid/Web
+cd Sources/RichMarkdownMermaid/Web
 npm ci
 OUTPUT_DIR=<외장 작업 폴더> npm run build
 # 산출물(mermaid.bundle.js, MERMAID-THIRD-PARTY-NOTICES.txt)을 Resources/WebAssets로 복사
@@ -235,16 +235,16 @@ OUTPUT_DIR=<외장 작업 폴더> npm run build
 ## 6. 검증
 
 ```sh
-xcodebuild test -scheme SwiftLatex-Package \
+xcodebuild test -scheme RichMarkdown-Package \
     -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-- `SwiftLatexHighlightTests`: 실제 JavaScriptCore 실행. 문법 16종 로드, 별칭 해석,
+- `RichMarkdownHighlightTests`: 실제 JavaScriptCore 실행. 문법 16종 로드, 별칭 해석,
   한글·이모지 범위가 `Character` 경계를 지키는지, 토큰 조각이 원문을 손실 없이
   복원하는지, 미지원·빈 입력·초과 입력 fallback, `reset()` 후 동일 결과.
-- `SwiftLatexMermaidTests`: 실제 WKWebView 실행. 번들 리소스 존재와 외부 참조 없음,
+- `RichMarkdownMermaidTests`: 실제 WKWebView 실행. 번들 리소스 존재와 외부 참조 없음,
   flowchart·sequence 렌더, 잘못된 원문 실패 후 같은 WebView 복구, 입력 상한.
-- `SwiftLatexTests/CodeBlockExtensionTests`: 코어 구간 분할과 두 렌더러의 배선.
+- `RichMarkdownTests/CodeBlockExtensionTests`: 코어 구간 분할과 두 렌더러의 배선.
 
-데모는 `Examples/SwiftLatexDemo`의 **코드 블록 확장 (Mermaid · Prism)** 화면이다.
+데모는 `Examples/RichMarkdownDemo`의 **코드 블록 확장 (Mermaid · Prism)** 화면이다.
 SwiftUI/UIKit 렌더러를 바꿔 가며 두 확장을 켜고 끌 수 있다.
