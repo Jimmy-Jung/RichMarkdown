@@ -1,8 +1,8 @@
-# SwiftLatex 개발 문서
+# RichMarkdown 개발 문서
 
 메시지 렌더러다. Markdown, 인라인/블록 LaTeX, 코드 블록을 네이티브 UI로
-표시하는 재사용 가능한 Swift Package를 목표로 한다. SwiftUI는 `LatexMarkdownView`,
-UIKit은 네이티브 `LatexMarkdownUIView`가 담당하고 파서·수식 raster·generation
+표시하는 재사용 가능한 Swift Package를 목표로 한다. SwiftUI는 `RichMarkdownView`,
+UIKit은 네이티브 `RichMarkdownUIView`가 담당하고 파서·수식 raster·generation
 관리는 두 뷰가 공유한다.
 
 - 작성자: JunyoungJung
@@ -60,7 +60,7 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 | GFM 표 | 헤더, 셀 테두리, 좌·중앙·우 정렬, 가로 스크롤, 셀 내부 인라인 콘텐츠 |
 | 스트리밍 | 최신 전체 `String` 입력, coalescing과 latest-wins 게시 |
 | 선택 | SwiftUI `.textSelection(.enabled)`의 시스템 동작. 단 iOS 18+에서 인라인 코드가 있는 문단은 예외 — `.textSelection`이 커스텀 `TextRenderer`(인라인 코드 칩)를 우회하므로(실측, 수식자 순서 무관) 그 문단만 칩을 택한다. UIKit 렌더러는 선택과 칩을 모두 지원한다 |
-| UIKit | 네이티브 `LatexMarkdownUIView` + `UIHostingConfiguration`·`UIHostingController` 사용 예제 |
+| UIKit | 네이티브 `RichMarkdownUIView` + `UIHostingConfiguration`·`UIHostingController` 사용 예제 |
 | 접근성 | Dynamic Type, VoiceOver, 키보드, 명암/굵은 텍스트 검증 |
 
 ### 명시적 비목표
@@ -80,14 +80,14 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 ### 비목표에서 옮긴 것 — 코드 블록 확장 (별도 product)
 
 「신택스 하이라이팅」, 「Mermaid」, 「WebView」는 실제 요구가 생겨 경계를 바꿨다.
-다만 **`SwiftLatex` product의 경계는 그대로다** — 코어는 JavaScriptCore도 WebKit도
-링크하지 않고, 추가된 것은 프로토콜 2개와 주입 지점 1개(`LatexCodeBlockOptions`)뿐이다.
+다만 **`RichMarkdown` product의 경계는 그대로다** — 코어는 JavaScriptCore도 WebKit도
+링크하지 않고, 추가된 것은 프로토콜 2개와 주입 지점 1개(`RichMarkdownCodeBlockOptions`)뿐이다.
 엔진은 각각 opt-in product에 있어 쓰지 않는 앱은 의존하지 않는다.
 
 | product | 엔진 | 코드 블록 동작 |
 |---|---|---|
-| `SwiftLatexHighlight` | Prism 1.30.0 + JavaScriptCore | UTF-16 범위에 색 역할 부여 |
-| `SwiftLatexMermaid` | Mermaid 11.17.2 + WKWebView | ```` ```mermaid ```` 블록을 다이어그램으로 교체 |
+| `RichMarkdownHighlight` | Prism 1.30.0 + JavaScriptCore | UTF-16 범위에 색 역할 부여 |
+| `RichMarkdownMermaid` | Mermaid 11.17.2 + WKWebView | ```` ```mermaid ```` 블록을 다이어그램으로 교체 |
 
 설계·번들 출처·SHA-256·실패 fallback은 [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md)에 있다.
 
@@ -103,31 +103,31 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 
 ## 2. 최소 공개 표면
 
-v1의 공개 product는 `SwiftLatex` 하나다. 0.4.0부터 Notion 스타일 블록 편집기가
-별도 product `SwiftLatexBlockEditor`로 추가됐다 — 렌더 라이브러리와 관심사가 달라
+v1의 공개 product는 `RichMarkdown` 하나다. 0.4.0부터 Notion 스타일 블록 편집기가
+별도 product `RichMarkdownBlockEditor`로 추가됐다 — 렌더 라이브러리와 관심사가 달라
 같은 product에 합치지 않으며, 편집기가 필요 없는 앱은 의존하지 않는다.
-0.7.0의 `SwiftLatexHighlight`·`SwiftLatexMermaid`도 같은 규칙이다 — 코어가 링크하지
+0.7.0의 `RichMarkdownHighlight`·`RichMarkdownMermaid`도 같은 규칙이다 — 코어가 링크하지
 않는 JavaScriptCore·WebKit과 번들 JavaScript를 쓰는 앱에만 들어간다.
 
 ```swift
-import SwiftLatex
+import RichMarkdown
 
-LatexMarkdownView(
+RichMarkdownView(
     markdown: message,
     parsesDollarMath: false
 )
-.latexTheme(.default)
+.richMarkdownTheme(.default)
 ```
 
 - `parsesDollarMath` 기본값은 `false`다.
-- 테마는 색 6종 + 폰트 7종 + 수식 서체를 **요소 단위**로 갖는다. `LatexFont`는
+- 테마는 색 6종 + 폰트 7종 + 수식 서체를 **요소 단위**로 갖는다. `RichMarkdownFont`는
   `Font`/`UIFont`가 아니라 `Sendable` 값이라 렌더 요청 key에 넣을 수 있다.
 - 텍스트 색·폰트는 두 렌더러 모두 **명시 지정**한다. SwiftUI에서 환경 값에 맡기면
   `theme`가 본문에 닿지 않고 소비 앱의 바깥 `.font(_:)`가 우연히 새어 들어온다.
 - 링크 실행은 allowlist를 통과한 뒤 SwiftUI `OpenURLAction`을 사용한다.
 - 코드 복사는 패키지의 native `Button` 동작으로 제공한다.
-- UIKit은 `LatexMarkdownUIView`(네이티브 `UIView`)가 담당한다. SwiftUI 뷰를 감싼
-  래퍼가 아니며 파서·`MathRenderService`·`LatexRenderModel`을 SwiftUI 경로와 공유한다.
+- UIKit은 `RichMarkdownUIView`(네이티브 `UIView`)가 담당한다. SwiftUI 뷰를 감싼
+  래퍼가 아니며 파서·`MathRenderService`·`RichMarkdownRenderModel`을 SwiftUI 경로와 공유한다.
 - 범용 custom renderer API는 만들지 않는다.
 - 내부 parser target은 테스트와 UI target 분리를 위해 두되 외부 product로 노출하지 않는다.
   UI target이 쓰는 교차 target 심볼은 Swift 5.9의 `package` 접근 수준으로 한정한다.
@@ -138,8 +138,8 @@ LatexMarkdownView(
   Swift Testing 채택으로 tools 6.0이 필요하며, 우리 target은 Swift 6 language
   mode + complete concurrency로 빌드된다. host Core 검증을 위해 `.macOS(.v12)`
   최소 선언을 추가한다(SwiftMath 요구, macOS UI 비목표 유지).
-- 공개 product는 `SwiftLatex` 하나다.
-- 비공개 `SwiftLatexCore` target은 `Markdown` product에 의존한다.
+- 공개 product는 `RichMarkdown` 하나다.
+- 비공개 `RichMarkdownCore` target은 `Markdown` product에 의존한다.
 - UI target은 Core와 SwiftMath에 의존한다.
 - P0 재현성은 SwiftMath `exact: "1.7.3"`, swift-markdown `exact: "0.4.0"`으로 고정한다.
 - 지원 toolchain을 확정한 뒤에만 CI에서 검증한 버전 범위로 넓힌다.
@@ -229,7 +229,7 @@ code / HTML / Link / Image 금지 범위
 
 ### 내부 모델
 
-- parser와 AST는 `SwiftLatexCore` target의 package-private 구현 세부사항이다.
+- parser와 AST는 `RichMarkdownCore` target의 package-private 구현 세부사항이다.
 - source span은 원문 UTF-8 offset/length를 저장한다.
 - view identity는 렌더 시점의 위치와 content digest로 만들며 편집 사이의 영속성을
   약속하지 않는다.
@@ -256,7 +256,7 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
 ```
 
 - **`@MainActor` 타입의 처리 함수에는 `nonisolated`를 붙인다.** global actor 표시는
-  static 멤버에도 적용되므로, `nonisolated` 없는 `LatexRenderModel`의 static 처리 함수는
+  static 멤버에도 적용되므로, `nonisolated` 없는 `RichMarkdownRenderModel`의 static 처리 함수는
   전체가 MainActor에서 실행되고 `swift-markdown` parse가 main thread를 점유한다
   (50 KiB에서 p50 약 119ms). 컴파일러의
   `no 'async' operations occur within 'await' expression` 경고가 이 표시가 빠졌다는 신호다.
@@ -277,7 +277,7 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
 - `RenderedDocument`는 게시 후 변경하지 않는 값이다.
 - 수식 렌더 실패 시 해당 노드만 원문 source를 유지한다.
 - **UIKit 렌더러의 블록 수식은 이 2단계 게시에 참여하지 않는다** (2026-08-21).
-  `LatexMarkdownUIView`는 블록 수식을 SwiftMath의 벡터 뷰로 그리며 크기가 rebuild
+  `RichMarkdownUIView`는 블록 수식을 SwiftMath의 벡터 뷰로 그리며 크기가 rebuild
   시점에 동기 확정된다. 위 파이프라인은 model 계약이라 그대로다 — 인라인 수식이
   여전히 raster를 쓰고 게시 횟수·generation 규칙·idle 계약이 바뀌지 않는다.
   SwiftUI 렌더러는 블록 수식도 raster를 유지한다.
@@ -298,9 +298,9 @@ API는 현재 메시지 전체 `String`을 받으며 증분 parser를 제공하�
 기준 기기/OS/configuration의 baseline, idle 시간, 실행/대기 상한을 정한다. 증분 파싱은
 확정된 성능 기준을 넘은 측정 근거가 있을 때만 검토한다.
 
-스트리밍 **표시** 상태(`LatexStreamingOptions`, 2026-09-04)는 `Request`·parse identity·cache key
+스트리밍 **표시** 상태(`RichMarkdownStreamingOptions`, 2026-09-04)는 `Request`·parse identity·cache key
 밖에 둔다. Request에 넣으면 스트림 종료가 "수식 설정 변경" 분기로 들어가 이미지가 무효화된다.
-꼬리 페이드와 미닫힌 opener 억제는 `SwiftLatexCore.StreamingTail`이 마지막 리프 문단의
+꼬리 페이드와 미닫힌 opener 억제는 `RichMarkdownCore.StreamingTail`이 마지막 리프 문단의
 `[InlineRun]`을 표시 직전에 변환하는 순수 함수고, 두 렌더러가 같은 결과를 그린다. 게시 경로에
 hop을 더하지 않으며 스트리밍 append parse는 `ParseCache`에 저장하지 않는다(§6).
 
@@ -411,7 +411,7 @@ baseline 오차와 clipping을 측정한다.
 
 ```swift
 cell.contentConfiguration = UIHostingConfiguration {
-    LatexMarkdownView(markdown: message)
+    RichMarkdownView(markdown: message)
 }
 ```
 
@@ -424,7 +424,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
 
 ### UIKit 네이티브 렌더러
 
-`LatexMarkdownUIView`는 뷰 계층만 UIKit으로 구성하고 나머지는 SwiftUI 경로와 공유한다.
+`RichMarkdownUIView`는 뷰 계층만 UIKit으로 구성하고 나머지는 SwiftUI 경로와 공유한다.
 
 | 관심사 | SwiftUI | UIKit |
 |---|---|---|
@@ -432,8 +432,8 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
 | 인라인 수식 | `Text(Image)` + `baselineOffset(-descent)` | `MathTextAttachment.attachmentBounds(...)`가 `-descent` 반환 |
 | 블록 수식 | raster `Image` | **SwiftMath 벡터 뷰** (`BlockMathVectorView.make`) |
 | 텍스트 | `Text` + `AttributedString` | `UITextView`(`isScrollEnabled = false`) + `NSAttributedString` |
-| 폰트·색 출처 | `LatexTheme`의 `LatexFont` → `resolvedFont` | 같은 값 → `resolvedUIFont(compatibleWith:)` |
-| Dynamic Type | `@ScaledMetric` 배율 × `LatexFont.unscaledSize` | `UIFontMetrics(compatibleWith: traitCollection)` |
+| 폰트·색 출처 | `RichMarkdownTheme`의 `RichMarkdownFont` → `resolvedFont` | 같은 값 → `resolvedUIFont(compatibleWith:)` |
+| Dynamic Type | `@ScaledMetric` 배율 × `RichMarkdownFont.unscaledSize` | `UIFontMetrics(compatibleWith: traitCollection)` |
 | 색·scale | `@Environment(colorScheme/displayScale)` | `traitCollection` |
 | 재렌더 트리거 | `.task(id:)` | `registerForTraitChanges`(iOS 17+) / `traitCollectionDidChange`(iOS 16) |
 | 게시 구독 | `@StateObject` | `objectWillChange` + MainActor hop 1회 coalescing |
@@ -478,7 +478,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
     errorLabel 표시 여부가 이 값으로 정해진다.
   - 실패(latex parse 오류·preflight 초과)는 기존과 같은 원문 fallback이다.
 - 수식 attachment는 본문 텍스트로 읽히지 않는다. 수식이 있고 링크가 없는 문단은
-  `LatexTextView.spokenOverride`로 합성 label을 주고, 이중 낭독을 막기 위해
+  `RichMarkdownTextView.spokenOverride`로 합성 label을 주고, 이중 낭독을 막기 위해
   `accessibilityValue`를 비운다.
 - 셀 재사용 환경에서는 hydration이 최초 레이아웃 뒤에 오므로 `onContentSizeChange`로
   self-sizing 재측정을 요청한다.
@@ -494,7 +494,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
     append에서는 의도된 동작(모델이 이전 렌더를 유지한다, §4 2026-08-28 개정)이지만
     셀 재사용에서는 남의 메시지가 보이는 셈이다.
     데모는 첫 `onContentSizeChange`까지 뷰를 감춘다.
-  - 기준 구현: `Examples/SwiftLatexDemo/Sources/UIKitChatDemo.swift`.
+  - 기준 구현: `Examples/RichMarkdownDemo/Sources/UIKitChatDemo.swift`.
   - **메시지별 뷰를 캐시해 셀 간에 이동시키는 소비자는 늦은 `prepareForReuse`를
     방어해야 한다** (2026-08-21 실측, 빠른 스크롤 왕복에서 빈 버블로 재현).
     화면 밖으로 나간 셀은 `prepareForReuse` 없이 reuse pool에 머물다가 다음
@@ -562,8 +562,8 @@ actor 밖에는 P0에서 Sendable 안전성을 확인한 immutable 결과만 반
 
 | 렌더러 | 인라인 수식 | 블록 수식 |
 |---|---|---|
-| SwiftUI (`LatexMarkdownView`) | raster cache | raster cache |
-| UIKit (`LatexMarkdownUIView`) | raster cache | **벡터 뷰 — cache 미사용** |
+| SwiftUI (`RichMarkdownView`) | raster cache | raster cache |
+| UIKit (`RichMarkdownUIView`) | raster cache | **벡터 뷰 — cache 미사용** |
 
 `MathRenderKey`는 벡터 경로에서도 그대로 쓴다. 이미지를 찾기 위해서가 아니라
 **같은 preflight 상한과 같은 폰트·색·mode 해석을 공유**하기 위해서다
@@ -596,7 +596,7 @@ tick마다 누적 원문이 새 키가 되어 다른 셀의 항목을 밀어내�
 - SwiftMath raster preflight와 이미지 Sendable/isolation 경로 확정
 - deployment target 16 consumer compile과 현재 최소 runtime(iOS 18.6) 선택/복사 동작 기록
 - iOS 16 실행 지원을 선언하려면 호환 Xcode/runtime 또는 실기기 검증 환경 별도 확보
-- 최소 `Examples/SwiftLatexDemo/SwiftLatexDemo.xcodeproj`, UI-test target,
+- 최소 `Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj`, UI-test target,
   shared scheme/test plan 생성
 - 스트리밍 baseline 측정 환경과 P1 합격 수치 확정 (완료 — 아래 측정 기록)
 
@@ -613,9 +613,9 @@ tick마다 누적 원문이 새 키가 되어 다른 셀의 항목을 밀어내�
   - 50 KiB parse p95 < 300ms
   - 입력 종료 후 idle < 3초
 - MainActor 검증: worker off-main 실행 테스트(`OffMainExecutionTests`) +
-  signpost `dev.swiftlatex`/`parse`·`raster` (Instruments 확인용)
-- 30초 전체 측정 재실행: `TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test
-  -scheme SwiftLatex-Package -only-testing:SwiftLatexTests/StreamingBaselineTests ...`
+  signpost `dev.richmarkdown`/`parse`·`raster` (Instruments 확인용)
+- 30초 전체 측정 재실행: `TEST_RUNNER_RICHMARKDOWN_STREAM_SECONDS=30 xcodebuild test
+  -scheme RichMarkdown-Package -only-testing:RichMarkdownTests/StreamingBaselineTests ...`
 
 ### iPad 실기기 측정 기록 (2026-09-15)
 
@@ -633,25 +633,25 @@ agent-device `perf trace stop`은 Animation Hitches 트레이스 저장을 기�
 | 챗 스크롤 (SwiftUI) | 6페이지 왕복 31초 | **0건** | 앱 프레임 비중 <1% |
 | 챗 스크롤 (UIKit) | 6페이지 왕복 31초 | **3건**(8·17·42ms) | `AssistantMessageCell.configure` 30ms 외 미미 |
 | SSE 스트리밍 20Hz (SwiftUI) | 9초 | **23건**(전부 8.3ms, 합 200ms) | `publishPending` → AttributeGraph 갱신·전 블록 body 재평가 |
-| SSE 스트리밍 20Hz (UIKit) | 9초 | **10건**(최대 25ms, 표 구간 2.5초에 집중) | `rebuild` 550/1627 샘플, 그중 `LatexTextView.init` 171·`tableView` 184 |
+| SSE 스트리밍 20Hz (UIKit) | 9초 | **10건**(최대 25ms, 표 구간 2.5초에 집중) | `rebuild` 550/1627 샘플, 그중 `RichMarkdownTextView.init` 171·`tableView` 184 |
 | 콜드 런치 → SwiftUI 챗 첫 진입 | 런치 1초 + 진입 4초 | hang 0 | 런치 창 메인 340ms(13개 뷰 prewarm `rebuild` 89ms) |
 
 - hitch는 Instruments `hitches` 테이블 기준이며 120Hz 한 프레임(8.33ms) 단위다. Apple의
   hitch time ratio 기준(5ms/s 경고, 10ms/s 심각)으로 스트리밍 구간은 SwiftUI 28ms/s, UIKit 13ms/s.
 - UIKit은 표·코드·목록·인용 tail 블록의 in-place 갱신으로 대응했다(§5). 같은 스크립트로 재측정:
   hitch **10건 → 3건**(합 116.7ms → 41.7ms, 최대 25ms → 16.7ms), `rebuild` 550 → 316 샘플,
-  `LatexTextView.init` 171 → 70, `tableView` 184 → 69. 표본은 각 1회라 추세로만 읽는다.
+  `RichMarkdownTextView.init` 171 → 70, `tableView` 184 → 69. 표본은 각 1회라 추세로만 읽는다.
 - SwiftUI는 바꾸지 않았다. `publishPending` 아래 비용을 분해하면 블록 body 재평가는 5ms 미만이고
-  나머지가 SwiftUI 스택 레이아웃·스크롤 커밋(게시당 약 3ms)이다. `LatexBlockView: Equatable` 실험은
+  나머지가 SwiftUI 스택 레이아웃·스크롤 커밋(게시당 약 3ms)이다. `RichMarkdownBlockView: Equatable` 실험은
   같은 조건 재측정에서 hitch 23 → 20건, `updateBody` 62 → 59 샘플로 차이가 없어 넣지 않았다.
   120Hz 한 프레임(8.3ms)짜리 hitch가 게시마다 하나씩 나는 구조이며, 60Hz 기기에서는 hitch로 잡히지 않는다.
 - 스트리밍 중 ` ```mermaid ` 블록은 UIKit 렌더러가 tick마다 다이어그램 뷰(WKWebView)를 새로 만든다.
-  fixture에 없어 측정하지 않았다(미검증). `LatexDiagramRendering`에 갱신 경로가 없어 다음 과제다.
-- 산출물(trace·XML·스크립트)은 외장 `AgentBuilds/SwiftLatexDemo-*/perf`에 있다. 저장소에는 넣지 않는다.
+  fixture에 없어 측정하지 않았다(미검증). `RichMarkdownDiagramRendering`에 갱신 경로가 없어 다음 과제다.
+- 산출물(trace·XML·스크립트)은 외장 `AgentBuilds/RichMarkdownDemo-*/perf`에 있다. 저장소에는 넣지 않는다.
 
 ### 데모 앱 (2026-08-19)
 
-`Examples/SwiftLatexDemo`는 LLM 챗봇 형태의 화면을 제공한다. 한 화면을 스크롤하며
+`Examples/RichMarkdownDemo`는 LLM 챗봇 형태의 화면을 제공한다. 한 화면을 스크롤하며
 v1 렌더 계약 케이스를 눈으로 확인하는 것이 목적이다.
 
 - 질문/답변 쌍 13개, 답변마다 확인 대상 케이스를 라벨로 표시
@@ -664,10 +664,10 @@ v1 렌더 계약 케이스를 눈으로 확인하는 것이 목적이다.
 
 ### P2 검증 기록 (2026-08-19)
 
-`SwiftLatexDemoP2UITests`로 자동화 (iPhone 16 Pro, iOS 18.6 simulator):
+`RichMarkdownDemoP2UITests`로 자동화 (iPhone 16 Pro, iOS 18.6 simulator):
 
 - Dynamic Type: L / AccessibilityXXXL 양 극단 렌더 확인
-- dark mode(launch arg `-swiftlatexDark`), 회전(landscape 왕복)
+- dark mode(launch arg `-richmarkdownDark`), 회전(landscape 왕복)
 - `UIHostingConfiguration` 셀 재사용: 왕복 스크롤 후 콘텐츠 유지
 - 수식 접근성 label("수식: <LaTeX>") 노출 확인
 - 복사 버튼: 존재·hittable·44×44pt 확인 (UI 테스트) +
@@ -702,7 +702,7 @@ P2에서 UI 테스트가 잡아낸 실제 결함과 수정:
 
 1. **링크 대비 미달** — 시스템 블루(#007AFF)는 흰 배경에서 약 3.6:1로 본문
    기준(4.5:1) 미달. audit `Contrast nearly passed`로 검출됨.
-   → `LatexTheme.linkColor` 추가(기본 `Color.accessibleLink`, light 약 7.5:1 /
+   → `RichMarkdownTheme.linkColor` 추가(기본 `Color.accessibleLink`, light 약 7.5:1 /
    dark 약 8.9:1)와 밑줄(색 외 구분 수단) 적용.
 2. **복사 버튼이 앱 idle을 붙잡음** — 아이콘 교체로 버튼 폭이 변해 가로
    `ScrollView`가 재측정되고 XCUITest "wait for app to idle"이 풀리지 않았다.
@@ -797,10 +797,10 @@ UI 테스트는 app launch가 회당 7~8초라 검증 항목을 launch 단위로
 
 ### CI 원칙
 
-- Foundation-only Core는 host에서 `swift build --target SwiftLatexCore`로 우선 검증한다.
+- Foundation-only Core는 host에서 `swift build --target RichMarkdownCore`로 우선 검증한다.
 - host에서는 Core target만 build한다. Core를 포함한 전체 unit test는 iOS Simulator의
   Swift Package scheme에서 실행한다.
-- UIKit lifecycle/UI test는 `Examples/SwiftLatexDemo/SwiftLatexDemo.xcodeproj`의
+- UIKit lifecycle/UI test는 `Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj`의
   shared scheme/test plan으로 실행한다.
 - macOS host의 일반 `swift test`를 UIKit target 검증 근거로 사용하지 않는다.
 - P0에서 CI simulator 기기/OS와 실제 package/demo scheme 이름을 고정하고 해당
@@ -814,40 +814,40 @@ P0가 scheme을 만든 뒤 현재 로컬 최소 runtime에서는 다음 형태�
 고정한다. 빌드 출력은 파일로 보내고 exit code로 판정한다.
 
 ```bash
-swiftlatex_results_dir=$(mktemp -d /tmp/swiftlatex-results.XXXXXX)
+richmarkdown_results_dir=$(mktemp -d /tmp/richmarkdown-results.XXXXXX)
 
-swiftlatex_package_status=0
-# test action을 가진 package scheme은 `SwiftLatex-Package`다. 같은 이름의 `SwiftLatex`
+richmarkdown_package_status=0
+# test action을 가진 package scheme은 `RichMarkdown-Package`다. 같은 이름의 `RichMarkdown`
 # scheme은 library product 빌드 전용이라 test action이 없다 (product가 4개로 늘어난 뒤 실측).
 # Swift 6 mode/strict concurrency는 tools 6.0 manifest가 적용한다. 전역
 # SWIFT_VERSION=6 / WARNINGS_AS_ERRORS override는 의존성까지 재컴파일하므로 쓰지 않는다.
 xcodebuild test \
-  -scheme SwiftLatex-Package \
+  -scheme RichMarkdown-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
-  -resultBundlePath "$swiftlatex_results_dir/package.xcresult" \
+  -resultBundlePath "$richmarkdown_results_dir/package.xcresult" \
   -enableCodeCoverage YES \
-  > /tmp/swiftlatex-package-tests.log 2>&1 || swiftlatex_package_status=$?
+  > /tmp/richmarkdown-package-tests.log 2>&1 || richmarkdown_package_status=$?
 
-swiftlatex_demo_status=0
+richmarkdown_demo_status=0
 xcodebuild test \
-  -project Examples/SwiftLatexDemo/SwiftLatexDemo.xcodeproj \
-  -scheme SwiftLatexDemo \
-  -testPlan SwiftLatexDemo \
+  -project Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj \
+  -scheme RichMarkdownDemo \
+  -testPlan RichMarkdownDemo \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
-  -resultBundlePath "$swiftlatex_results_dir/demo.xcresult" \
+  -resultBundlePath "$richmarkdown_results_dir/demo.xcresult" \
   -enableCodeCoverage YES \
-  > /tmp/swiftlatex-demo-tests.log 2>&1 || swiftlatex_demo_status=$?
+  > /tmp/richmarkdown-demo-tests.log 2>&1 || richmarkdown_demo_status=$?
 
-swiftlatex_coverage_status=0
+richmarkdown_coverage_status=0
 xcrun xccov view --report --json \
-  "$swiftlatex_results_dir/package.xcresult" \
-  > "$swiftlatex_results_dir/package-coverage.json" || swiftlatex_coverage_status=$?
+  "$richmarkdown_results_dir/package.xcresult" \
+  > "$richmarkdown_results_dir/package-coverage.json" || richmarkdown_coverage_status=$?
 xcrun simctl shutdown all
-test "$swiftlatex_package_status" -eq 0 \
-  && test "$swiftlatex_demo_status" -eq 0 \
-  && test "$swiftlatex_coverage_status" -eq 0
+test "$richmarkdown_package_status" -eq 0 \
+  && test "$richmarkdown_demo_status" -eq 0 \
+  && test "$richmarkdown_coverage_status" -eq 0
 ```
 
 iOS 16 실행 검증은 호환 Xcode/runtime 또는 실기기 환경에서 같은 test plan으로 별도 수행한다.
-P1에서 coverage JSON의 `SwiftLatexCore` line coverage가 `0.80` 미만이면 nonzero로 종료하는
+P1에서 coverage JSON의 `RichMarkdownCore` line coverage가 `0.80` 미만이면 nonzero로 종료하는
 검사 script를 함께 추가한다. `-enableCodeCoverage YES`만으로 합격 처리하지 않는다.

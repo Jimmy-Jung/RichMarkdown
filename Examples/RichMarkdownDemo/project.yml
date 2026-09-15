@@ -1,0 +1,60 @@
+# xcodegen manifest — `xcodegen generate`로 RichMarkdownDemo.xcodeproj 생성 (DEVELOPMENT.md §7 P0).
+name: RichMarkdownDemo
+options:
+  bundleIdPrefix: dev.richmarkdown
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  RichMarkdown:
+    path: ../..
+targets:
+  RichMarkdownDemo:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    dependencies:
+      - package: RichMarkdown
+        product: RichMarkdown
+      - package: RichMarkdown
+        product: RichMarkdownBlockEditor
+      # 코드 블록 확장은 opt-in product다. 데모는 둘 다 연결해 켜고 끄며 비교한다.
+      - package: RichMarkdown
+        product: RichMarkdownHighlight
+      - package: RichMarkdown
+        product: RichMarkdownMermaid
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "0.7.0"
+        CODE_SIGN_STYLE: Automatic
+  RichMarkdownDemoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: RichMarkdownDemo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+  RichMarkdownDemoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: RichMarkdownDemo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  RichMarkdownDemo:
+    build:
+      targets:
+        RichMarkdownDemo: all
+    test:
+      testPlans:
+        - path: RichMarkdownDemo.xctestplan
+          defaultPlan: true

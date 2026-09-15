@@ -2,12 +2,12 @@
 
 > 작성: JunyoungJung · 2026-08-24
 >
-> `Examples/SwiftLatexDemo`에서 구현한 화면 코드 중 package source로 옮길 가치가 있는
+> `Examples/RichMarkdownDemo`에서 구현한 화면 코드 중 package source로 옮길 가치가 있는
 > 코드를 발굴하고, 각 코드가 무엇인지 · 재활용한다면 어떻게 활용할지를 정리한다.
 > 우선순위는 "이동 비용 대비 재사용 가치" 기준이다.
 >
 > **구현 상태 (2026-08-24 완료)**: 1~3순위 이동 완료 — `EquationTextAttachment`는
-> `Sources/SwiftLatex`로, 블록 엔진·에디터 뷰는 신규 product `SwiftLatexBlockEditor`로
+> `Sources/RichMarkdown`로, 블록 엔진·에디터 뷰는 신규 product `RichMarkdownBlockEditor`로
 > 이동했다. 선행 작업(UI 문자열 분리, preset 결합 해소, pasteboard type 개명, 툴바
 > 주입점)도 함께 반영했다. 4순위 캐시 패턴은 README "UICollectionView 재사용" 절에
 > 레시피로 문서화했다 (코드 이동은 eviction 설계 후 재검토 유지). 아래 본문은 발굴
@@ -17,17 +17,17 @@
 
 | 순위 | 대상 | 현재 위치 | 이동 목적지 | 이동 비용 |
 |---|---|---|---|---|
-| 1 | `EquationTextAttachment` + `EquationAttachmentViewProvider` | `BlockEditorTextView.swift:848-950` | `Sources/SwiftLatex` | 낮음 |
-| 2 | 블록 편집 엔진 (`EditorBlock*`, `InlineMarkdownCodec`, `BlockEditorModel`) | `BlockEditorModel.swift` (1,555줄) | 신규 타깃 `SwiftLatexBlockEditor` | 중간 |
-| 3 | `BlockDocumentTextEditor` + `MarkdownStyler` + pasteboard payload | `BlockEditorTextView.swift` | 신규 타깃 `SwiftLatexBlockEditor` | 중간~높음 |
+| 1 | `EquationTextAttachment` + `EquationAttachmentViewProvider` | `BlockEditorTextView.swift:848-950` | `Sources/RichMarkdown` | 낮음 |
+| 2 | 블록 편집 엔진 (`EditorBlock*`, `InlineMarkdownCodec`, `BlockEditorModel`) | `BlockEditorModel.swift` (1,555줄) | 신규 타깃 `RichMarkdownBlockEditor` | 중간 |
+| 3 | `BlockDocumentTextEditor` + `MarkdownStyler` + pasteboard payload | `BlockEditorTextView.swift` | 신규 타깃 `RichMarkdownBlockEditor` | 중간~높음 |
 | 4 | `AssistantMessageViewCache` + 셀 attach/detach 패턴 | `UIKitChatDemo.swift:226-403` | 코드 이동 대신 문서화 (레시피) | 낮음 |
-| — | `BlockKeyboardToolbar`, `LatexThemePreset`, fixtures | demo 각 파일 | 이동 비추천 (demo 잔류) | — |
+| — | `BlockKeyboardToolbar`, `RichMarkdownThemePreset`, fixtures | demo 각 파일 | 이동 비추천 (demo 잔류) | — |
 
 ---
 
 ## 1. `EquationTextAttachment` + `EquationAttachmentViewProvider`
 
-**위치**: `Examples/SwiftLatexDemo/Sources/BlockEditorTextView.swift:848-950`
+**위치**: `Examples/RichMarkdownDemo/Sources/BlockEditorTextView.swift:848-950`
 
 ### 어떤 코드인가
 
@@ -45,7 +45,7 @@ TextKit 2의 `NSTextAttachment` / `NSTextAttachmentViewProvider` 서브클래스
   display 수식은 줄 높이만큼 baseline을 내려 블록처럼 보이게 한다.
 - inline 수식은 주변 폰트의 `descender`에 맞춰 baseline을 정렬한다.
 
-의존성은 package public API(`LatexEquationUIView`, `LatexTheme`)뿐이다.
+의존성은 package public API(`LatexEquationUIView`, `RichMarkdownTheme`)뿐이다.
 demo 타입에 대한 의존이 전혀 없어 **그대로 잘라 옮길 수 있다**.
 
 ### 재활용 방법
@@ -56,7 +56,7 @@ demo 타입에 대한 의존이 전혀 없어 **그대로 잘라 옮길 수 있�
 **예시 1 — 인라인·display 수식이 섞인 문서 구성** (TextKit 2 `UITextView` 전제):
 
 ```swift
-import SwiftLatex
+import RichMarkdown
 import UIKit
 
 final class NoteViewController: UIViewController {
@@ -71,7 +71,7 @@ final class NoteViewController: UIViewController {
         textView.attributedText = Self.makeDocument(theme: .default)
     }
 
-    private static func makeDocument(theme: LatexTheme) -> NSAttributedString {
+    private static func makeDocument(theme: RichMarkdownTheme) -> NSAttributedString {
         let body = UIFont.preferredFont(forTextStyle: .body)
         let result = NSMutableAttributedString(
             string: "가우스 적분은 ",
@@ -121,7 +121,7 @@ final class NoteViewController: UIViewController {
 재구성 비용은 문자열 순회뿐이다.
 
 ```swift
-func applyTheme(_ theme: LatexTheme, to textView: UITextView) {
+func applyTheme(_ theme: RichMarkdownTheme, to textView: UITextView) {
     let old = textView.attributedText ?? NSAttributedString()
     let rebuilt = NSMutableAttributedString(attributedString: old)
     old.enumerateAttribute(
@@ -146,7 +146,7 @@ func applyTheme(_ theme: LatexTheme, to textView: UITextView) {
 
 1. **노트 앱·메모 앱의 수식 삽입** — 기존 `NSAttributedString` 파이프라인에 attachment
    하나만 끼우면 된다. TextKit 2 스택(`NSTextLayoutManager`)이면 즉시 동작.
-2. **`LatexMarkdownUIView`를 못 쓰는 커스텀 에디터** — 자체 attributed-string 렌더러를
+2. **`RichMarkdownUIView`를 못 쓰는 커스텀 에디터** — 자체 attributed-string 렌더러를
    가진 앱이 수식 구간만 이 attachment로 치환.
 3. **package 내부 재사용** — 현재 UIKit 렌더러가 수식을 다루는 경로와 통합해
    중복 제거 여지가 있다.
@@ -162,7 +162,7 @@ func applyTheme(_ theme: LatexTheme, to textView: UITextView) {
 
 ## 2. 블록 편집 엔진 — `EditorBlockKind` / `EditorBlock` / `InlineMarkdownCodec` / `BlockEditorModel`
 
-**위치**: `Examples/SwiftLatexDemo/Sources/BlockEditorModel.swift` (파일 전체, 1,555줄)
+**위치**: `Examples/RichMarkdownDemo/Sources/BlockEditorModel.swift` (파일 전체, 1,555줄)
 
 ### 어떤 코드인가
 
@@ -196,17 +196,17 @@ markdown을 파싱하고(`# `, `- [ ] `, ` ``` ` fence, `\[...\]` 수식 등), `
 - undo/redo 스택(상한 100) + 선택 복원.
 - markdown 직렬화 시 번호 목록 ordinal을 depth별로 재계산.
 
-demo에 이미 단위 테스트가 있다: `Examples/SwiftLatexDemo/Tests/BlockEditorModelTests.swift`.
+demo에 이미 단위 테스트가 있다: `Examples/RichMarkdownDemo/Tests/BlockEditorModelTests.swift`.
 이동 시 테스트도 함께 옮긴다.
 
 ### 재활용 방법
 
-**신규 package 타깃 `SwiftLatexBlockEditor`의 코어**로 이동을 권장한다. 렌더
-라이브러리(SwiftLatex)와 편집기는 관심사가 달라 기존 타깃에 합치지 않는다.
+**신규 package 타깃 `RichMarkdownBlockEditor`의 코어**로 이동을 권장한다. 렌더
+라이브러리(RichMarkdown)와 편집기는 관심사가 달라 기존 타깃에 합치지 않는다.
 
 ```swift
 // Package.swift
-.target(name: "SwiftLatexBlockEditor", dependencies: ["SwiftLatex"]),
+.target(name: "RichMarkdownBlockEditor", dependencies: ["RichMarkdown"]),
 ```
 
 활용 시나리오:
@@ -312,7 +312,7 @@ let markdown = InlineMarkdownCodec.serialize(text: text, marks: marks)
 
 ## 3. `BlockDocumentTextEditor` + `MarkdownStyler` + `BlockDocumentPasteboardPayload`
 
-**위치**: `Examples/SwiftLatexDemo/Sources/BlockEditorTextView.swift` (attachment 제외 전체)
+**위치**: `Examples/RichMarkdownDemo/Sources/BlockEditorTextView.swift` (attachment 제외 전체)
 
 ### 어떤 코드인가
 
@@ -345,14 +345,14 @@ payload 디코딩 시 heading level·indent를 clamp해 조작된 데이터를 �
 
 ### 재활용 방법
 
-2번과 함께 `SwiftLatexBlockEditor` 타깃으로. 앱 입장에서는 이 뷰 하나가 공개
+2번과 함께 `RichMarkdownBlockEditor` 타깃으로. 앱 입장에서는 이 뷰 하나가 공개
 진입점이 된다.
 
 **예시 1 — SwiftUI 화면 전체 배선** (모델 + 뷰 + 툴바 액션 라우팅.
 `BlockEditorDemoView`가 실제 동작 레퍼런스):
 
 ```swift
-import SwiftLatexBlockEditor
+import RichMarkdownBlockEditor
 import SwiftUI
 
 struct NoteEditorScreen: View {
@@ -374,7 +374,7 @@ struct NoteEditorScreen: View {
             onSelectionChange: { model.updateDocumentSelection($0) },
             onToolbarAction: perform,
             onReplaceDocumentBlocks: { model.replaceDocumentBlocks(in: $0, with: $1) },
-            theme: .default              // ← 정리 후: preset 대신 LatexTheme
+            theme: .default              // ← 정리 후: preset 대신 RichMarkdownTheme
         )
         .onDisappear { onSave(model.markdown) }
     }
@@ -441,13 +441,13 @@ var item: [String: Any] = [
     UTType.utf8PlainText.identifier: model.markdown,
 ]
 if let data = BlockDocumentPasteboardPayload.encode(model.blocks) {
-    item["com.swiftlatex.block-document"] = data   // demo 접미사 제거 후
+    item["com.richmarkdown.block-document"] = data   // demo 접미사 제거 후
 }
 UIPasteboard.general.setItems([item])
 
 // 받는 쪽: 구조 payload 우선, 실패 시 markdown fallback.
 // decode가 heading level·indent를 clamp해 조작된 데이터를 방어한다.
-if let data = UIPasteboard.general.data(forPasteboardType: "com.swiftlatex.block-document"),
+if let data = UIPasteboard.general.data(forPasteboardType: "com.richmarkdown.block-document"),
    let blocks = BlockDocumentPasteboardPayload.decode(data) {
     model.replaceDocumentBlocks(
         in: NSRange(location: 0, length: model.documentText.utf16.count),
@@ -470,11 +470,11 @@ if let data = UIPasteboard.general.data(forPasteboardType: "com.swiftlatex.block
 
 이동 전 정리할 것:
 
-- **`LatexThemePreset` 결합 해소** — `MarkdownStyler`의 폰트·색 결정이 demo 전용
+- **`RichMarkdownThemePreset` 결합 해소** — `MarkdownStyler`의 폰트·색 결정이 demo 전용
   preset enum에 걸려 있다 (`preset == .large ? 20 : nil`, Georgia 서체 분기 등).
-  package API는 `LatexTheme`(+ 필요 시 폰트 소스 프로토콜)을 직접 받도록 바꾸고,
-  preset별 분기는 demo의 `LatexThemePreset.theme`으로 밀어낸다.
-- pasteboard type 문자열 `com.swiftlatex.demo.block-document` → `com.swiftlatex.block-document`.
+  package API는 `RichMarkdownTheme`(+ 필요 시 폰트 소스 프로토콜)을 직접 받도록 바꾸고,
+  preset별 분기는 demo의 `RichMarkdownThemePreset.theme`으로 밀어낸다.
+- pasteboard type 문자열 `com.richmarkdown.demo.block-document` → `com.richmarkdown.block-document`.
 - `BlockKeyboardToolbar` 의존 분리 — 툴바는 주입 가능한 `inputAccessoryView`로
   두고 package에는 포함하지 않는다 (아래 "이동 비추천" 참고).
 
@@ -482,11 +482,11 @@ if let data = UIPasteboard.general.data(forPasteboardType: "com.swiftlatex.block
 
 ## 4. `AssistantMessageViewCache` + 셀 attach/detach 패턴
 
-**위치**: `Examples/SwiftLatexDemo/Sources/UIKitChatDemo.swift:226-403`
+**위치**: `Examples/RichMarkdownDemo/Sources/UIKitChatDemo.swift:226-403`
 
 ### 어떤 코드인가
 
-`LatexMarkdownUIView`를 `UICollectionView` 셀에서 재사용할 때의 정석 패턴.
+`RichMarkdownUIView`를 `UICollectionView` 셀에서 재사용할 때의 정석 패턴.
 메시지 identity(`ChatMessage.ID`) → 렌더된 뷰 인스턴스 캐시로, **셀 재사용과
 뷰 수명을 분리**한다. 화면 재진입·스크롤 왕복에도 이미 렌더된 수식이 다시
 파싱되지 않는다.
@@ -600,7 +600,7 @@ func entry(for message: ChatMessage) -> Entry {
 
 활용 시나리오:
 
-1. **UIKit 채팅 앱 통합 가이드** — README 또는 `DEVELOPMENT.md`에 "LatexMarkdownUIView
+1. **UIKit 채팅 앱 통합 가이드** — README 또는 `DEVELOPMENT.md`에 "RichMarkdownUIView
    + UICollectionView" 절을 만들고 예시 1·2를 옮겨 적는다. attach/detach의
    `superview` 체크와 prewarm 호출 시점(루트 화면 `.task`)이 핵심.
 2. **추후 package API 후보** — 예시 3의 eviction 정책(LRU + 개수 상한)을 설계하고
@@ -614,15 +614,15 @@ func entry(for message: ChatMessage) -> Entry {
 | 대상 | 이유 |
 |---|---|
 | `BlockKeyboardToolbar` | 제품 특화 UI. 한국어 라벨 하드코딩, `UIScreen.main` 사용(resize 환경 비권장 API). 에디터 package는 `inputAccessoryView` 주입점만 열어두면 된다. |
-| `LatexThemePreset` | 예시용 테마 4종 + UI 테스트용 launch argument 헬퍼. package 사용자는 `LatexTheme`을 직접 만들면 되고, 프리셋은 README 예제 코드로 충분하다. |
+| `RichMarkdownThemePreset` | 예시용 테마 4종 + UI 테스트용 launch argument 헬퍼. package 사용자는 `RichMarkdownTheme`을 직접 만들면 되고, 프리셋은 README 예제 코드로 충분하다. |
 | `ChatFixtures` / `ChatBubble` / `ChatDemoView` | 렌더 케이스 검증용 fixture와 showcase 화면. UI 테스트가 의존하므로 demo에 남아야 한다. |
-| `EditorDemoView` / `HostingConfigurationDemo` | `LatexMarkdownView` 사용법 자체가 내용의 전부. package로 옮길 로직이 없다. |
+| `EditorDemoView` / `HostingConfigurationDemo` | `RichMarkdownView` 사용법 자체가 내용의 전부. package로 옮길 로직이 없다. |
 
 ## 권장 이동 순서
 
-1. **`EquationTextAttachment`** → `Sources/SwiftLatex`. 의존 정리 불필요, 즉시 가능.
-2. **`BlockEditorModel.swift` 전체 + 테스트** → 신규 `SwiftLatexBlockEditor` 타깃.
+1. **`EquationTextAttachment`** → `Sources/RichMarkdown`. 의존 정리 불필요, 즉시 가능.
+2. **`BlockEditorModel.swift` 전체 + 테스트** → 신규 `RichMarkdownBlockEditor` 타깃.
    선행 작업: `EditorBlockKind.title`/`systemImage` UI 레이어 분리.
 3. **`BlockDocumentTextEditor` + `MarkdownStyler` + pasteboard payload** → 같은 타깃.
-   선행 작업: `LatexThemePreset` 결합 해소, pasteboard type 개명, 툴바 주입점 분리.
+   선행 작업: `RichMarkdownThemePreset` 결합 해소, pasteboard type 개명, 툴바 주입점 분리.
 4. **캐시 패턴 문서화** → README/DEVELOPMENT.md. 코드 이동은 eviction 설계 후 재검토.
