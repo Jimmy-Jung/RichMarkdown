@@ -23,6 +23,8 @@ public struct LatexTheme: Sendable, Equatable {
     public var inlineCodeBorder: Color
     public var quoteBar: Color
     public var codeHeaderBackground: Color
+    /// 코드 블록 신택스 하이라이팅 색. `LatexCodeBlockOptions.highlighter`를 주입했을 때만 쓰인다.
+    public var syntax: LatexSyntaxColors
 
     // MARK: 폰트
     /// 본문 문단, 리스트 마커, 링크, 원문 fallback.
@@ -51,6 +53,7 @@ public struct LatexTheme: Sendable, Equatable {
         inlineCodeBorder: Color = Color(.separator),
         quoteBar: Color = Color(.systemGray3),
         codeHeaderBackground: Color = Color(.tertiarySystemBackground),
+        syntax: LatexSyntaxColors = .default,
         bodyFont: LatexFont = LatexFont(relativeTo: .body),
         heading1Font: LatexFont = LatexFont(relativeTo: .title1, weight: .bold),
         heading2Font: LatexFont = LatexFont(relativeTo: .title2, weight: .bold),
@@ -69,6 +72,7 @@ public struct LatexTheme: Sendable, Equatable {
         self.inlineCodeBorder = inlineCodeBorder
         self.quoteBar = quoteBar
         self.codeHeaderBackground = codeHeaderBackground
+        self.syntax = syntax
         self.bodyFont = bodyFont
         self.heading1Font = heading1Font
         self.heading2Font = heading2Font
@@ -91,6 +95,70 @@ public struct LatexTheme: Sendable, Equatable {
     }
 
     public static let `default` = LatexTheme()
+}
+
+/// 코드 블록 신택스 색. 역할별 **요소 단위**이며 테마의 다른 색과 같은 규칙이다.
+///
+/// 기본값은 light/dark 각각을 담은 동적 `UIColor`다. 코드 블록 배경
+/// (`secondarySystemBackground`) 위에서 일곱 역할 모두 본문 대비 기준(4.5:1)을 넘는다.
+public struct LatexSyntaxColors: Sendable, Equatable {
+    public var keyword: Color
+    public var string: Color
+    public var comment: Color
+    public var number: Color
+    public var type: Color
+    public var function: Color
+    public var property: Color
+
+    public init(
+        keyword: Color = Self.dynamic(light: 0x9A_24_6C, dark: 0xFF_7A_B2),
+        string: Color = Self.dynamic(light: 0xAF_30_1D, dark: 0xFC_8F_74),
+        comment: Color = Self.dynamic(light: 0x62_70_69, dark: 0x9A_A7_B2),
+        number: Color = Self.dynamic(light: 0x76_54_A3, dark: 0xD9_C9_7C),
+        type: Color = Self.dynamic(light: 0x17_6A_66, dark: 0x82_D4_C0),
+        function: Color = Self.dynamic(light: 0x23_5C_AD, dark: 0x73_BF_FF),
+        property: Color = Self.dynamic(light: 0x74_51_9A, dark: 0xC2_A8_FF)
+    ) {
+        self.keyword = keyword
+        self.string = string
+        self.comment = comment
+        self.number = number
+        self.type = type
+        self.function = function
+        self.property = property
+    }
+
+    public func color(for kind: LatexHighlightKind) -> Color {
+        switch kind {
+        case .keyword: return keyword
+        case .string: return string
+        case .comment: return comment
+        case .number: return number
+        case .type: return type
+        case .function: return function
+        case .property: return property
+        }
+    }
+
+    /// light/dark RGB를 담은 동적 색. 스냅샷이 아니라 trait에 따라 해석된다.
+    public static func dynamic(light: UInt32, dark: UInt32) -> Color {
+        Color(UIColor { traits in
+            UIColor(rgb: traits.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+
+    public static let `default` = LatexSyntaxColors()
+}
+
+private extension UIColor {
+    convenience init(rgb: UInt32) {
+        self.init(
+            red: CGFloat((rgb >> 16) & 0xFF) / 255,
+            green: CGFloat((rgb >> 8) & 0xFF) / 255,
+            blue: CGFloat(rgb & 0xFF) / 255,
+            alpha: 1
+        )
+    }
 }
 
 public extension Color {

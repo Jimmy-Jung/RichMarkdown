@@ -5,6 +5,92 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-15
+
+### 추가
+
+- **코드 블록 확장점 `LatexCodeBlockOptions`.** 코드 블록에 색 범위를 주거나, 특정 언어의 코드
+  블록을 통째로 다른 뷰로 바꾸는 두 가지 확장을 주입한다. SwiftUI `.latexCodeBlocks(_:)`,
+  UIKit `LatexMarkdownUIView.codeBlocks`. 주입하지 않으면 기존 plain monospace 그대로다.
+  - 코어(`SwiftLatex`)에 들어간 것은 프로토콜 `LatexSyntaxHighlighting`·`LatexDiagramRendering`,
+    값 타입 `LatexHighlightSpan`·`LatexHighlightKind`, 주입 지점 하나뿐이다. **JavaScriptCore도
+    WebKit도 링크하지 않는다.**
+  - 범용 custom renderer API는 여전히 만들지 않는다. 확장점은 이 두 가지로 한정한다.
+- **`SwiftLatexHighlight` product — Prism 1.30.0 + JavaScriptCore.** `PrismHighlighter`가 번들에
+  고정한 Prism을 `JSContext`에서 실행해 UTF-16 범위 + 역할을 돌려준다. WebView와 HTML 변환을
+  쓰지 않는다.
+  - 문법 16종: swift, javascript, typescript, jsx, tsx, python, json, bash, kotlin, java, c,
+    cpp, go, rust, sql, yaml, css, markup. Prism이 등록하는 별칭(`js`·`py`·`sh`·`yml` 등)에
+    더해 `c++`·`rs`·`golang`·`zsh`·`postgres` 같은 이름을 보완 매핑한다.
+  - 사용자 코드는 `evaluateScript`에 이어 붙이지 않고 JS 함수의 **문자열 인자**로만 전달한다.
+  - 토큰 조각을 이어 붙인 결과가 원문과 한 글자라도 다르면 범위 **전체**를 버린다. 미지원 언어,
+    Prism 예외, UTF-16 100,000 단위 초과는 모두 빈 배열이며 원문이 그대로 표시된다.
+  - 색은 늦게 와도 된다. 먼저 plain으로 그리고 도착한 범위의 **색만** 바꾸므로 코드 블록 크기가
+    달라지지 않는다. 스트리밍 중 원문이 바뀌면 이전 범위를 버려 위치가 밀린 색을 보여 주지 않는다.
+- **`SwiftLatexMermaid` product — 공식 Mermaid 11.17.2 + WKWebView.** `MermaidDiagramRenderer`를
+  주입하면 ` ```mermaid ` 코드 블록이 공식 Mermaid가 그린 다이어그램으로 바뀐다. 헤더의 언어
+  라벨과 복사 버튼은 남아 원문을 항상 가져갈 수 있다.
+  - `MermaidDiagramView`(SwiftUI)·`MermaidDiagramUIView`(UIKit)·`MermaidWebRenderer`를 직접 쓸 수도 있다.
+  - 로컬 번들 파일만 로드한다. `securityLevel: 'strict'`, CSP `connect-src 'none'`, 링크 실행·외부
+    이동 차단, 런타임 다운로드 없음. 원문은 `callAsyncJavaScript`의 인자다.
+  - 원문 UTF-8 20,000바이트·`maxEdges` 200·표시 높이 4,000pt 상한. 문법 오류와 크기 초과는
+    오류 한 줄 + 원문 코드로 되돌린다.
+  - 모든 다이어그램 WebView가 `WKProcessPool` 하나를 공유해 3 MB가 넘는 번들을 매번 새 콘텐츠
+    프로세스에서 다시 컴파일하지 않는다.
+  - 번들 재생성은 `Sources/SwiftLatexMermaid/Web`(`npm ci && npm run build`). 서드파티 고지
+    64개 패키지를 함께 배포한다.
+- **`LatexTheme.syntax` (`LatexSyntaxColors`).** 신택스 색 7역할(keyword·string·comment·number·
+  type·function·property). 기본값은 light/dark를 담은 동적 색이며 코드 블록 배경 위에서 본문
+  대비 기준(4.5:1)을 넘는다. `LatexSyntaxColors.dynamic(light:dark:)`로 교체한다.
+- **데모 화면 「코드 블록 확장 (Mermaid · Prism)」.** SwiftUI/UIKit 렌더러를 바꿔 가며 두 확장을
+  켜고 끈다.
+- **[Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md).** 설계, 번들 원본 주소와
+  SHA-256, 토큰→역할 매핑, 언어 별칭, 실패 fallback, 표시 한계.
+
+### 변경
+
+- **`DEVELOPMENT.md §1` 비목표에서 「신택스 하이라이팅」·「Mermaid」·「WebView」를 제거**하고 별도
+  opt-in product로 옮겼다. `SwiftLatex` product 자체의 의존성 경계는 그대로다.
+- **테스트 scheme 이름.** product가 4개로 늘면서 test action을 가진 package scheme이
+  `SwiftLatex-Package`가 됐다. 같은 이름의 `SwiftLatex` scheme은 library 빌드 전용이라
+  `xcodebuild test -scheme SwiftLatex`는 "not currently configured for the test action"으로 실패한다.
+  `scripts/ci-test.sh`와 README의 명령을 갱신했다.
+
+### 수정
+
+- `MermaidDiagramUIView`는 `window != nil`일 때만 렌더를 시작한다. WKWebView는 window에 붙기
+  전에는 콘텐츠 프로세스를 띄우지 않아 `didFinish`가 오지 않고 15초 뒤 timeout으로 실패한다(실측).
+  `didMoveToWindow`에서 다시 예약하고, WebKit 콘텐츠 프로세스가 종료된 경우에만 한 번 재시도한다.
+
+### 성능
+
+iPad Pro 11(M5, iPadOS 26.6.2) 실기기에서 Release 데모를 Instruments(Time Profiler·Animation Hitches)로
+계측했다. 챗 스크롤(SwiftUI·UIKit)은 hitch 0·3건으로 문제가 없었고, 개선 대상은 **스트리밍**이었다
+(DEVELOPMENT.md «iPad 실기기 측정 기록»).
+
+- **UIKit 렌더러 스트리밍 in-place 갱신을 구조 블록까지 확대.** 지금까지는 문단·헤딩만 자리에서
+  내용을 바꾸고, 표·코드·목록·인용이 tail이면 tick마다 통째로 다시 만들었다. 표 하나를 스트리밍하는
+  구간에서 tick마다 셀 `UITextView` 12개를 재생성해 hitch가 집중됐다(20Hz 스트림 45초 중 hitch 10건이
+  2.5초 구간에 몰림, 메인 스레드의 34%가 `rebuild`). 이제 같은 언어의 코드 블록은 본문·복사 원문·
+  색 범위 요청만, 열·행 수가 같은 표는 바뀐 셀만, 항목 수가 같은 목록·인용은 바뀐 자식만 갱신한다.
+  행·항목이 늘거나 언어가 바뀌는 tick만 그 블록 하나를 새로 만든다. 같은 스크립트로 재측정한 결과
+  hitch 10건 → 3건(합 116.7ms → 41.7ms), `rebuild` 표본 550 → 316. 회귀 방지:
+  `streamingUpdatesTailCodeBlockInPlace`·`streamingUpdatesTailTableCellsInPlace`·
+  `streamingUpdatesTailListItemInPlace`.
+  - 가로 스크롤 컨테이너는 `HorizontalScrollBlock`이 크기 제약을 보관해 상수만 갱신한다.
+    복사 버튼은 생성 시점 원문을 캡처하지 않고 `LatexCopyButton.payload`를 읽는다.
+- SwiftUI 렌더러의 스트리밍은 바꾸지 않았다. 10Hz 게시마다 8.3ms(120Hz 한 프레임) hitch가 20여 건
+  나지만 비용은 블록 body(5ms 미만)가 아니라 SwiftUI 스택 레이아웃·스크롤 커밋(게시당 약 3ms)이었고,
+  `LatexBlockView`를 `Equatable`로 두는 실험은 같은 조건 재측정에서 차이가 없어 넣지 않았다.
+
+### 데모
+
+- **본문 열 폭 제한.** iPad·가로 모드에서 코드 블록·다이어그램·문단이 화면 전폭으로 늘어나던 것을
+  Notion(708px)·GitHub(1012px) 사이 720pt에서 멈추고 가운데 정렬한다(`DemoLayout`). 챗·SSE·코드 블록
+  확장·라이브 편집 화면에 적용했다. 라이브러리는 폭을 정하지 않는다 — README «사용법»에 레시피를 적었다.
+- UIKit SSE 화면의 하단 자동 스크롤을 tick당 1회로 줄였다. 게시 직후와 블록 재구성 뒤에 각각
+  `layoutIfNeeded`를 강제해 메인 스레드의 14%를 쓰고 있었다.
+
 ## [0.6.0] - 2026-09-04
 
 ### 추가
@@ -92,7 +178,7 @@
   캐시된 수식 raster는 1단계 게시에서 즉시 hydration한다(부분 hydration) — 이미
   raster된 수식이 원문으로 되돌아가는 프레임도 함께 사라졌다.
   두 렌더러(SwiftUI `LatexMarkdownView`, UIKit `LatexMarkdownUIView`) 공통
-  (`DEVELOPMENT.md` §4 계약 개정, `Docs/RENDERING_PERFORMANCE_PLAN.md` §9.5).
+  (`DEVELOPMENT.md` §4 계약 개정).
 
 ## [0.4.0] - 2026-08-25
 
@@ -186,7 +272,6 @@
 ### 성능
 
 UIKit 렌더러(`LatexMarkdownUIView`)의 스크롤 버벅임 개선. 공개 API 변화는 없다.
-근거와 측정 절차는 `Docs/RENDERING_PERFORMANCE_PLAN.md`에 있다.
 
 - **rebuild 증분화.** 게시마다 블록 뷰를 전부 파괴·재생성하지 않는다. `ParsedBlock`
   값 비교로 앞쪽 블록의 뷰를 재사용하고 달라진 지점 뒤만 교체한다. 한 요청의 게시는
@@ -329,7 +414,9 @@ SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는�
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
-[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/Jimmy-Jung/SwiftLatex/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.7.0
+[0.6.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.6.0
 [0.5.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.5.0
 [0.4.1]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.4.1
 [0.4.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.4.0

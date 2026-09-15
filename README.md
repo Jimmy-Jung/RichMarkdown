@@ -3,11 +3,12 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.6.0%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.6.0 beta** — `LatexDollarMathOptions`로 dollar 수식 범위를 조합한다. `.inlineDouble`을 켜면
-> 문장 안 `$$...$$`도 inline 수식이다(LLM 출력·서버 자막 데이터가 자주 쓰는 표기). 기존
-> `parsesDollarMath: Bool` API는 그대로 동작한다.
+> **0.7.0 beta** — 코드 블록 확장점 `LatexCodeBlockOptions`. `SwiftLatexHighlight`(Prism +
+> JavaScriptCore)와 `SwiftLatexMermaid`(공식 Mermaid + WKWebView)를 **opt-in product**로 추가했다.
+> 주입하지 않으면 코드 블록은 지금까지와 같고, `SwiftLatex` 코어는 여전히 WebView도
+> JavaScript 런타임도 링크하지 않는다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
@@ -22,10 +23,28 @@ generation 관리를 공유한다.
 문장 흐름 안에 baseline 정렬된 수식이 포함된 네이티브 텍스트
 ```
 
-- WebView·HTML 실행 없음. 전부 `Text`, `Image`, `ScrollView`로 렌더한다.
+- 코어는 WebView·HTML 실행 없이 전부 `Text`, `Image`, `ScrollView`로 렌더한다.
+  Mermaid 다이어그램이 필요하면 별도 product를 opt-in한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
+
+## 0.7.0 베타 핵심
+
+- **코드 블록 확장** — `LatexCodeBlockOptions` 주입 하나로 코드 블록에 색을 입히거나
+  다이어그램으로 바꾼다. 두 엔진 모두 **opt-in product**라 쓰지 않는 앱은 링크하지 않는다.
+
+  | product | 엔진 | 코드 블록 동작 |
+  |---|---|---|
+  | `SwiftLatexHighlight` | Prism 1.30.0 + JavaScriptCore | 문법 16종의 UTF-16 범위에 색 역할 부여 |
+  | `SwiftLatexMermaid` | Mermaid 11.17.2 + WKWebView | ` ```mermaid ` 블록을 공식 다이어그램으로 교체 |
+
+  색은 `LatexTheme.syntax`가 정하고, 실패·미지원 언어는 원문 코드 블록으로 되돌린다.
+  자세한 내용은 [코드 블록 확장](#코드-블록-확장-하이라이팅과-다이어그램)과
+  [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md).
+- **iPad 실기기 계측과 스트리밍 개선** — UIKit 렌더러가 스트리밍 중 표·코드·목록·인용 블록을
+  자리에서 갱신한다(iPad Pro 실측 hitch 10건 → 3건). 데모는 넓은 화면에서 본문 열을 720pt로
+  제한한다 — 레시피는 [사용법](#swiftui) 참고.
 
 ## 0.6.0 베타 핵심
 
@@ -94,8 +113,8 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 
 ```swift
 dependencies: [
-    // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 0.4 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.6.0")),
+    // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 minor로 고정한다.
+    .package(url: "https://github.com/Jimmy-Jung/SwiftLatex.git", .upToNextMinor(from: "0.7.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLatex"]),
@@ -107,6 +126,17 @@ Notion 스타일 블록 편집기가 필요하면 별도 product를 추가한다
 
 ```swift
 .target(name: "MyApp", dependencies: ["SwiftLatex", "SwiftLatexBlockEditor"]),
+```
+
+코드 블록 확장도 opt-in product다. 필요한 것만 추가한다
+([코드 블록 확장](#코드-블록-확장-하이라이팅과-다이어그램) 참고).
+
+```swift
+.target(name: "MyApp", dependencies: [
+    "SwiftLatex",
+    "SwiftLatexHighlight",  // Prism + JavaScriptCore, 리소스 약 100 KB
+    "SwiftLatexMermaid",    // 공식 Mermaid + WKWebView, 리소스 약 3.4 MB
+]),
 ```
 
 Xcode에서는 File → Add Package Dependencies에 저장소 URL을 넣는다.
@@ -161,6 +191,18 @@ ScrollView {
     }
     .padding()
 }
+```
+
+뷰는 주어진 폭을 가득 채운다. iPad·가로 모드처럼 넓은 화면에서 문단·코드 블록·다이어그램이
+화면 전폭으로 늘어나지 않게 하는 것은 소비 앱의 컨테이너 몫이다. Notion(708px)·GitHub(1012px)처럼
+읽기 폭을 두려면 상한 프레임과 가운데 정렬 프레임을 겹친다. UIKit은 `readableContentGuide`나
+같은 규칙의 `UILayoutGuide`에 `LatexMarkdownUIView`를 붙인다 (데모 `DemoLayout` 참고).
+
+```swift
+LazyVStack(alignment: .leading, spacing: 16) { /* … */ }
+    .frame(maxWidth: 720)        // 열 폭 상한
+    .padding(.horizontal, 16)
+    .frame(maxWidth: .infinity)  // 상한에 걸린 열을 가운데로
 ```
 
 ### 스트리밍
@@ -396,6 +438,57 @@ NSLayoutConstraint.activate([
 ])
 host.didMove(toParent: self)
 ```
+
+### 코드 블록 확장: 하이라이팅과 다이어그램
+
+`LatexCodeBlockOptions` 하나를 주입하면 코드 블록 표시가 바뀐다. 주입하지 않으면
+지금까지와 같은 plain monospace다.
+
+```swift
+import SwiftLatex
+import SwiftLatexHighlight
+import SwiftLatexMermaid
+
+let options = LatexCodeBlockOptions(
+    highlighter: PrismHighlighter.shared,      // ```swift 등에 색
+    diagram: MermaidDiagramRenderer.shared     // ```mermaid → 다이어그램
+)
+
+// SwiftUI
+LatexMarkdownView(markdown: message)
+    .latexTheme(.default)
+    .latexCodeBlocks(options)
+
+// UIKit
+let view = LatexMarkdownUIView(markdown: message)
+view.codeBlocks = options
+```
+
+둘 중 하나만 넣어도 된다. `PrismHighlighter`는 번들에 고정한 Prism 1.30.0을
+JavaScriptCore에서 실행하고(WebView를 쓰지 않는다), `MermaidDiagramRenderer`는 번들에
+고정한 공식 Mermaid 11.17.2를 `WKWebView`에서 실행한다. 둘 다 런타임 다운로드가 없다.
+
+**색**은 테마가 정한다. 다른 테마 값처럼 역할 단위다.
+
+```swift
+var theme = LatexTheme.default
+theme.syntax.keyword = .purple
+theme.syntax.comment = LatexSyntaxColors.dynamic(light: 0x6B_72_80, dark: 0x9C_A3_AF)
+```
+
+**지원 문법 16종**: swift, javascript(js), typescript(ts), jsx, tsx, python(py), json,
+bash(sh/shell/zsh), kotlin(kt), java, c, cpp(c++), go, rust(rs), sql, yaml(yml),
+css, markup(html/xml/svg). 목록에 없는 언어는 색 없이 원문으로 표시한다.
+
+**실패는 전부 원문으로 되돌린다.** 미지원 언어, Prism 예외, 토큰 조각이 원문과 어긋난
+경우, Mermaid 문법 오류, 크기 초과는 모두 원문 코드 블록이다. 다이어그램으로 바뀐
+블록에서도 헤더의 복사 버튼은 그대로 남아 원문을 가져갈 수 있다.
+
+**스트리밍 중**에도 안전하다. 색 범위는 그 범위를 만든 원문과 함께 보관하고, 원문이
+바뀌면 버린다 — 위치가 밀린 색을 한 프레임도 보여 주지 않는다. 하이라이팅은 색만 바꾸므로
+코드 블록 크기가 달라지지 않는다.
+
+설계, 번들 출처와 SHA-256, 표시 한계는 [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md)에 있다.
 
 ### 블록 편집기 (SwiftLatexBlockEditor)
 
@@ -672,8 +765,11 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
   스트림이 끝나면(`nil`) 원문대로 보인다. `$`는 `parsesDollarMath`일 때 다음 문자가 숫자·공백이
   아닌 경우만 대상이다(`$5` 유지). 꼬리 페이드 끝의 alpha 0.2는 대비 기준 미달이지만 12 grapheme
   안의 일시 상태다. 표·코드 블록·수식 블록이 마지막이면 페이드하지 않는다.
-- UIKit 스트리밍 in-place 갱신은 최상위 문단·헤딩에 한한다. 리스트·인용 안의 tail 리프는
-  현행처럼 다시 만든다.
+- UIKit 스트리밍 in-place 갱신은 **구조가 같은 블록**에 한한다. 문단·헤딩, 같은 언어의 코드
+  블록, 열·행 수가 같은 표, 항목 수가 같은 목록·인용은 자리에서 내용만 바꾸고, 행·항목이 늘거나
+  언어가 바뀌는 tick은 그 블록 하나를 새로 만든다. 다이어그램으로 대체된 코드 블록은 tick마다
+  다이어그램 뷰를 다시 만든다(WebView 재생성) — 스트리밍 중 ` ```mermaid ` 블록은 아직 최적화
+  대상이 아니다.
 - 인라인 코드는 감싼 블록 크기를 따르지 않고 `codeFont` 크기를 쓴다.
   헤딩 안의 인라인 코드도 `codeFont` 크기다.
 - **SwiftUI 렌더러 iOS 18+에서 인라인 코드가 있는 문단은 텍스트 선택이 빠진다.**
@@ -710,9 +806,10 @@ P0에서 실제 실행으로 고정한 명령 (CI simulator: iPhone 16 Pro, iOS 
 # Foundation-only Core를 host에서 우선 검증
 swift build --target SwiftLatexCore
 
-# 전체 unit test (package scheme 이름은 `SwiftLatex`)
+# 전체 unit test — test action을 가진 package scheme은 `SwiftLatex-Package`다.
+# 같은 이름의 `SwiftLatex` scheme은 library product 빌드 전용이라 test action이 없다.
 xcodebuild test \
-  -scheme SwiftLatex \
+  -scheme SwiftLatex-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -enableCodeCoverage YES
 
@@ -734,7 +831,7 @@ scripts/ci-test.sh
 
 ```bash
 TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test \
-  -scheme SwiftLatex \
+  -scheme SwiftLatex-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -only-testing:SwiftLatexTests/StreamingBaselineTests
 ```
@@ -768,3 +865,13 @@ TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test \
 - [swift-markdown](https://github.com/swiftlang/swift-markdown) — Apache License 2.0
 - [swift-cmark](https://github.com/apple/swift-cmark) — 2-Clause BSD (cmark 파생)
 - [SwiftMath](https://github.com/mgriebling/SwiftMath) — MIT License
+
+번들된 JavaScript (SPM 의존성이 아니라 소스에 포함한 고정 버전):
+
+- [Prism 1.30.0](https://github.com/PrismJS/prism) — MIT License
+  (`Sources/SwiftLatexHighlight/Resources/Prism/PRISM-LICENSE.txt`, `SwiftLatexHighlight` product)
+- [Mermaid 11.17.2](https://github.com/mermaid-js/mermaid) — MIT License. 번들된 전이 의존성
+  64개 패키지의 고지는 `Sources/SwiftLatexMermaid/Resources/WebAssets/MERMAID-THIRD-PARTY-NOTICES.txt`
+  (`SwiftLatexMermaid` product)
+
+원본 주소와 SHA-256은 [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md)에 기록했다.
