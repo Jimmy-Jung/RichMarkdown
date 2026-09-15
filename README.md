@@ -42,6 +42,9 @@ generation 관리를 공유한다.
   색은 `LatexTheme.syntax`가 정하고, 실패·미지원 언어는 원문 코드 블록으로 되돌린다.
   자세한 내용은 [코드 블록 확장](#코드-블록-확장-하이라이팅과-다이어그램)과
   [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md).
+- **iPad 실기기 계측과 스트리밍 개선** — UIKit 렌더러가 스트리밍 중 표·코드·목록·인용 블록을
+  자리에서 갱신한다(iPad Pro 실측 hitch 10건 → 3건). 데모는 넓은 화면에서 본문 열을 720pt로
+  제한한다 — 레시피는 [사용법](#swiftui) 참고.
 
 ## 0.6.0 베타 핵심
 
@@ -188,6 +191,18 @@ ScrollView {
     }
     .padding()
 }
+```
+
+뷰는 주어진 폭을 가득 채운다. iPad·가로 모드처럼 넓은 화면에서 문단·코드 블록·다이어그램이
+화면 전폭으로 늘어나지 않게 하는 것은 소비 앱의 컨테이너 몫이다. Notion(708px)·GitHub(1012px)처럼
+읽기 폭을 두려면 상한 프레임과 가운데 정렬 프레임을 겹친다. UIKit은 `readableContentGuide`나
+같은 규칙의 `UILayoutGuide`에 `LatexMarkdownUIView`를 붙인다 (데모 `DemoLayout` 참고).
+
+```swift
+LazyVStack(alignment: .leading, spacing: 16) { /* … */ }
+    .frame(maxWidth: 720)        // 열 폭 상한
+    .padding(.horizontal, 16)
+    .frame(maxWidth: .infinity)  // 상한에 걸린 열을 가운데로
 ```
 
 ### 스트리밍
@@ -750,8 +765,11 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
   스트림이 끝나면(`nil`) 원문대로 보인다. `$`는 `parsesDollarMath`일 때 다음 문자가 숫자·공백이
   아닌 경우만 대상이다(`$5` 유지). 꼬리 페이드 끝의 alpha 0.2는 대비 기준 미달이지만 12 grapheme
   안의 일시 상태다. 표·코드 블록·수식 블록이 마지막이면 페이드하지 않는다.
-- UIKit 스트리밍 in-place 갱신은 최상위 문단·헤딩에 한한다. 리스트·인용 안의 tail 리프는
-  현행처럼 다시 만든다.
+- UIKit 스트리밍 in-place 갱신은 **구조가 같은 블록**에 한한다. 문단·헤딩, 같은 언어의 코드
+  블록, 열·행 수가 같은 표, 항목 수가 같은 목록·인용은 자리에서 내용만 바꾸고, 행·항목이 늘거나
+  언어가 바뀌는 tick은 그 블록 하나를 새로 만든다. 다이어그램으로 대체된 코드 블록은 tick마다
+  다이어그램 뷰를 다시 만든다(WebView 재생성) — 스트리밍 중 ` ```mermaid ` 블록은 아직 최적화
+  대상이 아니다.
 - 인라인 코드는 감싼 블록 크기를 따르지 않고 `codeFont` 크기를 쓴다.
   헤딩 안의 인라인 코드도 `codeFont` 크기다.
 - **SwiftUI 렌더러 iOS 18+에서 인라인 코드가 있는 문단은 텍스트 선택이 빠진다.**
