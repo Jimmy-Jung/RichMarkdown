@@ -392,8 +392,9 @@ struct SSEDemoView: View {
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
+                .padding(DemoLayout.horizontalMargin)
+                .frame(maxWidth: .infinity)
             }
             .onAppear { scrollProxy = proxy }
             .onReceive(buffer.$text.dropFirst()) { _ in

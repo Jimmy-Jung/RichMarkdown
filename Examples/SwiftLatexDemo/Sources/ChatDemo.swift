@@ -239,8 +239,10 @@ struct ChatDemoView: View {
                     )
                 }
             }
-            .padding(.horizontal, 16)
+            .frame(maxWidth: DemoLayout.readableWidth)
+            .padding(.horizontal, DemoLayout.horizontalMargin)
             .padding(.vertical, 20)
+            .frame(maxWidth: .infinity)
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("AI 챗봇")

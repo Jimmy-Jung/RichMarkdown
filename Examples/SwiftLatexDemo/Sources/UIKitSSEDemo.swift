@@ -142,7 +142,11 @@ final class UIKitSSEDemoViewController: UIViewController {
         bubble.isHidden = false
         messageView.markdown = text
         updateStatus()
-        scrollToBottom()
+        // 스트리밍 중 하단 추적은 `onContentSizeChange`(블록 재구성 뒤)가 맡는다. 여기서도 스크롤하면
+        // 아직 갱신되지 않은 옛 콘텐츠를 강제 레이아웃해 tick마다 `layoutIfNeeded`가 두 번 돈다
+        // (2026-09-15 iPad Pro 실측: 스트리밍 중 메인 스레드의 14%). 스트림이 끝난 뒤의 마지막
+        // 게시(`stop()`의 flush)만 여기서 맞춘다.
+        if !isStreaming { scrollToBottom() }
     }
 
     /// 화면을 떠나면 스트림을 멈춘다. SwiftUI 화면의 `.task(id:)` 수명과 같은 의미다.
@@ -195,6 +199,8 @@ final class UIKitSSEDemoViewController: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentStack)
         view.addSubview(scrollView)
+        // 본문 열은 읽기 폭에서 멈춘다 (DemoLayout). 컨트롤러 뷰 기준이라 회전에도 따라온다.
+        let column = view.addReadableColumnGuide()
 
         NSLayoutConstraint.activate([
             messageView.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 14),
@@ -203,10 +209,10 @@ final class UIKitSSEDemoViewController: UIViewController {
             messageView.bottomAnchor.constraint(equalTo: bubble.bottomAnchor, constant: -14),
 
             contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 16),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 16),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -16),
             contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -16),
-            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32),
+            contentStack.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+            scrollView.contentLayoutGuide.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
     }
 
@@ -354,8 +360,9 @@ final class UIKitSSEDemoViewController: UIViewController {
     }
 
     private func stop() {
-        buffer.flush()
+        // 종료를 먼저 알린 뒤 flush한다 — 마지막 게시의 `render`가 스트림 종료 경로로 하단을 맞춘다.
         isStreaming = false
+        buffer.flush()
         runID += 1
         streamTask?.cancel()
         streamTask = nil

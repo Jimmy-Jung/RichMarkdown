@@ -1,6 +1,34 @@
 import SwiftUI
 import SwiftLatex
 
+/// 데모 화면의 본문 열 폭. iPad·가로 모드에서 코드 블록·다이어그램·문단이 화면 전폭으로
+/// 늘어나지 않게 Notion(708px)·GitHub(1012px) 사이 값으로 제한하고 가운데 정렬한다.
+/// 라이브러리는 폭을 정하지 않는다 — 소비 앱의 컨테이너 책임이다 (README «레이아웃 폭»).
+enum DemoLayout {
+    static let readableWidth: CGFloat = 720
+    static let horizontalMargin: CGFloat = 16
+}
+
+extension UIView {
+    /// 가운데 정렬된 본문 열 가이드. 좁은 화면에서는 좌우 여백만 남기고 폭을 채우며,
+    /// 넓은 화면에서는 `DemoLayout.readableWidth`에서 멈춘다.
+    func addReadableColumnGuide() -> UILayoutGuide {
+        let guide = UILayoutGuide()
+        addLayoutGuide(guide)
+        let fill = guide.widthAnchor.constraint(
+            equalTo: widthAnchor, constant: -2 * DemoLayout.horizontalMargin
+        )
+        fill.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            guide.centerXAnchor.constraint(equalTo: centerXAnchor),
+            guide.widthAnchor.constraint(lessThanOrEqualToConstant: DemoLayout.readableWidth),
+            guide.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: DemoLayout.horizontalMargin),
+            fill,
+        ])
+        return guide
+    }
+}
+
 @main
 struct SwiftLatexDemoApp: App {
     var body: some Scene {
