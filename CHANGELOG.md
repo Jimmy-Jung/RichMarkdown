@@ -5,6 +5,63 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-14
+
+### 추가
+
+- **코드 블록 확장점 `LatexCodeBlockOptions`.** 코드 블록에 색 범위를 주거나, 특정 언어의 코드
+  블록을 통째로 다른 뷰로 바꾸는 두 가지 확장을 주입한다. SwiftUI `.latexCodeBlocks(_:)`,
+  UIKit `LatexMarkdownUIView.codeBlocks`. 주입하지 않으면 기존 plain monospace 그대로다.
+  - 코어(`SwiftLatex`)에 들어간 것은 프로토콜 `LatexSyntaxHighlighting`·`LatexDiagramRendering`,
+    값 타입 `LatexHighlightSpan`·`LatexHighlightKind`, 주입 지점 하나뿐이다. **JavaScriptCore도
+    WebKit도 링크하지 않는다.**
+  - 범용 custom renderer API는 여전히 만들지 않는다. 확장점은 이 두 가지로 한정한다.
+- **`SwiftLatexHighlight` product — Prism 1.30.0 + JavaScriptCore.** `PrismHighlighter`가 번들에
+  고정한 Prism을 `JSContext`에서 실행해 UTF-16 범위 + 역할을 돌려준다. WebView와 HTML 변환을
+  쓰지 않는다.
+  - 문법 16종: swift, javascript, typescript, jsx, tsx, python, json, bash, kotlin, java, c,
+    cpp, go, rust, sql, yaml, css, markup. Prism이 등록하는 별칭(`js`·`py`·`sh`·`yml` 등)에
+    더해 `c++`·`rs`·`golang`·`zsh`·`postgres` 같은 이름을 보완 매핑한다.
+  - 사용자 코드는 `evaluateScript`에 이어 붙이지 않고 JS 함수의 **문자열 인자**로만 전달한다.
+  - 토큰 조각을 이어 붙인 결과가 원문과 한 글자라도 다르면 범위 **전체**를 버린다. 미지원 언어,
+    Prism 예외, UTF-16 100,000 단위 초과는 모두 빈 배열이며 원문이 그대로 표시된다.
+  - 색은 늦게 와도 된다. 먼저 plain으로 그리고 도착한 범위의 **색만** 바꾸므로 코드 블록 크기가
+    달라지지 않는다. 스트리밍 중 원문이 바뀌면 이전 범위를 버려 위치가 밀린 색을 보여 주지 않는다.
+- **`SwiftLatexMermaid` product — 공식 Mermaid 11.17.2 + WKWebView.** `MermaidDiagramRenderer`를
+  주입하면 ` ```mermaid ` 코드 블록이 공식 Mermaid가 그린 다이어그램으로 바뀐다. 헤더의 언어
+  라벨과 복사 버튼은 남아 원문을 항상 가져갈 수 있다.
+  - `MermaidDiagramView`(SwiftUI)·`MermaidDiagramUIView`(UIKit)·`MermaidWebRenderer`를 직접 쓸 수도 있다.
+  - 로컬 번들 파일만 로드한다. `securityLevel: 'strict'`, CSP `connect-src 'none'`, 링크 실행·외부
+    이동 차단, 런타임 다운로드 없음. 원문은 `callAsyncJavaScript`의 인자다.
+  - 원문 UTF-8 20,000바이트·`maxEdges` 200·표시 높이 4,000pt 상한. 문법 오류와 크기 초과는
+    오류 한 줄 + 원문 코드로 되돌린다.
+  - 모든 다이어그램 WebView가 `WKProcessPool` 하나를 공유해 3 MB가 넘는 번들을 매번 새 콘텐츠
+    프로세스에서 다시 컴파일하지 않는다.
+  - 번들 재생성은 `Sources/SwiftLatexMermaid/Web`(`npm ci && npm run build`). 서드파티 고지
+    64개 패키지를 함께 배포한다.
+- **`LatexTheme.syntax` (`LatexSyntaxColors`).** 신택스 색 7역할(keyword·string·comment·number·
+  type·function·property). 기본값은 light/dark를 담은 동적 색이며 코드 블록 배경 위에서 본문
+  대비 기준(4.5:1)을 넘는다. `LatexSyntaxColors.dynamic(light:dark:)`로 교체한다.
+- **데모 화면 「코드 블록 확장 (Mermaid · Prism)」.** SwiftUI/UIKit 렌더러를 바꿔 가며 두 확장을
+  켜고 끈다.
+- **[Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md).** 설계, 번들 원본 주소와
+  SHA-256, 토큰→역할 매핑, 언어 별칭, 실패 fallback, 표시 한계.
+
+### 변경
+
+- **`DEVELOPMENT.md §1` 비목표에서 「신택스 하이라이팅」·「Mermaid」·「WebView」를 제거**하고 별도
+  opt-in product로 옮겼다. `SwiftLatex` product 자체의 의존성 경계는 그대로다.
+- **테스트 scheme 이름.** product가 4개로 늘면서 test action을 가진 package scheme이
+  `SwiftLatex-Package`가 됐다. 같은 이름의 `SwiftLatex` scheme은 library 빌드 전용이라
+  `xcodebuild test -scheme SwiftLatex`는 "not currently configured for the test action"으로 실패한다.
+  `scripts/ci-test.sh`와 README의 명령을 갱신했다.
+
+### 수정
+
+- `MermaidDiagramUIView`는 `window != nil`일 때만 렌더를 시작한다. WKWebView는 window에 붙기
+  전에는 콘텐츠 프로세스를 띄우지 않아 `didFinish`가 오지 않고 15초 뒤 timeout으로 실패한다(실측).
+  `didMoveToWindow`에서 다시 예약하고, WebKit 콘텐츠 프로세스가 종료된 경우에만 한 번 재시도한다.
+
 ## [0.6.0] - 2026-09-04
 
 ### 추가

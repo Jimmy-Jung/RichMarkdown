@@ -66,15 +66,30 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 ### 명시적 비목표
 
 - 공개 parser/AST product
-- 신택스 하이라이팅과 Highlightr 의존성
+- Highlightr 의존성
 - 여러 블록을 가로지르는 연속 범위 선택
-- 범위(문자 구간) 단위 색·폰트 지정. 테마는 요소 단위다
+- 임의의 문자 구간 단위 색·폰트 지정. 테마는 요소 단위다
 - callback 기반 링크/복사 API
 - 공개 입력 제한 설정
-- 원격 이미지, Mermaid, HTML 실행, WebView, 편집, macOS UI
+- 원격 이미지, HTML 실행, 편집, macOS UI
 - 링크와 이미지 Markdown 문법 내부의 LaTeX 해석
+- 범용 custom renderer API
 
 두 번째 실제 소비자나 측정된 요구가 생기기 전에는 위 기능을 추가하지 않는다.
+
+### 비목표에서 옮긴 것 — 코드 블록 확장 (별도 product)
+
+「신택스 하이라이팅」, 「Mermaid」, 「WebView」는 실제 요구가 생겨 경계를 바꿨다.
+다만 **`SwiftLatex` product의 경계는 그대로다** — 코어는 JavaScriptCore도 WebKit도
+링크하지 않고, 추가된 것은 프로토콜 2개와 주입 지점 1개(`LatexCodeBlockOptions`)뿐이다.
+엔진은 각각 opt-in product에 있어 쓰지 않는 앱은 의존하지 않는다.
+
+| product | 엔진 | 코드 블록 동작 |
+|---|---|---|
+| `SwiftLatexHighlight` | Prism 1.30.0 + JavaScriptCore | UTF-16 범위에 색 역할 부여 |
+| `SwiftLatexMermaid` | Mermaid 11.17.2 + WKWebView | ```` ```mermaid ```` 블록을 다이어그램으로 교체 |
+
+설계·번들 출처·SHA-256·실패 fallback은 [Docs/CODE_BLOCK_EXTENSIONS.md](Docs/CODE_BLOCK_EXTENSIONS.md)에 있다.
 
 ### 실패 시 표시 원칙
 
@@ -91,6 +106,8 @@ LLM 채팅 UI에서 어시스턴트 메시지 하나를 다음처럼 표시한�
 v1의 공개 product는 `SwiftLatex` 하나다. 0.4.0부터 Notion 스타일 블록 편집기가
 별도 product `SwiftLatexBlockEditor`로 추가됐다 — 렌더 라이브러리와 관심사가 달라
 같은 product에 합치지 않으며, 편집기가 필요 없는 앱은 의존하지 않는다.
+0.7.0의 `SwiftLatexHighlight`·`SwiftLatexMermaid`도 같은 규칙이다 — 코어가 링크하지
+않는 JavaScriptCore·WebKit과 번들 JavaScript를 쓰는 앱에만 들어간다.
 
 ```swift
 import SwiftLatex
@@ -598,7 +615,7 @@ tick마다 누적 원문이 새 키가 되어 다른 셀의 항목을 밀어내�
 - MainActor 검증: worker off-main 실행 테스트(`OffMainExecutionTests`) +
   signpost `dev.swiftlatex`/`parse`·`raster` (Instruments 확인용)
 - 30초 전체 측정 재실행: `TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test
-  -scheme SwiftLatex -only-testing:SwiftLatexTests/StreamingBaselineTests ...`
+  -scheme SwiftLatex-Package -only-testing:SwiftLatexTests/StreamingBaselineTests ...`
 
 ### 데모 앱 (2026-08-19)
 
@@ -768,11 +785,12 @@ P0가 scheme을 만든 뒤 현재 로컬 최소 runtime에서는 다음 형태�
 swiftlatex_results_dir=$(mktemp -d /tmp/swiftlatex-results.XXXXXX)
 
 swiftlatex_package_status=0
-# P0 확정: package scheme의 실제 이름은 `SwiftLatex`다.
+# test action을 가진 package scheme은 `SwiftLatex-Package`다. 같은 이름의 `SwiftLatex`
+# scheme은 library product 빌드 전용이라 test action이 없다 (product가 4개로 늘어난 뒤 실측).
 # Swift 6 mode/strict concurrency는 tools 6.0 manifest가 적용한다. 전역
 # SWIFT_VERSION=6 / WARNINGS_AS_ERRORS override는 의존성까지 재컴파일하므로 쓰지 않는다.
 xcodebuild test \
-  -scheme SwiftLatex \
+  -scheme SwiftLatex-Package \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -resultBundlePath "$swiftlatex_results_dir/package.xcresult" \
   -enableCodeCoverage YES \
