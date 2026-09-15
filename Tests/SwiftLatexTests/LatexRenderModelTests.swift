@@ -255,8 +255,8 @@ import Testing
         #expect(ParseCache.shared.document(for: staleKey) == nil)
     }
 
-    /// UIKit 렌더러 요청(`rastersDisplayMath: false`)은 블록 수식을 raster하지 않는다
-    /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.4 부채 해소). 인라인 raster는 유지된다.
+    /// UIKit 렌더러 요청(`rastersDisplayMath: false`)은 블록 수식을 raster하지 않는다.
+    /// 인라인 raster는 유지된다.
     @Test func skipsDisplayMathRasterWhenRequestOptsOut() async throws {
         let model = LatexRenderModel()
         // 처음 보는 latex — raster 캐시가 비어 있어, "raster가 실행되지 않았다"를

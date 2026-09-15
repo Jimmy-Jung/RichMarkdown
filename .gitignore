@@ -6,3 +6,6 @@ DerivedData/
 *.xcresult
 .serena/
 .gstack/
+
+# npm 의존성은 저장소에 두지 않는다. 번들 재생성은 Docs/CODE_BLOCK_EXTENSIONS.md §5.1 참고.
+node_modules/

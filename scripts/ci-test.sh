@@ -2,7 +2,9 @@
 # CI 테스트 파이프라인 (DEVELOPMENT.md §8, P0에서 실제 실행해 이름/옵션 고정).
 #
 # 확정된 사실:
-# - package scheme의 실제 이름은 `SwiftLatex`다 (`SwiftLatex-Package` 아님).
+# - 테스트 액션을 가진 package scheme은 `SwiftLatex-Package`다. 같은 이름의 `SwiftLatex`
+#   scheme도 있지만 그쪽은 library product 빌드 전용이라 test action이 없다 (product가
+#   4개로 늘어난 뒤 실측: "Scheme SwiftLatex is not currently configured for the test action").
 # - Swift 6 language mode + complete concurrency는 tools 6.0 manifest가 우리 target에 적용한다.
 #   전역 SWIFT_VERSION=6 / SWIFT_TREAT_WARNINGS_AS_ERRORS=YES override는 의존성(SwiftMath 등)까지
 #   재컴파일 대상으로 만들므로 사용하지 않는다.
@@ -20,7 +22,7 @@ swift build --target SwiftLatexCore \
 # 1) Core 포함 전체 unit test는 iOS Simulator의 package scheme에서 실행한다.
 swiftlatex_package_status=0
 xcodebuild test \
-    -scheme SwiftLatex \
+    -scheme SwiftLatex-Package \
     -destination "$destination" \
     -resultBundlePath "$swiftlatex_results_dir/package.xcresult" \
     -enableCodeCoverage YES \
