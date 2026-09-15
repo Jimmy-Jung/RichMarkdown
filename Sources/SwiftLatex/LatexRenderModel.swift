@@ -33,8 +33,8 @@ package final class LatexRenderModel: ObservableObject {
         package let displayScale: CGFloat
         package let mathFont: LatexMathFont
         /// 블록(display) 수식 raster가 필요한가. UIKit 렌더러는 블록 수식을 벡터 뷰로
-        /// 그리므로 false를 보낸다 — 아무도 읽지 않는 raster를 만들지 않는다
-        /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.4). 인라인 수식 raster에는 영향이 없다.
+        /// 그리므로 false를 보낸다 — 아무도 읽지 않는 raster를 만들지 않는다.
+        /// 인라인 수식 raster에는 영향이 없다.
         package let rastersDisplayMath: Bool
         package var wasTruncated: Bool { boundedInput.wasTruncated }
 

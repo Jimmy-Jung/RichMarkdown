@@ -388,8 +388,7 @@ import UIKit
         #expect(renderedText(in: view).contains(latex), "상한 초과 수식은 원문으로 남는다")
     }
 
-    /// UIKit 렌더러는 블록 수식 raster를 요청하지 않는다
-    /// (Docs/RENDERING_PERFORMANCE_PLAN.md §9.4 부채 해소).
+    /// UIKit 렌더러는 블록 수식 raster를 요청하지 않는다.
     @Test func doesNotRasterBlockMath() async throws {
         let unique = UUID().uuidString.prefix(8)
         let view = LatexMarkdownUIView(markdown: #"\[w_{\#(unique)}+9\]"#)

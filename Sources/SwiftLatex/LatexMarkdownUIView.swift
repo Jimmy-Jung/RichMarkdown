@@ -124,7 +124,7 @@ public final class LatexMarkdownUIView: UIView {
     ///
     /// 스트리밍은 markdown 갱신마다 fallback 게시(`document == nil`)를 거치므로, 매 tick
     /// `UITextView`(TextKit 스택 통째)를 만들고 버리지 않도록 인스턴스 하나를 유지하고
-    /// attributed string만 바꾼다 (Docs/RENDERING_PERFORMANCE_PLAN.md §9.5).
+    /// attributed string만 바꾼다.
     /// 텍스트 레이아웃 비용 자체는 남는다 — 내용이 실제로 바뀌므로 피할 수 없다.
     private lazy var fallbackTextView: LatexTextView = textView(NSAttributedString())
 
