@@ -440,7 +440,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
 
 - 한 요청의 게시는 3회(document, mathImages 초기화, hydration)다. `objectWillChange`를
   다음 MainActor hop으로 미뤄 rebuild를 1회로 합친다.
-- **rebuild는 증분이다** (2026-08-21, `Docs/RENDERING_PERFORMANCE_PLAN.md` §8.2).
+- **rebuild는 증분이다** (2026-08-21).
   게시가 와도 블록 뷰를 전부 파괴하지 않는다.
   - 재사용 조건은 셋이다: ① 같은 index의 `ParsedBlock` 값이 같다 ② 그 블록이 이미지
     사전에서 찾아 쓴 수식 개수가 같다 ③ `AppearanceKey`(theme, 해석된 body/code

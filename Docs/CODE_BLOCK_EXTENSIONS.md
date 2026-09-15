@@ -20,9 +20,7 @@
 | `SwiftLatexHighlight` | Prism 1.30.0 | JavaScriptCore | 약 100 KB |
 | `SwiftLatexMermaid` | Mermaid 11.17.2 | WebKit | 약 3.4 MB |
 
-이 문서는 **WKWebView로 공식 Mermaid를 실행하는 경로**를 기록한다. WebView 없이 Swift에서
-직접 파싱·배치·그리는 네이티브 경로는 [MERMAID_NATIVE_RENDERING_RESEARCH.md](MERMAID_NATIVE_RENDERING_RESEARCH.md)의
-조사 상태 그대로이며, 이 구현이 그 결정을 대신하지 않는다.
+이 문서는 **WKWebView로 공식 Mermaid를 실행하는 경로**를 기록한다.
 
 ## 2. 사용법
 

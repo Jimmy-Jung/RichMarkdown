@@ -149,7 +149,7 @@
   캐시된 수식 raster는 1단계 게시에서 즉시 hydration한다(부분 hydration) — 이미
   raster된 수식이 원문으로 되돌아가는 프레임도 함께 사라졌다.
   두 렌더러(SwiftUI `LatexMarkdownView`, UIKit `LatexMarkdownUIView`) 공통
-  (`DEVELOPMENT.md` §4 계약 개정, `Docs/RENDERING_PERFORMANCE_PLAN.md` §9.5).
+  (`DEVELOPMENT.md` §4 계약 개정).
 
 ## [0.4.0] - 2026-08-25
 
@@ -243,7 +243,6 @@
 ### 성능
 
 UIKit 렌더러(`LatexMarkdownUIView`)의 스크롤 버벅임 개선. 공개 API 변화는 없다.
-근거와 측정 절차는 `Docs/RENDERING_PERFORMANCE_PLAN.md`에 있다.
 
 - **rebuild 증분화.** 게시마다 블록 뷰를 전부 파괴·재생성하지 않는다. `ParsedBlock`
   값 비교로 앞쪽 블록의 뷰를 재사용하고 달라진 지점 뒤만 교체한다. 한 요청의 게시는
