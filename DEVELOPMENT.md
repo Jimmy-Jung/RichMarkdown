@@ -617,6 +617,38 @@ tick마다 누적 원문이 새 키가 되어 다른 셀의 항목을 밀어내�
 - 30초 전체 측정 재실행: `TEST_RUNNER_SWIFTLATEX_STREAM_SECONDS=30 xcodebuild test
   -scheme SwiftLatex-Package -only-testing:SwiftLatexTests/StreamingBaselineTests ...`
 
+### iPad 실기기 측정 기록 (2026-09-15)
+
+환경: iPad Pro 11-inch (M5), iPadOS 26.6.2, 120Hz, Release 빌드(Xcode 26.6), 앱 프로세스 attach.
+도구: `xcrun xctrace record --time-limit`(Time Profiler / Animation Hitches), UI 조작은 agent-device
+XCTest 러너. 러너의 접근성 조회가 앱 메인 스레드에 실리므로(SwiftUI `AccessibilityNode.automationElements`
+가 스크롤 표본의 약 25%) 절대 CPU 값은 과대이고, hitch·앱 프레임 비중은 시나리오 간 상대 비교로만 쓴다.
+agent-device `perf trace stop`은 Animation Hitches 트레이스 저장을 기다리지 못하고 강제 종료해 파일을
+깨뜨렸다 — 시간 제한으로 xctrace가 스스로 끝나게 두는 쪽이 맞다.
+
+| 시나리오 | 구간 | hitch | 메인 스레드 소견 |
+|---|---|---|---|
+| 코드 블록 확장 진입 (SwiftUI) | 탭 → 다이어그램 2개 | hang 0 | 진입 창 3.5초에 CPU 0.7초, `MermaidDiagramUIView.init` 14ms |
+| 코드 블록 확장 (UIKit 전환) | 세그먼트 탭 → 다이어그램 | hang 0 | 10초 창 23% 점유, 앱 프레임은 접근성 getter만 |
+| 챗 스크롤 (SwiftUI) | 6페이지 왕복 31초 | **0건** | 앱 프레임 비중 <1% |
+| 챗 스크롤 (UIKit) | 6페이지 왕복 31초 | **3건**(8·17·42ms) | `AssistantMessageCell.configure` 30ms 외 미미 |
+| SSE 스트리밍 20Hz (SwiftUI) | 9초 | **23건**(전부 8.3ms, 합 200ms) | `publishPending` → AttributeGraph 갱신·전 블록 body 재평가 |
+| SSE 스트리밍 20Hz (UIKit) | 9초 | **10건**(최대 25ms, 표 구간 2.5초에 집중) | `rebuild` 550/1627 샘플, 그중 `LatexTextView.init` 171·`tableView` 184 |
+| 콜드 런치 → SwiftUI 챗 첫 진입 | 런치 1초 + 진입 4초 | hang 0 | 런치 창 메인 340ms(13개 뷰 prewarm `rebuild` 89ms) |
+
+- hitch는 Instruments `hitches` 테이블 기준이며 120Hz 한 프레임(8.33ms) 단위다. Apple의
+  hitch time ratio 기준(5ms/s 경고, 10ms/s 심각)으로 스트리밍 구간은 SwiftUI 28ms/s, UIKit 13ms/s.
+- UIKit은 표·코드·목록·인용 tail 블록의 in-place 갱신으로 대응했다(§5). 같은 스크립트로 재측정:
+  hitch **10건 → 3건**(합 116.7ms → 41.7ms, 최대 25ms → 16.7ms), `rebuild` 550 → 316 샘플,
+  `LatexTextView.init` 171 → 70, `tableView` 184 → 69. 표본은 각 1회라 추세로만 읽는다.
+- SwiftUI는 바꾸지 않았다. `publishPending` 아래 비용을 분해하면 블록 body 재평가는 5ms 미만이고
+  나머지가 SwiftUI 스택 레이아웃·스크롤 커밋(게시당 약 3ms)이다. `LatexBlockView: Equatable` 실험은
+  같은 조건 재측정에서 hitch 23 → 20건, `updateBody` 62 → 59 샘플로 차이가 없어 넣지 않았다.
+  120Hz 한 프레임(8.3ms)짜리 hitch가 게시마다 하나씩 나는 구조이며, 60Hz 기기에서는 hitch로 잡히지 않는다.
+- 스트리밍 중 ` ```mermaid ` 블록은 UIKit 렌더러가 tick마다 다이어그램 뷰(WKWebView)를 새로 만든다.
+  fixture에 없어 측정하지 않았다(미검증). `LatexDiagramRendering`에 갱신 경로가 없어 다음 과제다.
+- 산출물(trace·XML·스크립트)은 외장 `AgentBuilds/SwiftLatexDemo-*/perf`에 있다. 저장소에는 넣지 않는다.
+
 ### 데모 앱 (2026-08-19)
 
 `Examples/SwiftLatexDemo`는 LLM 챗봇 형태의 화면을 제공한다. 한 화면을 스크롤하며
