@@ -318,14 +318,15 @@ public final class LatexMarkdownUIView: UIView {
                     if stablePrefix { stableCount += 1 }
                     continue
                 }
-                // 스트리밍 중에는 같은 종류의 텍스트 블록을 새로 만들지 않고 내용만 바꾼다.
-                // tick마다 `UITextView`를 버리지 않는다. 앞 블록이 모두 그대로인 일반적인 tick에서는
-                // 계층 조작이 없어 읽던 문단의 VoiceOver 포커스도 유지된다.
+                // 스트리밍 중에는 같은 종류의 블록을 새로 만들지 않고 내용만 바꾼다. tick마다
+                // `UITextView`를 버리지 않으며, 표·코드·목록·인용처럼 뷰가 여럿인 블록도 셀·본문만
+                // 갱신한다 (2026-09-15 iPad Pro 실측: 표를 스트리밍하는 구간에서 tick마다 셀
+                // UITextView 12개를 재생성해 hitch가 집중됐다). 앞 블록이 모두 그대로인 일반적인
+                // tick에서는 계층 조작이 없어 읽던 문단의 VoiceOver 포커스도 유지된다.
                 if streaming != nil,
-                   let textView = previous.view as? LatexTextView,
-                   updateTextBlock(textView, from: previous.block, to: block, images: images, tail: tail) {
+                   updateBlockInPlace(previous.view, from: previous.block, to: block, images: images, tail: tail) {
                     rendered.append(
-                        RenderedBlock(block: block, view: textView, mathImageCount: mathCount, tail: tail)
+                        RenderedBlock(block: block, view: previous.view, mathImageCount: mathCount, tail: tail)
                     )
                     if stablePrefix { stableCount += 1 }
                     continue
@@ -348,9 +349,11 @@ public final class LatexMarkdownUIView: UIView {
         renderedAppearance = appearance
     }
 
-    /// 같은 종류(문단↔문단, 같은 레벨 헤딩)의 텍스트 블록이면 기존 뷰의 내용만 바꾸고 true.
-    private func updateTextBlock(
-        _ view: LatexTextView,
+    /// 같은 종류의 블록이면 기존 뷰의 내용만 바꾸고 true. 구조(언어·열 수·행 수·항목 수)가
+    /// 달라지면 false — 호출자가 그 블록 하나만 새로 만든다. 스트리밍에서 구조 변화는 행·항목이
+    /// 하나 늘어날 때뿐이라 재생성은 그 tick 한 번이고, 글자가 이어지는 나머지 tick은 전부 이 경로다.
+    private func updateBlockInPlace(
+        _ view: UIView,
         from previous: ParsedBlock,
         to block: ParsedBlock,
         images: [MathSegment: RenderedMath],
@@ -358,18 +361,170 @@ public final class LatexMarkdownUIView: UIView {
     ) -> Bool {
         switch (previous, block) {
         case (.paragraph, .paragraph(let runs)):
-            configure(view, runs: runs, images: images, font: bodyUIFont, tail: tail)
+            guard let textView = view as? LatexTextView else { return false }
+            configure(textView, runs: runs, images: images, font: bodyUIFont, tail: tail)
             return true
+
         case (.heading(let previousLevel, _), .heading(let level, let runs)) where previousLevel == level:
+            guard let textView = view as? LatexTextView else { return false }
             configure(
-                view,
+                textView,
                 runs: runs,
                 images: images,
                 font: theme.headingFont(level: level).resolvedUIFont(compatibleWith: traitCollection),
                 tail: tail
             )
             return true
+
+        case (.codeBlock(let previousLanguage, _), .codeBlock(let language, let code))
+            where previousLanguage == language:
+            return updateCodeBlock(view, language: language, code: code)
+
+        case (.table(let previousTable), .table(let table)):
+            return updateTable(view, from: previousTable, to: table, images: images)
+
+        case (.blockQuote(let previousChildren), .blockQuote(let children)):
+            guard let row = view as? UIStackView, row.arrangedSubviews.count == 2,
+                  let stack = row.arrangedSubviews[1] as? UIStackView
+            else { return false }
+            return updateChildren(stack, from: previousChildren, to: children, images: images, tail: tail)
+
+        case (.unorderedList(let previousItems), .unorderedList(let items)):
+            return updateListItems(view, from: previousItems, to: items, images: images, tail: tail)
+
+        case (.orderedList(let previousStart, let previousItems), .orderedList(let start, let items))
+            where previousStart == start:
+            return updateListItems(view, from: previousItems, to: items, images: images, tail: tail)
+
         default:
+            return false
+        }
+    }
+
+    /// 자식 수가 같은 컨테이너(인용·목록 항목)의 자식을 자리에서 갱신한다. 하나라도 실패하면
+    /// false — 호출자가 컨테이너 전체를 새로 만들므로 앞선 부분 갱신은 그대로 버려진다.
+    private func updateChildren(
+        _ stack: UIStackView,
+        from previous: [ParsedBlock],
+        to children: [ParsedBlock],
+        images: [MathSegment: RenderedMath],
+        tail: LatexStreamingOptions?
+    ) -> Bool {
+        guard previous.count == children.count, stack.arrangedSubviews.count == children.count else {
+            return false
+        }
+        for (index, (old, new)) in zip(previous, children).enumerated() {
+            let isLast = index == children.count - 1
+            // 값이 같고 수식도 없는 자식은 바뀔 수 있는 것이 없다. 마지막 자식은 tail 표시가
+            // 바뀔 수 있어 항상 갱신한다.
+            if old == new, !isLast, !containsMath(new) { continue }
+            guard updateBlockInPlace(
+                stack.arrangedSubviews[index],
+                from: old,
+                to: new,
+                images: images,
+                tail: isLast ? tail : nil
+            ) else { return false }
+        }
+        return true
+    }
+
+    private func updateListItems(
+        _ view: UIView,
+        from previous: [[ParsedBlock]],
+        to items: [[ParsedBlock]],
+        images: [MathSegment: RenderedMath],
+        tail: LatexStreamingOptions?
+    ) -> Bool {
+        guard let list = view as? UIStackView, previous.count == items.count,
+              list.arrangedSubviews.count == items.count
+        else { return false }
+        for (index, (old, new)) in zip(previous, items).enumerated() {
+            let isLast = index == items.count - 1
+            if old == new, !isLast, !new.contains(where: { containsMath($0) }) { continue }
+            guard let row = list.arrangedSubviews[index] as? UIStackView, row.arrangedSubviews.count == 2,
+                  let children = row.arrangedSubviews[1] as? UIStackView,
+                  updateChildren(children, from: old, to: new, images: images, tail: isLast ? tail : nil)
+            else { return false }
+        }
+        return true
+    }
+
+    /// 같은 언어의 코드 블록이면 본문·복사 원문·색 범위 요청만 바꾼다. 다이어그램으로 대체된
+    /// 블록은 뷰 구조가 달라 false다.
+    private func updateCodeBlock(_ view: UIView, language: String?, code: String) -> Bool {
+        guard codeBlocks.diagramRenderer(for: language) == nil,
+              let container = view as? UIStackView, container.arrangedSubviews.count == 2,
+              let header = container.arrangedSubviews[0] as? UIStackView,
+              let copy = header.arrangedSubviews.last as? LatexCopyButton,
+              let scroll = container.arrangedSubviews[1] as? HorizontalScrollBlock,
+              let body = scroll.content as? LatexTextView
+        else { return false }
+
+        copy.payload = code
+        body.highlightTask = nil
+        body.attributedText = NSAttributedString(string: code, attributes: [
+            .font: codeUIFont,
+            .foregroundColor: UIColor(theme.textColor),
+        ])
+        scroll.setContentSize(Self.fittingSize(body))
+        applyHighlight(to: body, code: code, language: language)
+        return true
+    }
+
+    /// 열 수·행 수·정렬이 같은 표면 내용이 바뀐 셀만 다시 채우고 열 폭을 다시 잰다. 행이 늘어나는
+    /// tick은 false로 표 하나를 새로 만든다.
+    private func updateTable(
+        _ view: UIView,
+        from previous: ParsedTable,
+        to table: ParsedTable,
+        images: [MathSegment: RenderedMath]
+    ) -> Bool {
+        let rows = [table.header] + table.rows
+        let previousRows = [previous.header] + previous.rows
+        guard let block = view as? TableScrollBlock,
+              previous.columnAlignments == table.columnAlignments,
+              rows.count == previousRows.count, block.cells.count == rows.count,
+              zip(rows, previousRows).allSatisfy({ $0.count == $1.count }),
+              zip(rows, block.cells).allSatisfy({ $0.count == $1.count })
+        else { return false }
+
+        for (rowIndex, cells) in rows.enumerated() {
+            for (column, runs) in cells.enumerated()
+            where runs != previousRows[rowIndex][column] || containsMath(runs) {
+                configure(
+                    block.cells[rowIndex][column],
+                    runs: rowIndex == 0 ? runs.map(\.boldened) : runs,
+                    images: images,
+                    font: bodyUIFont,
+                    tail: nil
+                )
+            }
+        }
+        if table.header != previous.header {
+            applyTableAccessibilityHints(block, header: table.header)
+        }
+        layoutTableColumns(block)
+        return true
+    }
+
+    private func containsMath(_ runs: [InlineRun]) -> Bool {
+        runs.contains { if case .math = $0.content { return true } else { return false } }
+    }
+
+    private func containsMath(_ block: ParsedBlock) -> Bool {
+        switch block {
+        case .paragraph(let runs), .heading(_, let runs):
+            return containsMath(runs)
+        case .blockMath:
+            return true
+        case .blockQuote(let children):
+            return children.contains { containsMath($0) }
+        case .unorderedList(let items), .orderedList(_, let items):
+            return items.joined().contains { containsMath($0) }
+        case .table(let table):
+            return (table.header + table.rows.flatMap { $0 }).contains { containsMath($0) }
+        case .codeBlock, .thematicBreak:
             return false
         }
     }
@@ -554,9 +709,6 @@ public final class LatexMarkdownUIView: UIView {
 
     private func tableView(_ table: ParsedTable, images: [MathSegment: RenderedMath]) -> UIView {
         let rows = [table.header] + table.rows
-        let headers = table.header.map {
-            spokenText($0).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
         let borderColor = UIColor(theme.textColor)
             .resolvedColor(with: traitCollection)
             .withAlphaComponent(0.2)
@@ -573,29 +725,19 @@ public final class LatexMarkdownUIView: UIView {
                 cell.backgroundColor = rowIndex == 0 ? UIColor(theme.codeHeaderBackground) : .clear
                 cell.layer.borderColor = borderColor
                 cell.layer.borderWidth = 0.5
-                if rowIndex == 0 {
-                    cell.accessibilityTraits.insert(.header)
-                    cell.accessibilityHint = "열 \(column + 1), 헤더"
-                } else {
-                    let header = headers.indices.contains(column) ? headers[column] : ""
-                    cell.accessibilityHint = "행 \(rowIndex), 열 \(column + 1), 헤더 \(header)"
-                }
+                if rowIndex == 0 { cell.accessibilityTraits.insert(.header) }
                 return cell
             }
         }
-
-        let columnCount = table.header.count
-        let columnWidths = (0..<columnCount).map { column in
-            let naturalWidth = cellRows.compactMap { row in
-                row.indices.contains(column) ? Self.fittingSize(row[column]).width : nil
-            }.max() ?? 96
-            return min(max(naturalWidth, 96), 240)
-        }
-
-        let rowViews = cellRows.map { cells in
-            for (column, cell) in cells.enumerated() where columnWidths.indices.contains(column) {
-                cell.widthAnchor.constraint(equalToConstant: columnWidths[column]).isActive = true
+        // 폭 상수는 `layoutTableColumns`가 정한다. 자리만 잡아 두고 스트리밍 갱신에서 상수를 바꾼다.
+        let widthConstraints = cellRows.map { cells in
+            cells.map { cell in
+                let constraint = cell.widthAnchor.constraint(equalToConstant: 96)
+                constraint.isActive = true
+                return constraint
             }
+        }
+        let rowViews = cellRows.map { cells -> UIStackView in
             let row = UIStackView(arrangedSubviews: cells)
             row.axis = .horizontal
             row.spacing = 0
@@ -603,19 +745,57 @@ public final class LatexMarkdownUIView: UIView {
             return row
         }
 
-        let grid = verticalStack(spacing: 0, rowViews)
+        let block = TableScrollBlock(
+            content: verticalStack(spacing: 0, rowViews),
+            contentSize: CGSize(width: 96, height: 1)
+        )
+        block.cells = cellRows
+        block.widthConstraints = widthConstraints
+        block.accessibilityContainerType = .semanticGroup
+        applyTableAccessibilityHints(block, header: table.header)
+        layoutTableColumns(block)
+        return block
+    }
+
+    /// 헤더 텍스트를 담은 행·열 힌트. 스트리밍으로 헤더가 바뀌면 본문 셀 힌트도 따라 바꾼다.
+    private func applyTableAccessibilityHints(_ block: TableScrollBlock, header: [[InlineRun]]) {
+        let headers = header.map {
+            spokenText($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        for (rowIndex, cells) in block.cells.enumerated() {
+            for (column, cell) in cells.enumerated() {
+                if rowIndex == 0 {
+                    cell.accessibilityHint = "열 \(column + 1), 헤더"
+                } else {
+                    let header = headers.indices.contains(column) ? headers[column] : ""
+                    cell.accessibilityHint = "행 \(rowIndex), 열 \(column + 1), 헤더 \(header)"
+                }
+            }
+        }
+    }
+
+    /// 열 폭(셀 자연 폭의 최대, 96…240pt)과 표 전체 크기를 현재 셀 내용에서 다시 잰다.
+    /// 생성과 스트리밍 in-place 갱신이 같은 규칙을 쓴다.
+    private func layoutTableColumns(_ block: TableScrollBlock) {
+        let columnCount = block.cells.first?.count ?? 0
+        let columnWidths = (0..<columnCount).map { column in
+            let naturalWidth = block.cells.compactMap { row in
+                row.indices.contains(column) ? Self.fittingSize(row[column]).width : nil
+            }.max() ?? 96
+            return min(max(naturalWidth, 96), 240)
+        }
+        for row in block.widthConstraints {
+            for (column, constraint) in row.enumerated() where columnWidths.indices.contains(column) {
+                constraint.constant = columnWidths[column]
+            }
+        }
         let contentWidth = columnWidths.reduce(0, +)
-        let fitted = grid.systemLayoutSizeFitting(
+        let fitted = block.content.systemLayoutSizeFitting(
             CGSize(width: contentWidth, height: UIView.layoutFittingCompressedSize.height),
             withHorizontalFittingPriority: .required,
             verticalFittingPriority: .fittingSizeLevel
         )
-        let scroll = horizontalScroll(
-            content: grid,
-            contentSize: CGSize(width: ceil(contentWidth), height: max(1, ceil(fitted.height)))
-        )
-        scroll.accessibilityContainerType = .semanticGroup
-        return scroll
+        block.setContentSize(CGSize(width: ceil(contentWidth), height: max(1, ceil(fitted.height))))
     }
 
     private func textAlignment(
@@ -677,7 +857,7 @@ public final class LatexMarkdownUIView: UIView {
         ]))
         body.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
 
-        let scroll = horizontalScroll(content: body, contentSize: Self.fittingSize(body))
+        let scroll = HorizontalScrollBlock(content: body, contentSize: Self.fittingSize(body))
         scroll.backgroundColor = UIColor(theme.codeBlockBackground)
         applyHighlight(to: body, code: code, language: language)
         return scroll
@@ -733,7 +913,7 @@ public final class LatexMarkdownUIView: UIView {
 
         let copy = copyButton(text: segment.source, accessibilityLabel: "수식 원문 복사")
         let row = UIStackView(arrangedSubviews: [
-            horizontalScroll(
+            HorizontalScrollBlock(
                 content: content,
                 contentSize: contentSize,
                 alignment: theme.equationAlignment
@@ -934,7 +1114,8 @@ public final class LatexMarkdownUIView: UIView {
     }
 
     private func copyButton(text: String, accessibilityLabel: String) -> UIButton {
-        let button = UIButton(type: .system)
+        let button = LatexCopyButton(type: .system)
+        button.payload = text
         button.setImage(UIImage(systemName: "doc.on.doc"), for: .normal)
         // SwiftUI 렌더러(`CopyButton`)의 `.imageScale(.small)`과 같은 글리프 크기.
         // 없으면 기본 심볼 크기라 UIKit 쪽 아이콘이 더 크게 보인다.
@@ -957,59 +1138,15 @@ public final class LatexMarkdownUIView: UIView {
         ])
         button.addAction(
             UIAction { [weak button] _ in
-                CopyButton.copy(text)
+                guard let button else { return }
+                // 생성 시점의 원문을 캡처하지 않는다 — 스트리밍 in-place 갱신은 `payload`만 바꾼다.
+                CopyButton.copy(button.payload)
                 // ponytail: 체크 표시는 다시 누를 때까지 유지한다 (SwiftUI판과 동일 규칙).
-                button?.setImage(UIImage(systemName: "checkmark"), for: .normal)
+                button.setImage(UIImage(systemName: "checkmark"), for: .normal)
             },
             for: .primaryActionTriggered
         )
         return button
-    }
-
-    /// 가로 스크롤 컨테이너. content 크기를 명시 제약으로 고정해
-    /// UIScrollView의 높이 모호성을 없앤다.
-    private func horizontalScroll(
-        content: UIView,
-        contentSize: CGSize,
-        alignment: LatexEquationAlignment = .leading
-    ) -> UIScrollView {
-        let scroll = UIScrollView()
-        scroll.showsHorizontalScrollIndicator = false
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        content.translatesAutoresizingMaskIntoConstraints = false
-        // 정렬은 콘텐츠가 뷰포트보다 좁을 때만 의미가 있다. 컨테이너가 뷰포트 폭을
-        // 채우고(우선순위 high), 콘텐츠가 더 넓으면 required >= 제약이 이겨 스크롤한다.
-        let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(content)
-        scroll.addSubview(container)
-
-        let fillsViewport = container.widthAnchor.constraint(
-            equalTo: scroll.frameLayoutGuide.widthAnchor
-        )
-        fillsViewport.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-            container.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-            container.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            container.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-            container.widthAnchor.constraint(greaterThanOrEqualToConstant: contentSize.width),
-            fillsViewport,
-            container.heightAnchor.constraint(equalToConstant: contentSize.height),
-            content.widthAnchor.constraint(equalToConstant: contentSize.width),
-            content.heightAnchor.constraint(equalToConstant: contentSize.height),
-            content.topAnchor.constraint(equalTo: container.topAnchor),
-            scroll.heightAnchor.constraint(equalToConstant: contentSize.height),
-        ])
-        switch alignment {
-        case .leading:
-            content.leadingAnchor.constraint(equalTo: container.leadingAnchor).isActive = true
-        case .center:
-            content.centerXAnchor.constraint(equalTo: container.centerXAnchor).isActive = true
-        case .trailing:
-            content.trailingAnchor.constraint(equalTo: container.trailingAnchor).isActive = true
-        }
-        return scroll
     }
 
     private func verticalStack(spacing: CGFloat, _ views: [UIView]) -> UIStackView {
@@ -1118,4 +1255,78 @@ final class LatexTextView: UITextView {
         super.layoutSubviews()
         inlineCodeDecoration?.refresh()
     }
+}
+
+/// 복사 버튼. 스트리밍 in-place 갱신이 복사할 원문(`payload`)만 바꿀 수 있게 버튼이 값을 보관한다.
+final class LatexCopyButton: UIButton {
+    var payload = ""
+}
+
+/// 가로 스크롤 컨테이너. content 크기를 명시 제약으로 고정해 UIScrollView의 높이 모호성을 없앤다.
+///
+/// 스트리밍 in-place 갱신(코드 본문이 길어지는 tick)이 뷰를 다시 만들지 않고 크기 제약의 상수만
+/// 바꿀 수 있게 제약을 보관한다.
+class HorizontalScrollBlock: UIScrollView {
+    let content: UIView
+    /// container 최소 폭(≥)·content 폭은 width, container·content·scroll 높이는 height 속성이다.
+    /// `setContentSize`는 속성으로 상수를 고르므로 순서에 의존하지 않는다.
+    private var sizeConstraints: [NSLayoutConstraint] = []
+
+    init(content: UIView, contentSize: CGSize, alignment: LatexEquationAlignment = .leading) {
+        self.content = content
+        super.init(frame: .zero)
+        showsHorizontalScrollIndicator = false
+        translatesAutoresizingMaskIntoConstraints = false
+        content.translatesAutoresizingMaskIntoConstraints = false
+        // 정렬은 콘텐츠가 뷰포트보다 좁을 때만 의미가 있다. 컨테이너가 뷰포트 폭을
+        // 채우고(우선순위 high), 콘텐츠가 더 넓으면 required >= 제약이 이겨 스크롤한다.
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(content)
+        addSubview(container)
+
+        let fillsViewport = container.widthAnchor.constraint(equalTo: frameLayoutGuide.widthAnchor)
+        fillsViewport.priority = .defaultHigh
+        sizeConstraints = [
+            container.widthAnchor.constraint(greaterThanOrEqualToConstant: contentSize.width),
+            container.heightAnchor.constraint(equalToConstant: contentSize.height),
+            content.widthAnchor.constraint(equalToConstant: contentSize.width),
+            content.heightAnchor.constraint(equalToConstant: contentSize.height),
+            heightAnchor.constraint(equalToConstant: contentSize.height),
+        ]
+        NSLayoutConstraint.activate(sizeConstraints + [
+            container.leadingAnchor.constraint(equalTo: contentLayoutGuide.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: contentLayoutGuide.trailingAnchor),
+            container.topAnchor.constraint(equalTo: contentLayoutGuide.topAnchor),
+            container.bottomAnchor.constraint(equalTo: contentLayoutGuide.bottomAnchor),
+            fillsViewport,
+            content.topAnchor.constraint(equalTo: container.topAnchor),
+        ])
+        switch alignment {
+        case .leading:
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor).isActive = true
+        case .center:
+            content.centerXAnchor.constraint(equalTo: container.centerXAnchor).isActive = true
+        case .trailing:
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor).isActive = true
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("HorizontalScrollBlock은 코드로만 생성한다")
+    }
+
+    /// 콘텐츠 자연 크기가 바뀌었을 때 제약 상수만 갱신한다. 뷰 계층은 그대로다.
+    func setContentSize(_ size: CGSize) {
+        for constraint in sizeConstraints {
+            constraint.constant = constraint.firstAttribute == .width ? size.width : size.height
+        }
+    }
+}
+
+/// 표 블록. 셀 텍스트 뷰와 폭 제약을 보관해 스트리밍 tick에서 표 전체를 다시 만들지 않는다.
+final class TableScrollBlock: HorizontalScrollBlock {
+    var cells: [[LatexTextView]] = []
+    var widthConstraints: [[NSLayoutConstraint]] = []
 }
