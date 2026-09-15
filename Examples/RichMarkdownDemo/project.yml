@@ -1,4 +1,6 @@
 # xcodegen manifest — `xcodegen generate`로 RichMarkdownDemo.xcodeproj 생성 (DEVELOPMENT.md §7 P0).
+# DEVELOPMENT_TEAM은 저장소에 두지 않는다. 시뮬레이터는 팀 없이 빌드되고, 실기기 빌드는
+# `xcodebuild … -allowProvisioningUpdates DEVELOPMENT_TEAM=<팀 ID>`로 명령행에서 넘긴다.
 name: RichMarkdownDemo
 options:
   bundleIdPrefix: dev.richmarkdown
@@ -29,7 +31,6 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: "0.7.1"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: VJ2VF4KUF7
   RichMarkdownDemoUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -40,7 +41,6 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: VJ2VF4KUF7
   RichMarkdownDemoTests:
     type: bundle.unit-test
     platform: iOS
@@ -51,7 +51,6 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: VJ2VF4KUF7
 schemes:
   RichMarkdownDemo:
     build:
