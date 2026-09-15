@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- Created by JunyoungJung on 2026-09-14. -->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <style>
+    html, body { margin: 0; padding: 0; background: transparent; font-family: -apple-system, sans-serif; }
+    #diagram { box-sizing: border-box; padding: 16px; }
+    #diagram svg { display: block; height: auto; max-width: none; }
+  </style>
+  <script src="mermaid.bundle.js"></script>
+</head>
+<body>
+  <div id="diagram" role="img" aria-label="Mermaid 다이어그램"></div>
+  <script>
+    // 렌더 ID는 호출마다 증가시킨다. Mermaid는 같은 ID를 재사용하면 이전 정의를 남긴다.
+    let serial = 0;
+
+    // Swift가 callAsyncJavaScript로 호출한다. 원문은 코드가 아니라 인자로만 들어온다.
+    window.renderDiagram = async (source, dark, width, fontSize) => {
+      if (source.length > 20000) throw new Error('20,000자 이하의 Mermaid 원문만 표시합니다.');
+      const element = document.getElementById('diagram');
+      element.replaceChildren();
+
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: dark ? 'dark' : 'default',
+        fontFamily: '-apple-system, sans-serif',
+        fontSize: fontSize,
+        maxTextSize: 20000,
+        maxEdges: 200,
+        flowchart: { htmlLabels: false, useMaxWidth: false },
+        suppressErrorRendering: true
+      });
+      await document.fonts.ready;
+
+      const result = await mermaid.render('swiftlatex-mermaid-' + (++serial), source);
+      element.innerHTML = result.svg;
+      const svg = element.querySelector('svg');
+      if (!svg) throw new Error('SVG가 생성되지 않았습니다.');
+
+      const box = svg.viewBox.baseVal;
+      const rect = svg.getBoundingClientRect();
+      const naturalWidth = box.width || rect.width;
+      const naturalHeight = box.height || rect.height;
+      if (!(naturalWidth > 0 && naturalHeight > 0)) throw new Error('다이어그램 크기가 올바르지 않습니다.');
+
+      // 가용 폭보다 넓으면 줄이고, 좁으면 원래 크기를 유지한다(확대하지 않는다).
+      const targetWidth = Math.max(60, Math.min(width - 32, naturalWidth));
+      const height = naturalHeight * targetWidth / naturalWidth;
+      if (height > 4000) throw new Error('표시 한도(높이 4,000pt)를 넘었습니다.');
+
+      svg.style.width = targetWidth + 'px';
+      svg.style.height = height + 'px';
+      svg.setAttribute('width', targetWidth);
+      svg.setAttribute('height', height);
+      element.style.width = width + 'px';
+
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return { width: width, height: height + 32 };
+    };
+  </script>
+</body>
+</html>
