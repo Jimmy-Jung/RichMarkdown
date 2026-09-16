@@ -105,6 +105,11 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 | ![SSE 프레임이 도착하는 대로 렌더되는 SwiftUI 스트리밍 데모](Docs/screenshots/07-sse-swiftui.gif) | ![같은 스트림을 UIKit 렌더러로 배선한 스트리밍 데모](Docs/screenshots/08-sse-uikit.gif) |
 | 5Hz SSE 프레임이 도착하는 대로 누적 문자열을 다시 넘긴다. 스트리밍 append가 이전 렌더를 유지해 원문 플래시 없이 새 블록이 이어 붙는다 | 같은 스트림을 UIKit `RichMarkdownUIView`로 배선. 스트리밍 append에서 블록 뷰를 증분 재사용한다 |
 
+| Mermaid 다이어그램 | Prism 신택스 하이라이팅 |
+|---|---|
+| ![mermaid 코드 블록이 공식 Mermaid flowchart로 바뀐 화면](Docs/screenshots/09-mermaid.png) | ![Prism이 색을 입힌 swift·bash·json·python 코드 블록](Docs/screenshots/10-highlight.png) |
+| ` ```mermaid ` 블록을 `MermaidDiagramRenderer`가 공식 Mermaid 다이어그램으로 교체한다. 언어 라벨과 원문 복사 버튼은 그대로 남는다 | `PrismHighlighter`가 문법 16종의 토큰 범위에 `RichMarkdownTheme.syntax` 색을 입힌다. 미지원 언어와 실패는 원문 코드 블록으로 되돌린다 |
+
 ---
 
 ## 설치
@@ -597,6 +602,13 @@ UIKit 화면 2개가 함께 들어 있다.
   임의 문서에 직접 배치하는 경로와, `MarkdownStyler.styledDocument`로 블록 모델을
   읽기 전용 렌더하는 경로를 세그먼트로 전환해 비교한다. 테마 메뉴로 attachment
   재구성(테마 캡처) 계약을 확인한다.
+
+코드 블록 확장 product 화면 1개.
+
+- **코드 블록 확장 (Mermaid · Prism)** — 같은 원문에 `RichMarkdownCodeBlockOptions`를
+  주입해 ` ```mermaid ` 블록의 다이어그램 교체와 Prism 하이라이팅을 함께 본다.
+  상단 세그먼트로 SwiftUI·UIKit 렌더러를 바꾸고, 우측 상단 메뉴의 토글로 두 확장을
+  각각 꺼서 라이브러리 기본 코드 블록으로 돌아가는 것을 확인한다.
 
 ---
 
