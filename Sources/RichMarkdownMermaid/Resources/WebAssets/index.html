@@ -8,7 +8,9 @@
   <style>
     html, body { margin: 0; padding: 0; background: transparent; font-family: -apple-system, sans-serif; }
     #diagram { box-sizing: border-box; padding: 16px; }
-    #diagram svg { display: block; height: auto; max-width: none; }
+    /* 확대하지 않는 정책(useMaxWidth: false) 때문에 좁은 다이어그램은 컨테이너보다 작다.
+       margin-inline: auto가 없으면 남는 폭이 전부 오른쪽으로 몰려 좌측에 붙는다. */
+    #diagram svg { display: block; margin-inline: auto; height: auto; max-width: none; }
   </style>
   <script src="mermaid.bundle.js"></script>
 </head>

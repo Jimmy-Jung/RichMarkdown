@@ -96,6 +96,45 @@ import UIKit
         #expect((labels as? String)?.contains("입력") == true)
     }
 
+    /// 좁은 다이어그램은 남는 폭을 좌우로 나눠 가진다.
+    /// `useMaxWidth: false`라 확대하지 않으므로 세로형 플로우차트는 컨테이너보다 좁아지는데,
+    /// 중앙 정렬이 없으면 남는 폭이 전부 오른쪽으로 몰려 왼쪽 끝에 붙는다.
+    @Test func narrowDiagramIsHorizontallyCentered() async throws {
+        let host = Host()
+        defer { host.tearDown() }
+
+        let width: CGFloat = 900
+        _ = try await host.renderer.render(
+            source: "flowchart TD\n  A[시작] --> B[끝]",
+            dark: false,
+            width: width,
+            fontSize: 17
+        )
+
+        let measured = try await host.renderer.webView.callAsyncJavaScript(
+            """
+            const box = document.getElementById('diagram').getBoundingClientRect();
+            const svg = document.querySelector('#diagram svg').getBoundingClientRect();
+            return {
+                leading: svg.left - box.left,
+                trailing: box.right - svg.right,
+                svgWidth: svg.width
+            };
+            """,
+            arguments: [:],
+            in: nil,
+            contentWorld: .page
+        ) as? [String: Any]
+
+        let leading = try #require(measured?["leading"] as? Double)
+        let trailing = try #require(measured?["trailing"] as? Double)
+        let svgWidth = try #require(measured?["svgWidth"] as? Double)
+
+        // 전제: 이 원문은 컨테이너보다 확실히 좁다. 좁지 않으면 정렬을 검증할 수 없다.
+        #expect(svgWidth < Double(width) - 32)
+        #expect(abs(leading - trailing) <= 1)
+    }
+
     @Test func sequenceDiagramRendersOnTheSameWebView() async throws {
         let host = Host()
         defer { host.tearDown() }
