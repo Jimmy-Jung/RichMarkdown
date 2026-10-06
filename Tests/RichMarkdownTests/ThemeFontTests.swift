@@ -235,20 +235,4 @@ import UIKit
         #expect(attachment.bounds == .zero, "bounds 프로퍼티는 신뢰할 수 없다는 사실을 고정한다")
     }
 
-    /// 서체를 바꾸면 raster가 새로 만들어져야 한다 (캐시 키에 서체가 들어간다).
-    @Test func mathFontOverrideReachesRenderer() async throws {
-        let latinModern = try await makeView(
-            #"\(x+y\)"#,
-            theme: RichMarkdownTheme(mathFont: .latinModern)
-        )
-        let xits = try await makeView(
-            #"\(x+y\)"#,
-            theme: RichMarkdownTheme(mathFont: .xits)
-        )
-        let latinAttachment = try #require(attachments(in: latinModern).first)
-        let xitsAttachment = try #require(attachments(in: xits).first)
-        let a = try #require(latinAttachment.image?.pngData())
-        let b = try #require(xitsAttachment.image?.pngData())
-        #expect(a != b, "서체가 다르면 raster가 달라져야 한다")
-    }
 }

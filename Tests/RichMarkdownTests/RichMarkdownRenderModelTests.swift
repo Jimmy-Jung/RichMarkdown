@@ -285,7 +285,6 @@ import Testing
 
         let blockKey = MathRenderKey(
             latex: block.latex,
-            mathFont: submitted.mathFont,
             pointSize: submitted.pointSize,
             colorRGBA: submitted.colorRGBA,
             isDisplay: true,

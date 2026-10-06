@@ -37,21 +37,19 @@ enum RichMarkdownThemePreset: String, CaseIterable, Identifiable {
             )
 
         case .serif:
-            // 수식은 Georgia와 어울리는 Times계 서체를 쓴다.
+            // 본문은 Georgia를 쓰고 수식은 공통 KaTeX 서체로 렌더한다.
             return RichMarkdownTheme(
                 bodyFont: RichMarkdownFont(design: .custom(name: "Georgia"), relativeTo: .body),
                 heading1Font: RichMarkdownFont(design: .custom(name: "Georgia-Bold"), relativeTo: .title1),
                 heading2Font: RichMarkdownFont(design: .custom(name: "Georgia-Bold"), relativeTo: .title2),
                 heading3Font: RichMarkdownFont(design: .custom(name: "Georgia-Bold"), relativeTo: .title3),
-                heading4Font: RichMarkdownFont(design: .custom(name: "Georgia-Bold"), relativeTo: .headline),
-                mathFont: .termes
+                heading4Font: RichMarkdownFont(design: .custom(name: "Georgia-Bold"), relativeTo: .headline)
             )
 
         case .tinted:
             return RichMarkdownTheme(
                 textColor: Color(red: 0.20, green: 0.16, blue: 0.55),
-                quoteBar: Color(red: 0.45, green: 0.40, blue: 0.85),
-                mathFont: .xits
+                quoteBar: Color(red: 0.45, green: 0.40, blue: 0.85)
             )
         }
     }
@@ -168,7 +166,7 @@ final class UIKitChatViewController: UICollectionViewController {
     ///
     /// 셀 configure 시점에 markdown을 처음 주입하면 async 렌더가 진입 애니메이션과
     /// 겹쳐 fallback 원문이 이미지로 바뀌며 버블이 커지는 과정이 보인다.
-    /// 컨트롤러 init(전환 시작 전)만으로는 콜드 스타트에서 부족하다 — SwiftMath
+    /// 컨트롤러 init(전환 시작 전)만으로는 콜드 스타트에서 부족하다 — 수식 서체
     /// 폰트 등록 + 12개 메시지 raster가 전환 0.35s를 넘긴다(영상 실측). 그래서
     /// 루트 화면(`ContentView`)이 앱 시작 직후에도 호출한다. 사용자가 메뉴를 탭하기
     /// 전에 파이프라인이 끝나 첫 진입도 SwiftUI 화면처럼 완성 상태다.

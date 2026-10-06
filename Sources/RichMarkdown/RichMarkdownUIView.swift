@@ -214,7 +214,6 @@ public final class RichMarkdownUIView: UIView {
             pointSize: bodyUIFont.pointSize,
             colorRGBA: UIColor(theme.textColor).resolvedColor(with: traitCollection).rgbaValue,
             displayScale: displayScale,
-            mathFont: theme.mathFont,
             // 블록 수식은 벡터 뷰(BlockMathVectorView)로 그린다 — raster를 요청하지 않는다.
             rastersDisplayMath: false
         )
@@ -889,9 +888,9 @@ public final class RichMarkdownUIView: UIView {
         }
     }
 
-    /// 블록 수식은 raster가 아니라 SwiftMath의 공개 벡터 뷰로 그린다.
+    /// 블록 수식은 raster가 아니라 RaTeX native 벡터 뷰로 그린다.
     ///
-    /// `MTMathUILabel`은 내부에서 동기 typeset하고 CoreText로 직접 드로잉하므로
+    /// RaTeX native 뷰는 동기 measure 후 CoreText로 직접 드로잉하므로
     /// 이미지 중간 단계가 없다. 그래서 크기가 이 시점에 확정되고, 이미지 도착을 기다리는
     /// 원문 → 이미지 교체와 그에 따른 셀 리사이즈가 사라진다.
     /// 인라인 수식은 `NSTextAttachment`가 이미지를 요구하므로 raster를 유지한다.
@@ -934,7 +933,6 @@ public final class RichMarkdownUIView: UIView {
         let textColor = UIColor(theme.textColor).resolvedColor(with: traitCollection)
         let key = MathRenderKey(
             latex: segment.latex,
-            mathFont: theme.mathFont,
             pointSize: bodyUIFont.pointSize,
             colorRGBA: textColor.rgbaValue,
             isDisplay: segment.kind.isDisplay,

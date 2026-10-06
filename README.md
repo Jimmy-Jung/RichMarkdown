@@ -147,7 +147,13 @@ Notion 스타일 블록 편집기가 필요하면 별도 product를 추가한다
 Xcode에서는 File → Add Package Dependencies에 저장소 URL을 넣는다.
 
 전이 의존성은 [swift-markdown](https://github.com/swiftlang/swift-markdown)(파싱)과
-[SwiftMath](https://github.com/mgriebling/SwiftMath)(수식 raster) 둘이다.
+[RaTeX](https://github.com/erweixin/RaTeX)(native 수식 조판, iOS만 링크)이다.
+
+**수식 엔진 변경에 따른 마이그레이션:** SwiftMath 의존성 및 `LatexMathFont`,
+`RichMarkdownTheme.mathFont`와 initializer의 `mathFont:` 인자를 제거했다.
+기존 `RichMarkdownTheme(mathFont: .xits)` 등에서 해당 인자를 삭제한다.
+수식은 iOS·Android 모두 RaTeX 번들의 KaTeX 서체로 자동 렌더링하며,
+수식 크기는 계속 `bodyFont`, 색은 `textColor`를 따른다.
 
 ---
 
@@ -173,10 +179,9 @@ struct MessageView: View {
 |---|---|
 | `RichMarkdownView(markdown:parsesDollarMath:)` | 렌더 뷰. `parsesDollarMath` 기본값 `false` |
 | `.richMarkdownTheme(_:)` | 색·폰트를 바꾸는 View modifier |
-| `RichMarkdownTheme` | 요소별 색 8종 + 폰트 7종 + 수식 서체 |
+| `RichMarkdownTheme` | 요소별 색 8종 + 폰트 7종 |
 | `RichMarkdownFont` | 폰트 지정값 (서체·Dynamic Type 기준·크기·굵기) |
 | `RichMarkdownTextStyle` / `RichMarkdownFontWeight` | Dynamic Type 기준 스타일, 굵기 |
-| `LatexMathFont` | 수식 서체 12종 |
 | `Color.accessibleLink` | 대비 기준을 넘는 기본 링크 색 |
 | `Color.inlineCodeAccent` | 대비 기준을 넘는 기본 인라인 코드 텍스트 색 |
 
@@ -292,8 +297,7 @@ RichMarkdownView(markdown: message)
             heading3Font: RichMarkdownFont(relativeTo: .title3, weight: .semibold),
             heading4Font: RichMarkdownFont(relativeTo: .headline),
             codeFont: RichMarkdownFont(design: .monospaced, relativeTo: .body),
-            codeLabelFont: RichMarkdownFont(design: .monospaced, relativeTo: .caption),
-            mathFont: .latinModern
+            codeLabelFont: RichMarkdownFont(design: .monospaced, relativeTo: .caption)
         )
     )
 ```
@@ -320,7 +324,6 @@ WCAG AA(4.5:1)를 넘는다. 칩을 원하지 않으면 `inlineCodeBorder`를 `.
 | `heading1~4Font` | 헤딩. 4단계 이하는 전부 `heading4Font` |
 | `codeFont` | 인라인 코드, 코드 블록 본문, 블록 수식 fallback |
 | `codeLabelFont` | 코드 블록 헤더의 언어 라벨 |
-| `mathFont` | 수식 서체 (raster cache key에 포함) |
 
 `RichMarkdownFont`는 `Font`/`UIFont`가 아니라 `Sendable` 값이다. 두 타입 사이에 손실 없는
 변환이 없고 `UIFont`가 `Sendable`이 아니라서 중간 표현을 둔다. 두 렌더러가 같은 값에서
@@ -359,6 +362,31 @@ LLM 출력과 일부 콘텐츠 서버가 `총합($$f(1)$$)`처럼 쓰기 때문�
 
 ### UIKit
 
+`\underbrace`, `array`를 포함한 복합 수식도 인라인·블록에서 렌더링한다.
+모든 수식은 RaTeX의 CoreGraphics·CoreText 경로와 **KaTeX 서체**를 사용한다.
+JavaScript나 WebView를 사용하지 않는다. Android와 같은 LaTeX를
+사용할 수 있으며, 큰 중괄호 안의 각 열 전체를 아래 중괄호로 묶는 예시는 다음과 같다.
+
+```latex
+r_t=\left\{\begin{array}{ccc}
+\underbrace{\begin{array}{c}
+1+\frac{\bar{R}_Q(t+\Delta t)-R_Q(t)}{2\Delta t/T_{\mathrm{single}}}\\
+0\\
+0
+\end{array}}_{r_t^{(1)}}&
+\underbrace{\begin{array}{c}
+\vphantom{\frac{\bar{R}_Q}{T_{\mathrm{single}}}}+0\\
+-P\\
++0
+\end{array}}_{r_t^{(2)}}&
+\begin{array}{l}
+\vphantom{\frac{\bar{R}_Q}{T_{\mathrm{single}}}}\mathrm{if}\ \bar{R}_Q(t+\Delta t)>0\\
+\mathrm{if}\ \bar{R}_Q(t)\ne0\ \mathrm{and}\ R_Q(t+\Delta t)=0\\
+\mathrm{if}\ R_Q(t)=0
+\end{array}
+\end{array}\right.
+```
+
 `RichMarkdownUIView`는 SwiftUI 호스팅 래퍼가 아니다. `UIView` 하위 클래스로
 블록을 `UIStackView`에, 인라인 수식을 `NSTextAttachment`로 직접 배치한다.
 
@@ -394,9 +422,8 @@ let equationView = LatexEquationUIView(latex: #"\int_0^1 x^2 \, dx"#)
   `entry.view.superview === bubble`일 때만 `removeFromSuperview()`를 호출한다.
   무조건 제거하면 화면에 보이는 셀에서 뷰를 뜯어내 빈 버블이 남는다
   (빠른 스크롤 왕복에서 재현, 데모의 `UIKitChatCellReuseTests`가 회귀 방어).
-- **prewarm 시점은 루트 화면** — SwiftMath 폰트 등록 + 메시지 raster가 화면 전환
-  (0.35s)보다 오래 걸리므로, 채팅 화면 진입 직전이 아니라 앱 루트의 `.task`에서
-  캐시에 markdown을 미리 주입한다. 재호출은 dedupe로 no-op다.
+- **prewarm 시점은 루트 화면** — 서체 등록과 메시지 raster를 화면 전환 전에 준비하도록
+  앱 루트의 `.task`에서 캐시에 markdown을 미리 주입한다. 재호출은 dedupe로 no-op다.
 
 셀에서 쓸 때는 수식 이미지 hydration이 최초 레이아웃 뒤에 오므로,
 `onContentSizeChange`로 self-sizing 재측정을 요청한다.
@@ -589,7 +616,8 @@ UIKit 화면 2개가 함께 들어 있다.
 
 - **UIKit 네이티브** — `RichMarkdownUIView`를 재사용 셀에 직접 넣은 화면.
   메시지 ID별 완성 뷰를 다시 부착해 재방문 스크롤 비용을 줄인다. 테마 프리셋
-  (기본 / 큰 글자 / Serif / 색 강조)을 메뉴에서 바꿔 폰트·색·수식 서체를 확인한다.
+  (기본 / 큰 글자 / Serif / 색 강조)을 메뉴에서 바꿔 본문 폰트·색을 확인한다.
+  수식은 모든 프리셋에서 공통 KaTeX 서체를 사용한다.
   `-richmarkdownPreset Serif` launch argument로 특정 프리셋에서 시작할 수 있다.
 - **UIKit UIHostingConfiguration** — SwiftUI 뷰를 호스팅하는 셀 예제.
 
@@ -666,7 +694,7 @@ byte 단위로 보장하고, property/fuzz 테스트로 고정한다.
    ├─ 단일 worker: 실행 중 1개 + 최신 대기 1개만 유지 (latest-wins)
    ├─ off-main:  파싱
    ├─ MainActor: generation 일치 → 수식이 원문인 상태로 1차 게시
-   ├─ actor:     수식 raster (cache 조회 → SwiftMath)
+   ├─ actor:     수식 raster (cache 조회 → RaTeX 측정·draw)
    └─ MainActor: generation 일치 → 이미지가 채워진 최종 게시
 ```
 
@@ -675,14 +703,14 @@ stale이 된 연산 결과는 UI에도 cache에도 넣지 않는다.
 
 ### 수식 raster와 cache
 
-인라인 수식은 SwiftMath의 `MathImage.asImage()`가 준 이미지와 `LayoutInfo`를 쓴다.
+인라인 수식은 RaTeX로 측정한 ascent/depth와 요청 scale로 그린 이미지를 쓴다.
 
 ```swift
 Text(Image(uiImage: image))
-    .baselineOffset(-layout.descent)
+    .baselineOffset(-rendered.descent)
 ```
 
-cache key는 LaTeX source, math font 식별자, 실제 point size, resolved RGBA,
+cache key는 LaTeX source, 실제 point size, resolved RGBA,
 inline/display mode, display scale이다. cost는 이미지 pixel byte(현재 상한
 256개 / 64 MiB)이고 memory warning에서 비운다.
 
@@ -798,13 +826,10 @@ native `OpenURLAction`을 거치므로 소비 앱의 `environment(\.openURL)` ov
 
 | 항목 | 값 |
 |---|---|
-| 배포 대상 | iOS/iPadOS 16+ (선언). 실행 검증된 최소 runtime은 iOS 18.6 simulator |
+| 배포 대상 | iOS/iPadOS 16+ (선언). 엔진 변경의 실행 검증은 iOS 26.5 simulator |
 | 검증 toolchain | Xcode 26.6 (17F113), Swift 6.3.3 |
 | Swift tools | 6.0 (Swift Testing 사용) |
-| 의존성 | swift-markdown `exact: 0.4.0`, SwiftMath `exact: 1.7.3` |
-
-SwiftMath `1.7.2`는 `MTMathListBuilder`의 scope 버그로 Xcode 26.6에서 컴파일되지
-않는다. `1.7.3`이 수정 버전이며 `MathImage.asImage()` API는 동일하다.
+| 의존성 | swift-markdown `exact: 0.4.0`, RaTeX `exact: 0.1.14` |
 
 iOS 16 실행 검증은 호환 Xcode/runtime 또는 실기기 환경에서 별도 수행한다.
 
@@ -876,7 +901,8 @@ TEST_RUNNER_RICHMARKDOWN_STREAM_SECONDS=30 xcodebuild test \
 
 - [swift-markdown](https://github.com/swiftlang/swift-markdown) — Apache License 2.0
 - [swift-cmark](https://github.com/apple/swift-cmark) — 2-Clause BSD (cmark 파생)
-- [SwiftMath](https://github.com/mgriebling/SwiftMath) — MIT License
+- [RaTeX](https://github.com/erweixin/RaTeX) — MIT License
+- [KaTeX 번들 서체](https://github.com/erweixin/RaTeX/blob/v0.1.14/licenses/KaTeX-fonts-NOTICE.txt) — SIL Open Font License 1.1
 
 번들된 JavaScript (SPM 의존성이 아니라 소스에 포함한 고정 버전):
 

@@ -499,8 +499,9 @@ if let data = UIPasteboard.general.data(forPasteboardType: "com.richmarkdown.blo
   (`detachMessageView` 주석 참고).
 - **prewarm**: 앱 시작 직후 `prewarmSharedMessageViews`로 파싱·raster 파이프라인을
   미리 돌려, 화면 첫 진입이 전환 애니메이션(0.35s) 안에 완성 상태가 된다.
-  SwiftMath 폰트 등록 + 12개 메시지 raster가 전환 시간을 넘기는 것을 영상 실측으로
-  확인한 결과다.
+  초기 SwiftMath 서체 등록 + 12개 메시지 raster의 영상 실측에서 정한 방식이다.
+  2026-10-06 현재 수식은 RaTeX·KaTeX로 통일했으며, 아래 재활용 예시는 기존 방식대로
+  사전 준비한다. 초기 측정 시간을 새 엔진의 성능으로 간주하지 않는다.
 - 생성 직후의 빈 fallback 콜백은 무시하고, 콘텐츠 주입 후 갱신만
   `invalidateIntrinsicContentSize`로 연결 (`beginObservingContentChanges`).
 
@@ -562,8 +563,7 @@ struct RootView: View {
     var body: some View {
         NavigationStack { /* ... */ }
             // 앱 시작 직후 파싱·raster 파이프라인을 미리 돌린다.
-            // 화면 전환(0.35s) 안에 SwiftMath 폰트 등록 + 메시지 raster가
-            // 끝나지 않으므로, 진입 직전 prewarm으로는 부족하다 (영상 실측).
+            // 서체 등록과 메시지 raster를 화면 전환 전에 준비한다.
             .task {
                 for message in recentMessages where message.role == .assistant {
                     let entry = messageViewCache.entry(for: message)

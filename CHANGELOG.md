@@ -5,6 +5,15 @@
 
 ## [Unreleased]
 
+### 변경
+
+- 수식 엔진을 iOS·Android 공통 native RaTeX `0.1.14`와 KaTeX 서체로 통일했다.
+  iOS SwiftMath 의존성, `LatexMathFont`, `RichMarkdownTheme.mathFont` 및 `mathFont:` 인자를
+  제거했다. 소비 앱은 기존 서체 선택 인자를 삭제해야 한다. 수식 크기·색·baseline·cache·
+  접근성·원문 복사와 실패 시 원문 표시 계약은 유지한다.
+- `\underbrace`와 `array`를 포함한 복합 수식을 raster와 native vector에서 지원한다.
+  source byte/font/scale 제한 뒤 실제 layout의 pixel edge/count를 bitmap 생성 전에 확인한다.
+
 ## [0.7.2] - 2026-09-17
 
 ### 수정

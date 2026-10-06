@@ -1,6 +1,15 @@
 {
-  "originHash" : "d8d878dfea62450910861ebb6d0863a625e26a5d3ed6eeae5ad17a949fe7c06f",
+  "originHash" : "add1f11256faafca8360ce265d8a3e050ff575622a3690613057da2ef3a60c98",
   "pins" : [
+    {
+      "identity" : "ratex",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/erweixin/RaTeX.git",
+      "state" : {
+        "revision" : "ae391d727ac615437c63c308f4538d971a84bede",
+        "version" : "0.1.14"
+      }
+    },
     {
       "identity" : "swift-cmark",
       "kind" : "remoteSourceControl",
@@ -17,15 +26,6 @@
       "state" : {
         "revision" : "4aae40bf6fff5286e0e1672329d17824ce16e081",
         "version" : "0.4.0"
-      }
-    },
-    {
-      "identity" : "swiftmath",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/mgriebling/SwiftMath.git",
-      "state" : {
-        "revision" : "fa8244ed032f4a1ade4cb0571bf87d2f1a9fd2d7",
-        "version" : "1.7.3"
       }
     }
   ],

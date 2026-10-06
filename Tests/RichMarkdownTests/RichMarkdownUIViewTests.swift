@@ -338,7 +338,7 @@ import UIKit
         #expect((fallback.subviews.first as? UILabel)?.text == #"\sqrt{"#)
     }
 
-    /// 블록 수식의 벡터 뷰. SwiftMath 타입을 테스트 타깃으로 끌어오지 않기 위해 구조로
+    /// 블록 수식의 벡터 뷰. 수식 엔진 타입을 테스트 타깃으로 끌어오지 않기 위해 구조로
     /// 판정한다 — 수식 접근성 label을 갖고, 원문 fallback(`UITextView`)도
     /// raster(`UIImageView`)도 아닌 뷰.
     private func blockMathVectorViews(in view: UIView) -> [UIView] {
@@ -381,6 +381,19 @@ import UIKit
             renderedText(in: view).contains(#"\[\frac{\]"#),
             "실패 노드는 원래 구분자를 포함한 원문을 유지한다"
         )
+    }
+
+    @Test func rendersComplexBlockMathWithAccessibilityAndCopy() async throws {
+        let latex = #"\underbrace{\begin{array}{c}a+b\\c+d\end{array}}_{q}"#
+        let view = RichMarkdownUIView(markdown: #"## 복합 수식\#n\#n\["# + latex + #"\]"#)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let vector = try #require(blockMathVectorViews(in: view).first)
+        #expect(vector.accessibilityLabel == "수식: \(latex)")
+        #expect(!renderedText(in: view).contains(latex), "성공한 복합 수식은 원문 fallback을 남기지 않는다")
+        #expect(view.model.mathImages.isEmpty, "UIKit 복합 블록도 raster를 요청하지 않는다")
+        #expect(copyButtons(in: view).count == 1, "기존 수식 복사 버튼을 유지한다")
     }
 
     /// preflight 상한을 넘는 수식은 동기 typeset을 시작하지도 않는다.

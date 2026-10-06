@@ -42,7 +42,7 @@ package struct ProtectedMathSpan: Sendable, Hashable {
         self.source = source
     }
 
-    /// SwiftMath에 넘길 delimiter 제거 LaTeX.
+    /// 수식 renderer에 넘길 delimiter 제거 LaTeX.
     package var latex: String {
         let dropCount: (leading: Int, trailing: Int)
         switch kind {

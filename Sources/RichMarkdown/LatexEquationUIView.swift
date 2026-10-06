@@ -84,7 +84,6 @@ public final class LatexEquationUIView: UIView {
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2
         let key = MathRenderKey(
             latex: boundedLatex.text,
-            mathFont: theme.mathFont,
             pointSize: renderPointSize ?? bodyFont.pointSize,
             colorRGBA: textColor.rgbaValue,
             isDisplay: rendersDisplayStyle,

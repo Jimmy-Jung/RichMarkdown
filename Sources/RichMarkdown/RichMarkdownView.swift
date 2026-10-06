@@ -106,8 +106,7 @@ public struct RichMarkdownView: View {
             dollarMath: dollarMath,
             pointSize: mathPointSize,
             colorRGBA: resolvedTextColorRGBA,
-            displayScale: displayScale,
-            mathFont: theme.mathFont
+            displayScale: displayScale
         )
     }
 

@@ -164,7 +164,7 @@ public struct RichMarkdownFont: Sendable, Hashable {
     /// 수식 raster처럼 point size가 필요한 경로의 Dynamic Type 반영값.
     ///
     /// 텍스트의 custom font는 SwiftUI의 `relativeTo:`가 직접 스케일하지만,
-    /// SwiftMath에는 point size만 전달하므로 모든 design에 이 값을 쓴다.
+    /// 수식 renderer에는 point size만 전달하므로 모든 design에 이 값을 쓴다.
     func scaledPointSize(using scale: RichMarkdownFontScale) -> CGFloat {
         unscaledSize * scale.factor(for: relativeTo)
     }
@@ -303,22 +303,4 @@ extension UIFont {
         let descriptor = fontDescriptor.addingAttributes([.featureSettings: [feature]])
         return UIFont(descriptor: descriptor, size: pointSize)
     }
-}
-
-/// 수식 서체. SwiftMath가 번들한 서체 목록이다.
-///
-/// 값은 raster cache key에 들어가므로, 바꾸면 해당 서체의 이미지가 새로 만들어진다.
-public enum LatexMathFont: String, Sendable, Hashable, CaseIterable {
-    case latinModern
-    case kpMathLight
-    case kpMathSans
-    case xits
-    case termes
-    case asana
-    case euler
-    case fira
-    case notoSans
-    case libertinus
-    case garamond
-    case leteSans
 }

@@ -31,7 +31,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
         package let pointSize: CGFloat
         package let colorRGBA: UInt32
         package let displayScale: CGFloat
-        package let mathFont: LatexMathFont
         /// 블록(display) 수식 raster가 필요한가. UIKit 렌더러는 블록 수식을 벡터 뷰로
         /// 그리므로 false를 보낸다 — 아무도 읽지 않는 raster를 만들지 않는다.
         /// 인라인 수식 raster에는 영향이 없다.
@@ -46,14 +45,13 @@ package final class RichMarkdownRenderModel: ObservableObject {
             )
         }
 
-        /// markdown/파싱 조건을 제외한 raster 설정(크기·색·scale·서체)이 같은가.
+        /// markdown/파싱 조건을 제외한 raster 설정(크기·색·scale)이 같은가.
         /// 스트리밍 append로 문서가 stale인 동안 이전 이미지를 계속 써도 되는지 판정한다 —
         /// 수식 raster key는 latex source 기준이라 문서 안 위치와 무관하다.
         package func matchesRasterConfiguration(of other: Request) -> Bool {
             pointSize == other.pointSize
                 && colorRGBA == other.colorRGBA
                 && displayScale == other.displayScale
-                && mathFont == other.mathFont
                 && rastersDisplayMath == other.rastersDisplayMath
         }
 
@@ -63,7 +61,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
             pointSize: CGFloat,
             colorRGBA: UInt32,
             displayScale: CGFloat,
-            mathFont: LatexMathFont = .latinModern,
             rastersDisplayMath: Bool = true
         ) {
             self.init(
@@ -72,7 +69,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
                 pointSize: pointSize,
                 colorRGBA: colorRGBA,
                 displayScale: displayScale,
-                mathFont: mathFont,
                 rastersDisplayMath: rastersDisplayMath
             )
         }
@@ -83,7 +79,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
             pointSize: CGFloat,
             colorRGBA: UInt32,
             displayScale: CGFloat,
-            mathFont: LatexMathFont = .latinModern,
             rastersDisplayMath: Bool = true
         ) {
             self.init(
@@ -92,7 +87,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
                 pointSize: pointSize,
                 colorRGBA: colorRGBA,
                 displayScale: displayScale,
-                mathFont: mathFont,
                 rastersDisplayMath: rastersDisplayMath
             )
         }
@@ -105,7 +99,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
             pointSize: CGFloat,
             colorRGBA: UInt32,
             displayScale: CGFloat,
-            mathFont: LatexMathFont = .latinModern,
             rastersDisplayMath: Bool = true
         ) {
             self.boundedInput = boundedInput
@@ -113,7 +106,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
             self.pointSize = pointSize
             self.colorRGBA = colorRGBA
             self.displayScale = displayScale
-            self.mathFont = mathFont
             self.rastersDisplayMath = rastersDisplayMath
         }
     }
@@ -291,7 +283,6 @@ package final class RichMarkdownRenderModel: ObservableObject {
     private nonisolated static func renderKey(_ segment: MathSegment, _ request: Request) -> MathRenderKey {
         MathRenderKey(
             latex: segment.latex,
-            mathFont: request.mathFont,
             pointSize: request.pointSize,
             colorRGBA: request.colorRGBA,
             isDisplay: segment.kind.isDisplay,

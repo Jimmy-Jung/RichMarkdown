@@ -39,8 +39,6 @@ public struct RichMarkdownTheme: Sendable, Equatable {
     public var codeFont: RichMarkdownFont
     /// 코드 블록 헤더의 언어 라벨.
     public var codeLabelFont: RichMarkdownFont
-    /// 수식 서체.
-    public var mathFont: LatexMathFont
     /// 블록 수식 정렬. 기본 leading (콘텐츠가 좁을 때만 의미).
     public var equationAlignment: LatexEquationAlignment
 
@@ -61,7 +59,6 @@ public struct RichMarkdownTheme: Sendable, Equatable {
         heading4Font: RichMarkdownFont = RichMarkdownFont(relativeTo: .headline),
         codeFont: RichMarkdownFont = RichMarkdownFont(design: .monospaced, relativeTo: .body),
         codeLabelFont: RichMarkdownFont = RichMarkdownFont(design: .monospaced, relativeTo: .caption),
-        mathFont: LatexMathFont = .latinModern,
         equationAlignment: LatexEquationAlignment = .leading
     ) {
         self.textColor = textColor
@@ -80,7 +77,6 @@ public struct RichMarkdownTheme: Sendable, Equatable {
         self.heading4Font = heading4Font
         self.codeFont = codeFont
         self.codeLabelFont = codeLabelFont
-        self.mathFont = mathFont
         self.equationAlignment = equationAlignment
     }
 

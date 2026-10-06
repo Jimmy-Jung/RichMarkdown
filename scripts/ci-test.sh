@@ -6,7 +6,7 @@
 #   scheme도 있지만 그쪽은 library product 빌드 전용이라 test action이 없다 (product가
 #   4개로 늘어난 뒤 실측: "Scheme RichMarkdown is not currently configured for the test action").
 # - Swift 6 language mode + complete concurrency는 tools 6.0 manifest가 우리 target에 적용한다.
-#   전역 SWIFT_VERSION=6 / SWIFT_TREAT_WARNINGS_AS_ERRORS=YES override는 의존성(SwiftMath 등)까지
+#   전역 SWIFT_VERSION=6 / SWIFT_TREAT_WARNINGS_AS_ERRORS=YES override는 의존성(RaTeX 등)까지
 #   재컴파일 대상으로 만들므로 사용하지 않는다.
 set -uo pipefail
 cd "$(dirname "$0")/.."

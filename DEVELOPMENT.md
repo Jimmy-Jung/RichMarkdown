@@ -7,7 +7,7 @@ UIKit은 네이티브 `RichMarkdownUIView`가 담당하고 파서·수식 raster
 
 - 작성자: JunyoungJung
 - 최초 작성: 2026-08-19
-- 최종 개정: 2026-08-19 (rev.5 — P0 검증 결과 반영)
+- 최종 개정: 2026-10-06 (RaTeX 단일 수식 엔진·KaTeX 서체 통일)
 - 상태: P0 완료, P1 골격 구현 및 테스트 통과 (Core coverage 92.5%)
 - 배포 대상 후보: iOS/iPadOS 16 이상
 
@@ -17,12 +17,10 @@ UIKit은 네이티브 `RichMarkdownUIView`가 담당하고 파서·수식 raster
 
 ### 확인된 사실
 
-- SwiftMath `1.7.3`의 `MathImage.asImage()`는 이미지와
-  `LayoutInfo(ascent:descent:)`를 반환한다. 기존 fork 계획은 필요 없다.
-- P0 검증 결과(2026-08-19): SwiftMath `1.7.2`는 `MTMathListBuilder.swift`의
-  scope 버그(typo)로 Xcode `26.6 (17F113)`에서 컴파일되지 않는다. `1.7.3`이
-  수정 버전이며 `asImage()`의 `(NSError?, MTImage?, LayoutInfo?)` API는 동일하다.
-  고정 버전을 `exact: "1.7.3"`으로 확정했다.
+- 현재 수식 엔진은 native RaTeX `0.1.14`다. 공개 measure 결과의 width/ascent/depth를
+  allocation 전에 검사하고, raster와 vector가 같은 KaTeX 서체를 쓴다.
+- 초기 P0에서 사용한 SwiftMath `1.7.3`은 `\underbrace`와 `array`를 지원하지 않았다.
+  2026-10-06 iOS·Android 통일 결정으로 의존성과 12종 수식 서체 선택 API를 제거했다.
 - `swift-markdown`은 수식 AST 노드를 제공하지 않는다. 수식 구간을 별도로 찾아
   원문 범위를 보존해야 한다.
 - 검토한 `swift-markdown 0.4.0`의 source column은 UTF-8 byte 기준이다.
@@ -120,7 +118,7 @@ RichMarkdownView(
 ```
 
 - `parsesDollarMath` 기본값은 `false`다.
-- 테마는 색 6종 + 폰트 7종 + 수식 서체를 **요소 단위**로 갖는다. `RichMarkdownFont`는
+- 테마는 색과 폰트 7종을 **요소 단위**로 갖는다. `RichMarkdownFont`는
   `Font`/`UIFont`가 아니라 `Sendable` 값이라 렌더 요청 key에 넣을 수 있다.
 - 텍스트 색·폰트는 두 렌더러 모두 **명시 지정**한다. SwiftUI에서 환경 값에 맡기면
   `theme`가 본문에 닿지 않고 소비 앱의 바깥 `.font(_:)`가 우연히 새어 들어온다.
@@ -137,11 +135,11 @@ RichMarkdownView(
 - Swift tools `6.0`, platform `.iOS(.v16)`을 사용한다 (P0 확정).
   Swift Testing 채택으로 tools 6.0이 필요하며, 우리 target은 Swift 6 language
   mode + complete concurrency로 빌드된다. host Core 검증을 위해 `.macOS(.v12)`
-  최소 선언을 추가한다(SwiftMath 요구, macOS UI 비목표 유지).
+  최소 선언을 추가한다(macOS UI 비목표 유지).
 - 공개 product는 `RichMarkdown` 하나다.
 - 비공개 `RichMarkdownCore` target은 `Markdown` product에 의존한다.
-- UI target은 Core와 SwiftMath에 의존한다.
-- P0 재현성은 SwiftMath `exact: "1.7.3"`, swift-markdown `exact: "0.4.0"`으로 고정한다.
+- UI target은 Core와 iOS 조건부 native RaTeX에 의존한다.
+- 재현성은 RaTeX `exact: "0.1.14"`, swift-markdown `exact: "0.4.0"`으로 고정한다.
 - 지원 toolchain을 확정한 뒤에만 CI에서 검증한 버전 범위로 넓힌다.
 
 `swift-markdown`을 `from: "0.4.0"`으로 선언하면 SwiftPM이 Swift tools 6.2가 필요한 이후
@@ -263,13 +261,12 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
   경고를 지우려고 `await`를 떼면 결함이 남고 신호만 사라진다.
   회귀 방지: `StreamingBaselineTests.parseDoesNotBlockMainActor`가 250 KiB 처리 중
   MainActor 최대 공백을 잰다(정상 약 7ms, 단독 실행 기준).
-- request key에는 source, dollar 옵션, theme, scaled point size, resolved color,
-  수식 서체를 포함한다.
+- request key에는 source, dollar 옵션, scaled point size, resolved color, display scale을 포함한다.
 - 새 요청은 현재 generation을 stale로 표시하고 대기 요청을 최신 값으로 교체한다.
 - 장수명 worker 하나만 요청을 소비한다. 현재 동기 구간이 반환되기 전에는 다음 요청을
   시작하지 않으며, `.bufferingNewest(1)` 같은 경계로 대기는 하나만 유지한다.
 - 첫 parse 전, service 진입 직후, parse 직후, 각 수식 block 사이에 generation을 확인한다.
-- `swift-markdown` parse와 SwiftMath raster 하나는 동기·비취소 구간일 수 있으므로 입력/수식
+- `swift-markdown` parse와 RaTeX raster 하나는 동기·비취소 구간일 수 있으므로 입력/수식
   상한으로 작업량을 제한하고 측정된 최대 실행 시간을 gate로 둔다. 완료 직후에는 오래된
   generation을 버린다.
 - parse 게시와 최종 게시 직전에 각각 generation을 확인한다.
@@ -277,7 +274,7 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
 - `RenderedDocument`는 게시 후 변경하지 않는 값이다.
 - 수식 렌더 실패 시 해당 노드만 원문 source를 유지한다.
 - **UIKit 렌더러의 블록 수식은 이 2단계 게시에 참여하지 않는다** (2026-08-21).
-  `RichMarkdownUIView`는 블록 수식을 SwiftMath의 벡터 뷰로 그리며 크기가 rebuild
+  `RichMarkdownUIView`는 블록 수식을 RaTeX native 벡터 뷰로 그리며 크기가 rebuild
   시점에 동기 확정된다. 위 파이프라인은 model 계약이라 그대로다 — 인라인 수식이
   여전히 raster를 쓰고 게시 횟수·generation 규칙·idle 계약이 바뀌지 않는다.
   SwiftUI 렌더러는 블록 수식도 raster를 유지한다.
@@ -289,7 +286,7 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
   기존 테스트가 flaky해진다.
 
 `RenderService`와 `MathRenderService`의 isolation은 P0 spike로 컴파일·실행 검증한다.
-특히 SwiftMath가 반환하는 이미지 타입을 actor 밖으로 보낼 때 비검증
+특히 수식 raster 이미지 타입을 actor 밖으로 보낼 때 비검증
 `@unchecked Sendable`로 경고만 숨기지 않는다. 안전한 immutable bitmap 전달 경로를 확인하지
 못하면 bounded MainActor 렌더나 데이터 변환 경로를 선택한다.
 
@@ -308,73 +305,40 @@ hop을 더하지 않으며 스트리밍 append parse는 `ParseCache`에 저장�
 
 ## 5. 렌더링과 플랫폼 계약
 
-### 수식 엔진 선정 근거 (2026-08-20 기록)
+### 수식 엔진 통일 (2026-10-06)
 
-이 절은 사후 기록이다. SwiftMath는 문서 초안부터 전제로 잡혀 있었고 선정 근거가
-남아 있지 않아, 대안을 실측 조사한 뒤 정리했다.
+SwiftMath `1.7.3`은 `\underbrace`와 `array`를 parse 오류로 반환한다. Android가 사용하는
+native RaTeX `exact: "0.1.14"`로 iOS도 통일해 조판·명령 지원·KaTeX 서체를 공유한다.
+자체 TeX 엔진이나 WebView·JavaScript 경로는 추가하지 않는다. 엔진 호출은
+`MathRenderService.swift` 한 파일에 가두며 공식 XCFramework checksum은 SPM이 검증한다.
 
-요구조건으로 후보를 거르면 SwiftMath 하나가 남는다.
-
-| 요구 | 탈락 후보 | 근거 |
-|---|---|---|
-| iOS 16 | `swiftui-math` | Package.swift `platforms: .iOS(.v17)` |
-| UIKit 렌더러에서 사용 | `swiftui-math` | SwiftUI `Math` 뷰만 노출. `UIImage` 경로 없음 |
-| JS 런타임 없음 | `LaTeXSwiftUI`/`MathJaxSwift` | JavaScriptCore + MathJax |
-| WebView 없음 | KaTeX/MathJax | — |
-| Swift 6 동시성 | `iosMath` | Objective-C, 유지보수 중단 |
-
-설계가 의존하는 SwiftMath의 성질은 둘이다.
-
-1. **`asImage()`가 `MTImage`(=`UIImage`)를 반환한다.** 이것이 두 렌더러가 같은
-   raster를 공유하는 전제다. SwiftUI는 `Text(Image(uiImage:))`, UIKit은
-   `NSTextAttachment`로 같은 결과물을 쓴다. 수식 엔진이 SwiftUI 뷰였다면 아래
-   "UIKit 네이티브 렌더러" 절은 성립하지 않는다.
-2. **`LayoutInfo(ascent:descent:)`를 함께 반환한다.** `-layout.descent` baseline
-   보정의 유일한 근거다. 이미지만 주는 엔진으로는 인라인 정렬을 맞출 수 없다.
-
-`swiftui-math`(Textual이 사용)는 SwiftMath 파생이다 — LICENSE에 SwiftMath와
-iosMath 저작권이 함께 표기돼 있다. 조판 엔진은 같고 출력이 vector/raster로 갈렸을
-뿐이며, 그 선택이 UIKit 지원 가능 여부를 결정한다.
-
-**자체 구현하지 않는다.** SwiftMath 소스는 60파일 약 469 KB이고 `MTTypesetter.swift`
-하나가 93 KB다. TeX atom 간격표, 스타일 4단계, OpenType MATH 테이블, extensible
-delimiter 글리프 조립을 다시 구현하는 것은 이 패키지의 목표가 아니다.
-
-**통제권** — SwiftMath는 MIT다. §6의 raster preflight API 부재처럼 아쉬운 지점은
-상류 기여 또는 fork로 해결한다. 엔진 교체 사유가 아니다. SwiftMath 호출은
-`MathRenderService`에 가둬 두므로 교체 시 그 파일만 바뀐다.
-
-**재검토 조건** — ① upstream 유지보수 중단 ② 신규 iOS/Swift에서 구조적 사용 불가
-③ raster 방식이 성능 병목으로 *측정*됨. ③에서도 자체 구현이 아니라 vector 방식
-검토가 먼저다.
+- 모든 수식은 같은 native RaTeX 경로를 쓴다. parse와 bitmap 생성 사이에 실제 크기를
+  검사하므로 원문 command 길이 때문에 정상 복합식을 거부하던 추정 상한은 제거한다.
+- 수식은 RaTeX 번들의 **KaTeX 서체**로 자동 렌더링한다. `LatexMathFont`, theme의
+  `mathFont` property/initializer 인자를 제거한다. 소비 앱은 해당 인자를 삭제해야 한다.
+  수식 크기는 `bodyFont`, 색은 `textColor`를 계속 따른다.
+- raster는 기존 actor 내부에서 parse·측정·draw를 끝내고 `UIImage`, ascent/depth만 반환한다.
+  vector는 MainActor에서 측정한 renderer를 native UIView가 직접 그린다. 접근성·원문 복사·
+  실패 시 원문 표시·cache key는 기존 경로를 공유한다.
+- RaTeX product는 iOS 조건부 dependency다. macOS 12 Core-only target에는 링크하지 않는다.
+  RichMarkdown UI의 배포 대상은 계속 iOS 16이다.
 
 ### 인라인 수식
 
-SwiftMath `1.7.3`의 공개 API만 사용한다.
+RaTeX의 `DisplayList`를 측정한 뒤 요청 scale로 raster를 만들며, baseline은 ascent/depth로 보정한다.
 
 ```swift
-import SwiftMath
 import SwiftUI
-
-var mathImage = MathImage(
-    latex: latex,
-    fontSize: scaledFontSize,
-    textColor: resolvedColor,
-    labelMode: .text,
-    textAlignment: .left
-)
-
-let (error, image, layout) = mathImage.asImage()
-
-if error == nil, let image, let layout {
-    Text(Image(uiImage: image))
-        .baselineOffset(-layout.descent)
+// model이 actor에서 준비해 MainActor에 게시한 결과.
+if let rendered = mathImages[segment] {
+    Text(Image(uiImage: rendered.image))
+        .baselineOffset(-rendered.descent)
 } else {
     Text(source)
 }
 ```
 
-`-layout.descent`는 검증할 가설이지 Apple이나 SwiftMath가 보장한 SwiftUI 공식이 아니다.
+`-rendered.descent` 적용은 Text(Image)의 baseline/clipping 회귀 테스트로 검증한다.
 분수, 근호, 첨자, 합/적분, 행렬을 한글·영문·이모지 옆에 놓고 모든 Dynamic Type 크기에서
 baseline 오차와 clipping을 측정한다.
 
@@ -430,7 +394,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
 |---|---|---|
 | 블록 배치 | `VStack` + `ForEach` | `UIStackView`(`alignment = .fill`) |
 | 인라인 수식 | `Text(Image)` + `baselineOffset(-descent)` | `MathTextAttachment.attachmentBounds(...)`가 `-descent` 반환 |
-| 블록 수식 | raster `Image` | **SwiftMath 벡터 뷰** (`BlockMathVectorView.make`) |
+| 블록 수식 | raster `Image` | **native 벡터 뷰** (`BlockMathVectorView.make`, RaTeX) |
 | 텍스트 | `Text` + `AttributedString` | `UITextView`(`isScrollEnabled = false`) + `NSAttributedString` |
 | 폰트·색 출처 | `RichMarkdownTheme`의 `RichMarkdownFont` → `resolvedFont` | 같은 값 → `resolvedUIFont(compatibleWith:)` |
 | Dynamic Type | `@ScaledMetric` 배율 × `RichMarkdownFont.unscaledSize` | `UIFontMetrics(compatibleWith: traitCollection)` |
@@ -461,21 +425,13 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
     (TextKit 스택 통째)를 만들지 않고 `fallbackTextView` 하나에 attributed string만
     바꾼다. 텍스트 레이아웃 비용은 남는다 — 내용이 실제로 바뀌므로 피할 수 없다.
 - **블록 수식은 벡터 뷰다** (2026-08-21, 같은 문서 §8.3). `BlockMathVectorView.make`가
-  SwiftMath `MTMathUILabel`을 만들어 `UIView?`로 반환한다.
-  - 반환 타입을 `UIView`로 둬서 SwiftMath 타입이 뷰 계층으로 새지 않는다 (§5 통제권:
-    SwiftMath 호출은 `MathRenderService.swift` 한 파일에 가둔다).
+  측정한 RaTeX renderer를 그리는 native 벡터 뷰를 `UIView?`로 반환한다.
+  - 반환 타입을 `UIView`로 둬서 엔진 타입이 뷰 계층으로 새지 않는다.
   - 크기는 `intrinsicContentSize`로 **동기 확정**된다. 내부에서 typeset하므로 원문 →
     이미지 교체와 그에 따른 셀 self-sizing 재측정이 없다.
   - UIView다 — actor/worker에서 만들지 말 것. 생성·설정·측정 전부 main thread 전용이다.
-  - 폰트는 `MathFont.mtfont(size:)`(`MTFontV2`)로 만든다. `MTFontManager`의
-    `font(withName:size:)`는 legacy `MTFont(fontWithName:)` 경로로 `.otf`와 math table
-    `.plist`를 직접 읽고 size가 캐시된 값과 다르면 매번 math table을 재구성한다(실측).
-    raster 경로(`MathImage`)도 `mtfont(size:)`를 쓰므로, 같은 구현을 써야 인라인과
-    블록의 글리프 메트릭이 어긋나지 않는다.
-  - `label.fontSize`도 함께 맞춘다. 내부 세로 정렬(`_layoutSubviews`)이 쓰는 별도 저장
-    값이고 기본값 20이 남으면 raster와 정렬 기준이 갈린다.
-  - `displayErrorInline = false`는 `latex` 대입 **전에** 건다. 대입 시점에 내부
-    errorLabel 표시 여부가 이 값으로 정해진다.
+  - raster와 vector는 같은 measure 함수·KaTeX bundle 서체·point size를 쓴다.
+    폰트 등록 실패나 알 수 없는 display-list 명령은 부분 성공으로 표시하지 않는다.
   - 실패(latex parse 오류·preflight 초과)는 기존과 같은 원문 fallback이다.
 - 수식 attachment는 본문 텍스트로 읽히지 않는다. 수식이 있고 링크가 없는 문단은
   `RichMarkdownTextView.spokenOverride`로 합성 label을 주고, 이중 낭독을 막기 위해
@@ -505,7 +461,9 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
     (2026-08-21). 셀 configure에서 markdown을 처음 주입하면 async 렌더가 진입
     애니메이션과 겹쳐 fallback 원문이 이미지로 바뀌며 버블이 커지는 과정이
     보인다. 컨트롤러 init(전환 직전) prewarm은 콜드 스타트에서 부족했다 —
-    SwiftMath 폰트 등록 + 12개 메시지 raster가 전환 0.35s를 넘긴다(영상 실측).
+    당시 SwiftMath 서체 등록 + 12개 메시지 raster가 전환 0.35s를 넘겼다(초기 영상 실측).
+    2026-10-06 RaTeX로 통일한 뒤에도 사전 준비 방식은 유지한다. 이전 시간 측정을
+    새 엔진의 성능으로 간주하지 않는다.
     데모는 루트 화면 `.task`(앱 시작 직후)에서 prewarm하고 뷰 캐시를 static으로
     유지한다. detached 뷰도 predicted trait으로 기기 displayScale을 받으므로
     (lldb 실측: DisplayScale = 3) attach 후 재렌더가 없다.
@@ -532,24 +490,24 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
   `… [입력 제한 초과]` marker를 붙인다.
 - AST depth/node count는 parse 후 출력 비용을 제한할 뿐 parser DoS의 사전 방어라고
   주장하지 않는다.
-- 수식 source byte/구문 복잡도는 `MathImage.asImage()` 호출 전에 제한한다.
+- 수식 source byte/구문 복잡도는 RaTeX parser 진입 전에 제한한다.
 - 내부 상한은 P0 adversarial fixture와 측정으로 정하며 v1 공개 API로 고정하지 않는다.
 
-SwiftMath `1.7.3`의 `MathImage.asImage()`는 내부에서 raster 크기를 계산한 뒤 바로
-`UIGraphicsImageRenderer`를 생성한다. 반환 이미지의 dimension을 사후 검사하는 것만으로는
-OOM을 예방할 수 없다. 다음 중 하나를 P0에서 검증하기 전에는 raster dimension 제한을
-보안 경계로 문서화하지 않는다.
-
-1. allocation 전 크기를 얻는 public measure 경로
-2. 실제 최악 입력에서 상한을 증명한 보수적 source/구조/font 제한
-3. SwiftMath upstream의 public preflight API
+RaTeX의 public measure 경로로 실제 width/ascent/depth를 얻는다.
+유한한 비음수 ascent/depth, 양수 width/height를 확인한 뒤 요청 scale을 반영해 pixel edge
+8,192와 pixel count 4,194,304 이하인지 **bitmap 생성 전에** 검사한다. vector도 같은
+측정 상한을 공유한다. source 4,096 UTF-8 bytes, point size 1…256, display scale 1…4,
+escaped brace와 주석을 제외한 중괄호 깊이 64 상한은 parser 진입 전에 검사한다.
+이 중괄호 검사가 TeX 전체 구조의 깊이를 증명하는 것은 아니다. RaTeX `0.1.14`의
+parser 자체 structural-depth/macro-expansion 제한도 사용한다. 상한·parse·font 로드 실패는
+해당 수식만 원문으로 유지한다.
 
 ### 수식 cache
 
 cache key에는 다음 값을 포함한다.
 
 - LaTeX source
-- math font 식별자와 실제 point size
+- 실제 point size
 - resolved RGBA
 - inline/display mode
 - display scale
@@ -585,7 +543,7 @@ tick마다 누적 원문이 새 키가 되어 다른 셀의 항목을 밀어내�
 
 ## 7. 구현 순서와 Definition of Done
 
-### P0 — 기술 spike
+### P0 — 초기 기술 spike 기록 (SwiftMath 사용 당시)
 
 - Xcode `26.6 (17F113)`에서 exact SwiftMath `1.7.3`, swift-markdown `0.4.0` 조합 컴파일 (완료 — 1.7.2는 컴파일 불가)
 - 지원하려는 최소 Xcode로 같은 consumer build를 실행해 실제 최소 toolchain 확정
