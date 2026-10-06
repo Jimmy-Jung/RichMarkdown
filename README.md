@@ -3,12 +3,11 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.1%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.7.0 beta** — 코드 블록 확장점 `RichMarkdownCodeBlockOptions`. `RichMarkdownHighlight`(Prism +
-> JavaScriptCore)와 `RichMarkdownMermaid`(공식 Mermaid + WKWebView)를 **opt-in product**로 추가했다.
-> 주입하지 않으면 코드 블록은 지금까지와 같고, `RichMarkdown` 코어는 여전히 WebView도
-> JavaScript 런타임도 링크하지 않는다.
+> **0.8.0 beta** — 수식 엔진을 iOS·Android 공통 native [RaTeX](https://github.com/erweixin/RaTeX)
+> `0.1.14`와 KaTeX 서체로 통일했다. `\underbrace`·`array` 복합 수식을 지원한다. SwiftMath 의존성과
+> `LatexMathFont`·`mathFont:` 인자를 제거했으므로 [설치](#설치)의 마이그레이션 안내를 본다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
 > [CHANGELOG.md](CHANGELOG.md)를 본다.
 
@@ -28,6 +27,15 @@ generation 관리를 공유한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
+
+## 0.8.0 베타 핵심
+
+- **수식 엔진 통일** — SwiftMath 대신 Android와 같은 native RaTeX `0.1.14`로 조판하고 KaTeX 서체를
+  쓴다. SwiftMath가 parse 오류로 반환하던 `\underbrace`·`array` 복합 수식을 raster와 벡터 모두에서
+  렌더한다. 실제 layout 크기(각 변 8,192 px·4,194,304 pixel)를 bitmap 생성 전에 검사하므로
+  원문 길이 때문에 정상 수식을 거부하던 추정 상한이 사라졌다.
+- **마이그레이션** — `LatexMathFont`, `RichMarkdownTheme.mathFont`, initializer `mathFont:` 인자를
+  제거했다. 수식 크기는 `bodyFont`, 색은 `textColor`를 따른다.
 
 ## 0.7.0 베타 핵심
 
@@ -119,7 +127,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.7.1")),
+    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.8.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["RichMarkdown"]),

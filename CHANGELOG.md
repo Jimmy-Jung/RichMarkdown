@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-06
+
 ### 변경
 
 - 수식 엔진을 iOS·Android 공통 native RaTeX `0.1.14`와 KaTeX 서체로 통일했다.
@@ -457,7 +459,9 @@ SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는�
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
-[Unreleased]: https://github.com/Jimmy-Jung/RichMarkdown/compare/0.7.1...HEAD
+[Unreleased]: https://github.com/Jimmy-Jung/RichMarkdown/compare/0.8.0...HEAD
+[0.8.0]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.8.0
+[0.7.2]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.7.2
 [0.7.1]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.7.1
 [0.7.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.7.0
 [0.6.0]: https://github.com/Jimmy-Jung/SwiftLatex/releases/tag/0.6.0
