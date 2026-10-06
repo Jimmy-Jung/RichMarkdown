@@ -590,7 +590,7 @@ cd Examples/RichMarkdownDemo && xcodegen generate && open RichMarkdownDemo.xcode
 ```
 
 루트 목록의 **AI 챗봇 (SwiftUI)**와 **AI 챗봇 (UIKit)**에서 같은 fixture를 비교한다.
-인라인/블록 수식, 코드 블록, 리스트·인용, GFM 표, 링크 allowlist, 금지 문맥 보호,
+인라인/블록 수식, `array`·`\underbrace` 복합 수식, 코드 블록, 리스트·인용, GFM 표, 링크 allowlist, 금지 문맥 보호,
 실패 시 원문 표시, 다국어·RTL, 미지원 노드 강등, 긴 답변을 한 화면에서 확인한다. 두 화면의
 우측 상단 `렌더 옵션` 메뉴는 `$` 수식 opt-in, 케이스 라벨, 테마 프리셋을 제공한다.
 

@@ -43,6 +43,38 @@ enum ChatFixtures {
         \[ \det \begin{pmatrix} a & b \\ c & d \end{pmatrix} = ad - bc \]
         """#),
 
+        .question("보상 함수를 조건별로 나눠서 수식으로 보여줘"),
+        .answer("복합 수식 · array · underbrace", #"""
+        ## 복합 수식과 아래 중괄호
+
+        **보상 함수**를 조건별로 나누고, 아래 중괄호(`\underbrace`)로 두 항을 구분합니다.
+
+        \[
+        r_t=\left\{\begin{array}{ccc}
+        \underbrace{\begin{array}{c}
+        1+\frac{\bar{R}_Q(t+\Delta t)-R_Q(t)}{2\Delta t/T_{\mathrm{single}}}\\
+        0\\
+        0
+        \end{array}}_{r_t^{(1)}}&
+        \underbrace{\begin{array}{c}
+        \vphantom{\frac{\bar{R}_Q}{T_{\mathrm{single}}}}+0\\
+        -P\\
+        +0
+        \end{array}}_{r_t^{(2)}}&
+        \begin{array}{l}
+        \vphantom{\frac{\bar{R}_Q}{T_{\mathrm{single}}}}\mathrm{if}\ \bar{R}_Q(t+\Delta t)>0\\
+        \mathrm{if}\ \bar{R}_Q(t)\ne0\ \mathrm{and}\ R_Q(t+\Delta t)=0\\
+        \mathrm{if}\ R_Q(t)=0
+        \end{array}
+        \end{array}\right.
+        \]
+
+        - 첫 번째 아래 중괄호: \(r_t^{(1)}\)
+        - 두 번째 아래 중괄호: \(r_t^{(2)}\)
+
+        > 긴 수식은 가로로 스크롤하며 볼 수 있습니다.
+        """#),
+
         .question("피보나치 수열을 Swift로 구현해줘"),
         .answer("코드 블록 · 언어 라벨 · 가로 스크롤", #"""
         점화식은 \( F_n = F_{n-1} + F_{n-2} \)입니다.
