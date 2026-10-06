@@ -33,6 +33,7 @@ final class DocumentationScreenshotTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["RichMarkdown Demo"].waitForExistence(timeout: 30))
 
         captureChatScreens(app)
+        captureUIKitChat(app)
         captureBlockEditor(app)
         // SSE 화면은 정지컷 대신 GIF를 쓴다 — scripts/capture-sse-gifs.sh 참고.
         captureCodeBlockExtension(app)
@@ -52,14 +53,34 @@ final class DocumentationScreenshotTests: XCTestCase {
         )
         capture(named: "01-math")
 
-        // 케이스 라벨이 보이는 시점에는 본문이 화면 아래라 한 번 더 올린다.
-        scroll(app, until: app.staticTexts["헤딩 · 리스트 · 인용 · 구분선 · 링크"], extraSwipes: 1)
+        // 복합 수식 답변은 케이스 라벨을 내비게이션 바 바로 아래에 세워 설명·수식·목록을 한 화면에 담는다.
+        alignComplexMathCase(app, below: app.navigationBars["AI 챗봇"])
+        capture(named: "11-complex-math-swiftui")
+
+        // 고정 swipe 횟수는 앞 fixture 길이에 따라 헤딩을 지나친다. "헤딩 2"를 바 아래에 세워
+        // 헤딩·인라인 강조·리스트·인용·구분선을 한 화면에 담는다.
+        let heading = app.staticTexts["헤딩 2"].firstMatch
+        scroll(app, until: app.staticTexts["헤딩 · 리스트 · 인용 · 구분선 · 링크"])
+        align(app, heading, toY: app.navigationBars["AI 챗봇"].frame.maxY + 12)
         capture(named: "02-markdown")
 
         scroll(app, until: app.staticTexts["GFM 표 · 정렬 · 인라인 콘텐츠"])
         capture(named: "03-table")
 
         app.navigationBars["AI 챗봇"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["RichMarkdown Demo"].waitForExistence(timeout: 30))
+    }
+
+    /// SwiftUI와 같은 fixture를 `RichMarkdownUIView` 셀로 그린 화면에서 복합 수식을 비교한다.
+    @MainActor
+    private func captureUIKitChat(_ app: XCUIApplication) {
+        app.buttons["AI 챗봇 (UIKit)"].firstMatch.tap()
+        let navigationBar = app.navigationBars["UIKit 네이티브"]
+        XCTAssertTrue(navigationBar.waitForExistence(timeout: 30))
+        alignComplexMathCase(app, below: navigationBar)
+        capture(named: "12-complex-math-uikit")
+
+        navigationBar.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["RichMarkdown Demo"].waitForExistence(timeout: 30))
     }
 
@@ -129,16 +150,20 @@ final class DocumentationScreenshotTests: XCTestCase {
     /// `exists`는 화면 밖 요소도 참이다 (LazyVStack이 a11y tree에 올린다).
     /// 스크린샷은 눈에 보여야 하므로 `isHittable`을 기준으로 스크롤한다.
     @MainActor
-    private func scroll(
-        _ app: XCUIApplication,
-        until element: XCUIElement,
-        extraSwipes: Int = 0
-    ) {
+    private func scroll(_ app: XCUIApplication, until element: XCUIElement) {
         for _ in 0..<25 where !element.isHittable {
             app.swipeUp()
         }
         XCTAssertTrue(element.isHittable, "스크롤 후에도 화면에 보이지 않는다")
-        for _ in 0..<extraSwipes { app.swipeUp() }
+    }
+
+    /// «복합 수식 · array · underbrace» 케이스 라벨을 `navigationBar` 바로 아래로 끌어온다.
+    @MainActor
+    private func alignComplexMathCase(_ app: XCUIApplication, below navigationBar: XCUIElement) {
+        let caseLabel = app.staticTexts["복합 수식 · array · underbrace"].firstMatch
+        XCTAssertTrue(caseLabel.waitForExistence(timeout: 30), "복합 수식 케이스 라벨이 없다")
+        scroll(app, until: caseLabel)
+        align(app, caseLabel, toY: navigationBar.frame.maxY + 12)
     }
 
     /// 세그먼트 컨트롤 아래, 실제 본문이 시작하는 y.

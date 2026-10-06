@@ -98,6 +98,11 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 | ![인라인과 블록 수식](Docs/screenshots/01-math.png) | ![Markdown 블록과 인라인 강조](Docs/screenshots/02-markdown.png) |
 | 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 둥근 인라인 코드 칩, 링크, 리스트, 왼쪽 세로 바로 구분한 인용, 구분선. `\*별표\*` 같은 escape 해제도 함께 |
 
+| 복합 수식 (SwiftUI) | 복합 수식 (UIKit) |
+|---|---|
+| ![array와 두 underbrace로 나눈 보상 함수 수식을 SwiftUI로 렌더한 화면](Docs/screenshots/11-complex-math-swiftui.png) | ![같은 복합 수식을 UIKit RichMarkdownUIView로 렌더한 화면](Docs/screenshots/12-complex-math-uikit.png) |
+| `array` 열 정렬, 분수, 두 `\underbrace`와 아래 라벨을 RaTeX로 조판한다. 화면보다 넓은 열은 가로 스크롤로 본다 | 같은 fixture를 `RichMarkdownUIView` 셀로 그린다. 블록 수식은 native 벡터 뷰라 SwiftUI raster와 같은 KaTeX 서체·메트릭을 쓴다 |
+
 | GFM 표 | Notion 스타일 블록 편집 |
 |---|---|
 | ![정렬과 인라인 콘텐츠를 포함한 GFM 표](Docs/screenshots/03-table.png) | ![하나의 연속 문서에서 편집하는 Notion 스타일 블록 편집기](Docs/screenshots/04-block-editor.png) |
