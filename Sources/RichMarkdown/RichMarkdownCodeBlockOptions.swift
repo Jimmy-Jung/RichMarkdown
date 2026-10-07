@@ -139,8 +139,9 @@ enum RichMarkdownHighlightSegments {
 
         for span in spans.sorted(by: { $0.range.location < $1.range.location }) {
             let start = span.range.location
-            let end = span.range.location + span.range.length
-            guard start >= cursor, span.range.length > 0, end <= length,
+            guard start >= cursor, span.range.length > 0 else { continue }
+            let (end, overflow) = start.addingReportingOverflow(span.range.length)
+            guard !overflow, end <= length,
                   let colored = Range(span.range, in: code)
             else { continue }
 

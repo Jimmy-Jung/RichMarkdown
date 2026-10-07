@@ -5,6 +5,29 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-07
+
+### 수정
+
+- Core의 CR·LF·CRLF 위치 변환과 scanner 인용 깊이 제한을 일치시키고, 잘못된 범위의 정수 overflow를 방어했다.
+- UIKit 표의 생성·스트리밍 갱신 높이를 실제 셀 크기로 측정해 1pt 고착을 수정했다.
+- SwiftUI 코드 색 결과를 원문·언어·하이라이터 인스턴스와 연결해 요청 교체·빈 결과·늦은 응답의 이전 색을 차단했다.
+- 블록 편집기의 직접 숫자 입력과 인라인 마크·선택 범위를 검증하고, literal 문단·수식 모양 문단·가변 길이 코드 fence의 Markdown 왕복을 보완했다.
+- WebKit navigation policy callback을 현재 SDK의 actor·Sendable 계약에 맞추고, 지원 최소 OS에서 효과가 없는 명시적 process pool을 제거했다.
+- Mermaid의 공유 로드 대기·취소·렌더 deadline·최신 SVG 게시·WebKit 종료 복구를 정리하고 새 요청 중 이전 그림을 즉시 숨겼다.
+- Mermaid 설정 지시문의 HTML 라벨·sanitizer 완화를 차단하고, CSP bootstrap hash로 inline 이벤트 실행을 제한했다.
+- 번들 Mermaid 11.17.2는 유지하며 DOMPurify 3.4.16·JavaScript KaTeX 0.18.2로 전이 의존성의 보안 patch를 적용했다. native RaTeX 0.1.14는 유지한다.
+
+### 추가
+
+- 모듈별 architecture·spec·ADR·개선 기록과 Mermaid·Excalidraw 시각자료, 실제 검수 범위를 추가했다.
+- 표준 CI에 Mermaid JS 게시·frame·취소·CSP hash 회귀를 연결하고 로그·결과·Swift 캐시 경로를 외부에서 지정할 수 있게 했다.
+
+### 호환성
+
+- `MermaidError.renderTimeout`이 추가됐다. 오류 enum을 완전 분기하는 소비 코드는 이 경우도 처리한다.
+- 선언된 최소 iOS 16과 네 product의 구성은 유지한다. 임의의 Markdown 편집 무손실 왕복·실시간 처리의 성능 상한을 새로 보장하지 않는다.
+
 ## [0.8.0] - 2026-10-06
 
 ### 변경
@@ -459,7 +482,8 @@ SwiftUI 렌더러(`LatexMarkdownView`)는 이번 변경에 포함되지 않는�
 - iOS 16은 배포 대상으로 선언했지만 실행 검증된 최소 runtime은 iOS 18.6 simulator다
 - 표, 원격 이미지, 신택스 하이라이팅, macOS UI는 이 버전의 비목표다
 
-[Unreleased]: https://github.com/Jimmy-Jung/RichMarkdown/compare/0.8.0...HEAD
+[Unreleased]: https://github.com/Jimmy-Jung/RichMarkdown/compare/0.9.0...HEAD
+[0.9.0]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.9.0
 [0.8.0]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.8.0
 [0.7.2]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.7.2
 [0.7.1]: https://github.com/Jimmy-Jung/RichMarkdown/releases/tag/0.7.1

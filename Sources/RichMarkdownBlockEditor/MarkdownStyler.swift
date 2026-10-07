@@ -80,6 +80,10 @@ public enum MarkdownStyler {
         selection: NSRange? = nil,
         traitCollection: UITraitCollection? = nil
     ) -> NSAttributedString {
+        let selection = selection.flatMap { range in
+            let length = blocks.reduce(max(blocks.count - 1, 0)) { $0 + $1.text.utf16.count }
+            return EditorBlock.isValidRange(range, length: length) ? range : nil
+        }
         let result = NSMutableAttributedString()
         var numberedCounts: [Int: Int] = [:]
         var previousKinds: [Int: EditorBlockKind] = [:]
@@ -157,6 +161,8 @@ public enum MarkdownStyler {
         intersecting selection: NSRange,
         parsesDollarMath: Bool
     ) -> [NSRange] {
+        let length = blocks.reduce(max(blocks.count - 1, 0)) { $0 + $1.text.utf16.count }
+        guard EditorBlock.isValidRange(selection, length: length) else { return [] }
         var blockStart = 0
         var result: [NSRange] = []
         for (index, block) in blocks.enumerated() {
@@ -185,6 +191,9 @@ public enum MarkdownStyler {
         selection: NSRange? = nil,
         traitCollection: UITraitCollection? = nil
     ) -> NSAttributedString {
+        let selection = selection.flatMap {
+            EditorBlock.isValidRange($0, length: block.text.utf16.count) ? $0 : nil
+        }
         let text = NSMutableAttributedString(
             string: block.text,
             attributes: baseAttributes(
@@ -198,7 +207,7 @@ public enum MarkdownStyler {
 
         for format in InlineFormat.allCases {
             for mark in block.inlineMarks where mark.format == format && mark.range.length > 0 {
-                guard mark.range.location >= 0, NSMaxRange(mark.range) <= text.length else { continue }
+                guard EditorBlock.isValidRange(mark.range, length: text.length) else { continue }
                 switch mark.format {
                 case .bold:
                     applyFontTraits(.traitBold, range: mark.range, to: text)
@@ -304,7 +313,8 @@ public enum MarkdownStyler {
     ) -> [LatexInlineMathSpan] {
         guard !block.kind.preservesLineBreaks else { return [] }
         let codeRanges = block.inlineMarks.compactMap { mark in
-            mark.format == .code ? mark.range : nil
+            mark.format == .code && EditorBlock.isValidRange(mark.range, length: block.text.utf16.count)
+                ? mark.range : nil
         }
         return LatexInlineMathScanner.scan(
             block.text,

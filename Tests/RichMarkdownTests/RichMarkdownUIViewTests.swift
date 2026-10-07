@@ -696,6 +696,36 @@ import UIKit
         #expect(renderedText(in: view).contains("둘"))
     }
 
+    @Test func tableHeightFitsRowsOnCreationAndStreamingContentGrowth() async throws {
+        let prefix = "| 설명 | 확률 |\n| --- | --- |\n| "
+        let view = RichMarkdownUIView(markdown: prefix + "한 줄 | 68.27% |")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        let table = try #require(view.blockStack.arrangedSubviews.first as? TableScrollBlock)
+        let percentage = try #require(table.cells.last?.last)
+        #expect(percentage.text == "68.27%")
+
+        func fittedHeight() -> CGFloat {
+            table.systemLayoutSizeFitting(
+                CGSize(width: 320, height: UIView.layoutFittingCompressedSize.height),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
+            ).height
+        }
+        let initialHeight = fittedHeight()
+        let minimumCellHeight = percentage.sizeThatFits(
+            CGSize(width: 96, height: CGFloat.greatestFiniteMagnitude)
+        ).height
+        #expect(initialHeight >= minimumCellHeight * 2, "헤더와 본문이 초기 1pt 제약에 눌리면 안 된다")
+
+        view.markdown = prefix + String(repeating: "긴 설명 ", count: 40) + "| 68.27% |"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.first === table, "같은 구조의 표는 제자리 갱신한다")
+        #expect(table.cells.last?.last === percentage)
+        #expect(fittedHeight() > initialHeight, "줄바꿈한 셀은 이전 표 높이보다 커져야 한다")
+    }
+
     /// 항목 수가 같은 목록은 마지막 항목의 문단만 갱신한다.
     @Test func streamingUpdatesTailListItemInPlace() async throws {
         let view = RichMarkdownUIView(markdown: "- 하나\n- 둘")

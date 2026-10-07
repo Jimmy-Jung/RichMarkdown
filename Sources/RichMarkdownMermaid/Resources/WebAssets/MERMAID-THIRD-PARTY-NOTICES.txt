@@ -1319,7 +1319,7 @@ THIS SOFTWARE.
 
 
 ========================================================================
-dompurify 3.4.15 ((MPL-2.0 OR Apache-2.0))
+dompurify 3.4.16 ((MPL-2.0 OR Apache-2.0))
 https://github.com/cure53/DOMPurify
 
 
@@ -2009,7 +2009,7 @@ THIS SOFTWARE.
 
 
 ========================================================================
-katex 0.16.47 (MIT)
+katex 0.18.2 (MIT)
 https://katex.org
 
 

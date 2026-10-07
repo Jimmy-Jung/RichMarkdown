@@ -202,16 +202,17 @@ Prism 토큰은 문법마다 이름이 다르다. 표시에 쓰는 역할은 7�
 
 - 고정 버전: Mermaid `11.17.2` (`Sources/RichMarkdownMermaid/Web/package-lock.json`)
 - 번들러: esbuild `0.28.2`, `format: 'iife'`, `target: 'safari16'`, `legalComments: 'eof'`
+- 보안 patch override: DOMPurify `3.4.16`, JavaScript KaTeX `0.18.2` (native RaTeX 의존과 별도)
 - 서드파티 고지: `Resources/WebAssets/MERMAID-THIRD-PARTY-NOTICES.txt` (64개 패키지)
 
 | 번들 파일 | 바이트 | SHA-256 |
 | --- | ---: | --- |
-| `mermaid.bundle.js` | 3453031 | `244a929a547cfa38252ef9cabb90052e5f477070c4308a1d09c2c01695fb8615` |
-| `index.html` | 3320 | `336e0d86f302a4f6a5eb0f864767137063e020ff290c4281891318c5501ce504` |
+| `mermaid.bundle.js` | 3454027 | `a08fc0af7b41dbcda5da2a5aa03381ea83b1d5be3f71ee2dc20b4edbb76105b9` |
+| `index.html` | 4676 | `552bfb357b33777902e230cf9ee53efebb75a353c169b61866b7fecdb30f2e37` |
 
 ### 5.1 번들 다시 만들기
 
-Node.js가 필요하다. 이 Mac에서는 `node_modules`를 저장소 안에 만들지 않는다.
+Node.js가 필요합니다. 프로젝트의 출력·캐시 저장소 정책에 맞춰 작업 폴더를 지정합니다.
 
 ```sh
 cd Sources/RichMarkdownMermaid/Web
@@ -232,6 +233,14 @@ OUTPUT_DIR=<외장 작업 폴더> npm run build
 - 확대는 WebView 스크롤 뷰의 1~5배 줌이다. 세로 스크롤은 바깥 목록이 담당한다.
 - 다이어그램 내부 링크·클릭 콜백은 실행하지 않는다.
 
+### 5.3 요청 교체와 복구
+
+초기 로드는 대기 요청을 공유하고 각 취소를 독립적으로 종료합니다. native 요청과 JS 게시에는
+현재 request ID를 검사하며, 숨겨진 SVG staging과 마지막 frame 확인 뒤 현재 DOM에 반영합니다.
+새 원문이나 테마 요청은 이전 표시를 즉시 숨기고, 취소로 남은 JS 작업은 페이지 재로드 경계로
+격리합니다. 로드와 렌더 완료에는 각각 15초 상한을 두고 WebKit 종료 후에는 연속 실패에 한해
+한 번 재시도합니다. 성공 또는 새 입력은 이 재시도 예산을 다시 시작합니다.
+
 ## 6. 검증
 
 ```sh
@@ -248,3 +257,9 @@ xcodebuild test -scheme RichMarkdown-Package \
 
 데모는 `Examples/RichMarkdownDemo`의 **코드 블록 확장 (Mermaid · Prism)** 화면이다.
 SwiftUI/UIKit 렌더러를 바꿔 가며 두 확장을 켜고 끌 수 있다.
+
+순수 JS 게시·frame·취소 회귀는 Node built-ins만으로 실행하며 표준 CI에도 포함됩니다.
+
+```sh
+node Sources/RichMarkdownMermaid/Web/regression-test.mjs
+```

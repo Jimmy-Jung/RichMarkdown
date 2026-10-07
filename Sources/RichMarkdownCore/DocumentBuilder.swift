@@ -73,6 +73,12 @@ package enum RichMarkdownParser {
         dollarMath: DollarMathOptions,
         excludingUTF8Ranges: [Range<Int>] = []
     ) -> [ProtectedMathSpan] {
+        // scanner의 결과는 원문 좌표이므로 제한 초과 입력을 자르거나 marker로 치환하지 않는다.
+        // full parse와 같은 깊이 검사를 첫 AST 이전에 적용하고 빈 결과로 거절한다.
+        guard markdown.utf8.count <= InputLimits.maxInputUTF8Bytes,
+              InputLimits.firstLineExceedingBlockQuoteDepth(in: markdown) == nil
+        else { return [] }
+
         let bytes = Array(markdown.utf8)
         let scan = scanMath(
             text: markdown,

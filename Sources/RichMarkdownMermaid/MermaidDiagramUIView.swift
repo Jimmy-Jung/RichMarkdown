@@ -13,11 +13,21 @@ public final class MermaidDiagramUIView: UIView {
     public static let placeholderHeight: CGFloat = 64
 
     public var source: String {
-        didSet { if source != oldValue { invalidateRender() } }
+        didSet {
+            if source != oldValue {
+                retriedAfterTermination = false
+                invalidateRender()
+            }
+        }
     }
 
     public var theme: RichMarkdownTheme {
-        didSet { if theme != oldValue { invalidateRender() } }
+        didSet {
+            if theme != oldValue {
+                retriedAfterTermination = false
+                invalidateRender()
+            }
+        }
     }
 
     /// 높이가 확정·변경될 때 호출된다. 셀 self-sizing 재측정에 쓴다.
@@ -31,8 +41,14 @@ public final class MermaidDiagramUIView: UIView {
     private var contentHeight: CGFloat = MermaidDiagramUIView.placeholderHeight
     private var renderTask: Task<Void, Never>?
     /// 마지막으로 요청한 (원문, 다크, 폭, 글자 크기). 같은 조합은 다시 그리지 않는다.
-    private var renderedKey: String?
-    /// 콘텐츠 프로세스 종료 뒤 재시도를 한 번으로 제한한다.
+    private struct RenderKey: Equatable {
+        let source: String
+        let dark: Bool
+        let width: CGFloat
+        let fontSize: CGFloat
+    }
+    private var renderedKey: RenderKey?
+    /// 연속 콘텐츠 프로세스 종료의 재시도를 한 번으로 제한한다. 성공·새 입력은 예산을 되돌린다.
     private var retriedAfterTermination = false
 
     public init(source: String, theme: RichMarkdownTheme = .default) {
@@ -53,6 +69,7 @@ public final class MermaidDiagramUIView: UIView {
 
     private func setUp() {
         clipsToBounds = true
+        renderer.onContentProcessTermination = { [weak self] in self?.handleTermination() }
 
         let webView = renderer.webView
         webView.translatesAutoresizingMaskIntoConstraints = false
@@ -121,14 +138,35 @@ public final class MermaidDiagramUIView: UIView {
     /// 창에 들어온 시점에 렌더를 시작한다.
     public override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window != nil { setNeedsLayout() }
+        if window != nil {
+            setNeedsLayout()
+        } else {
+            cancelRendering()
+            renderedKey = nil
+        }
     }
 
     // MARK: - 렌더
 
     private func invalidateRender() {
+        cancelRendering()
+        showStatus("Mermaid 다이어그램을 그리는 중입니다.", showsSource: false, measuresHeight: false)
         renderedKey = nil
         setNeedsLayout()
+    }
+
+    func cancelRendering() {
+        renderTask?.cancel()
+    }
+
+    private func handleTermination() {
+        cancelRendering()
+        if retriedAfterTermination {
+            showStatus("Mermaid 다이어그램을 표시하지 못했습니다 · \(MermaidError.webContentTerminated.localizedDescription)", showsSource: true)
+            return
+        }
+        retriedAfterTermination = true
+        invalidateRender()
     }
 
     private var bodyFontSize: CGFloat {
@@ -143,12 +181,13 @@ public final class MermaidDiagramUIView: UIView {
         guard width > 1, window != nil else { return }
         let isDark = traitCollection.userInterfaceStyle == .dark
         let fontSize = bodyFontSize
-        // U+0001은 Mermaid 원문에 나타나지 않아 구분자로 안전하다.
-        let key = "\(source)\u{1}\(isDark)\u{1}\(floor(width))\u{1}\(fontSize)"
+        let key = RenderKey(source: source, dark: isDark, width: floor(width), fontSize: fontSize)
         guard key != renderedKey else { return }
         renderedKey = key
 
         renderTask?.cancel()
+        showStatus("Mermaid 다이어그램을 그리는 중입니다.", showsSource: false, measuresHeight: false)
+        renderer.webView.isHidden = false
         let source = source
         renderTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -167,10 +206,8 @@ public final class MermaidDiagramUIView: UIView {
                 guard !Task.isCancelled else { return }
                 // WebKit 콘텐츠 프로세스가 죽은 경우는 입력 문제가 아니다. 한 번만 다시 그린다 —
                 // 무제한 재시도는 15초 timeout을 반복하는 무한 루프가 된다.
-                if case MermaidError.webContentTerminated = error, !self.retriedAfterTermination {
-                    self.retriedAfterTermination = true
-                    self.renderedKey = nil
-                    self.setNeedsLayout()
+                if case MermaidError.webContentTerminated = error {
+                    self.handleTermination()
                     return
                 }
                 self.showStatus(
@@ -182,7 +219,10 @@ public final class MermaidDiagramUIView: UIView {
     }
 
     private func showDiagram(height: CGFloat) {
+        retriedAfterTermination = false
         renderer.webView.isHidden = false
+        renderer.webView.alpha = 1
+        renderer.webView.accessibilityElementsHidden = false
         fallbackStack.isHidden = true
         accessibilityLabel = nil
         isAccessibilityElement = false
@@ -190,17 +230,21 @@ public final class MermaidDiagramUIView: UIView {
     }
 
     /// 렌더 전·실패 상태. 실패면 원문을 그대로 보여 준다.
-    private func showStatus(_ message: String, showsSource: Bool) {
+    private func showStatus(_ message: String, showsSource: Bool, measuresHeight: Bool = true) {
         renderer.webView.isHidden = true
+        renderer.webView.alpha = 0
+        renderer.webView.accessibilityElementsHidden = true
         fallbackStack.isHidden = false
         statusLabel.font = theme.codeLabelFont.resolvedUIFont(compatibleWith: traitCollection)
         statusLabel.textColor = UIColor(theme.textColor)
         statusLabel.text = message
         sourceTextView.isHidden = !showsSource
-        sourceTextView.attributedText = NSAttributedString(string: source, attributes: [
+        sourceTextView.attributedText = NSAttributedString(string: showsSource ? boundedFallback() : "", attributes: [
             .font: theme.codeFont.resolvedUIFont(compatibleWith: traitCollection),
             .foregroundColor: UIColor(theme.textColor),
         ])
+
+        guard measuresHeight else { return }
 
         let width = bounds.width > 1 ? bounds.width : 320
         let fitted = fallbackStack.systemLayoutSizeFitting(
@@ -209,6 +253,19 @@ public final class MermaidDiagramUIView: UIView {
             verticalFittingPriority: .fittingSizeLevel
         )
         setContentHeight(max(Self.placeholderHeight, ceil(fitted.height)))
+    }
+
+    private func boundedFallback() -> String {
+        var end = source.startIndex
+        var bytes = 0
+        while end < source.endIndex {
+            let next = source.index(after: end)
+            let count = source[end..<next].utf8.count
+            if bytes + count > MermaidWebRenderer.maxSourceUTF8Bytes { break }
+            bytes += count
+            end = next
+        }
+        return end == source.endIndex ? source : String(source[..<end]) + "\n… [표시 상한 초과로 나머지 원문 생략]"
     }
 
     private func setContentHeight(_ height: CGFloat) {

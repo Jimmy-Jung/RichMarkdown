@@ -61,7 +61,7 @@ package enum InputLimits {
     }
 
     /// Block quote는 swift-markdown 변환과 내부 모델 모두 재귀로 처리하므로 parse 전에 제한한다.
-    private static func firstLineExceedingBlockQuoteDepth(in input: String) -> String.Index? {
+    package static func firstLineExceedingBlockQuoteDepth(in input: String) -> String.Index? {
         var lineStart = input.startIndex
         var openFence: CodeFence?
 

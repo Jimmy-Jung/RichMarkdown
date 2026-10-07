@@ -1,3 +1,4 @@
+import Markdown
 import Testing
 @testable import RichMarkdownCore
 
@@ -91,6 +92,26 @@ import Testing
         let masked = MathProtector.protect(bytes: bytes, spans: spans)
         #expect(Array(masked[0..<span.originalUTF8Range.lowerBound]) == Array(bytes[0..<span.originalUTF8Range.lowerBound]))
         #expect(Array(masked[span.originalUTF8Range.upperBound...]) == Array(bytes[span.originalUTF8Range.upperBound...]))
+    }
+
+    @Test(arguments: ["\n", "\r", "\r\n"])
+    func lineMapMatchesDependencySourceLocations(lineEnding: String) throws {
+        let prefix = "앞🙂\(lineEnding)\(lineEnding)"
+        let source = prefix + #"\(x\)"#
+        let document = Markdown.Document(parsing: source)
+        let paragraph = try #require(Array(document.blockChildren).last)
+        let location = try #require(paragraph.range?.lowerBound)
+        let map = UTF8LineMap(utf8: Array(source.utf8))
+
+        #expect(location.line == 3)
+        #expect(location.column == 1)
+        #expect(map.offset(line: location.line, column: location.column) == prefix.utf8.count)
+        #expect(map.byteCount == source.utf8.count)
+    }
+
+    @Test func lineMapRejectsOverflowingColumn() {
+        let map = UTF8LineMap(utf8: Array("앞\n뒤".utf8))
+        #expect(map.offset(line: 2, column: Int.max) == nil)
     }
 }
 

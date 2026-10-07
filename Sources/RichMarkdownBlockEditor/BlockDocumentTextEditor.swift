@@ -539,16 +539,14 @@ public struct BlockDocumentTextEditor: UIViewRepresentable {
         ) -> (range: NSRange, replacement: String)? {
             let oldText = old as NSString
             let newText = new as NSString
-            guard range.location >= 0,
-                  range.length >= 0,
-                  NSMaxRange(range) <= oldText.length
+            guard EditorBlock.isValidRange(range, length: oldText.length)
             else { return nil }
 
             let replacementLength = newText.length - (oldText.length - range.length)
             guard replacementLength >= 0 else { return nil }
             let newRange = NSRange(location: range.location, length: replacementLength)
             guard
-                  NSMaxRange(newRange) <= newText.length,
+                  EditorBlock.isValidRange(newRange, length: newText.length),
                   oldText.substring(to: range.location) == newText.substring(to: newRange.location),
                   oldText.substring(from: NSMaxRange(range))
                     == newText.substring(from: NSMaxRange(newRange))
@@ -613,6 +611,8 @@ public struct BlockDocumentTextEditor: UIViewRepresentable {
         in blocks: [EditorBlock],
         selection: NSRange
     ) -> Set<UUID> {
+        let length = blocks.reduce(max(blocks.count - 1, 0)) { $0 + $1.text.utf16.count }
+        guard EditorBlock.isValidRange(selection, length: length) else { return [] }
         var location = 0
         var result: Set<UUID> = []
         for (index, block) in blocks.enumerated() {
@@ -633,6 +633,8 @@ public struct BlockDocumentTextEditor: UIViewRepresentable {
         editingEquationIDs: Set<UUID>,
         editingInlineMathRanges: [NSRange]
     ) -> NSRange {
+        let length = blocks.reduce(max(blocks.count - 1, 0)) { $0 + $1.text.utf16.count }
+        let selection = clamped(selection, length: length)
         let start = sourceAlignedOffset(
             selection.location,
             in: blocks,

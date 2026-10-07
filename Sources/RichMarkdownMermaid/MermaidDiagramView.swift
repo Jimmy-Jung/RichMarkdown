@@ -47,6 +47,7 @@ public struct MermaidDiagramView: View {
 
         static func dismantleUIView(_ view: MermaidDiagramUIView, coordinator: ()) {
             view.onSizeChange = nil
+            view.cancelRendering()
         }
 
         private func attachSizeCallback(to view: MermaidDiagramUIView) {

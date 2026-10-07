@@ -6,6 +6,8 @@
   "author": "JunyoungJung",
   "description": "RichMarkdownMermaid가 번들하는 공식 Mermaid JavaScript의 고정 원본 빌드.",
   "scripts": {
+    "test": "node regression-test.mjs",
+    "prebuild": "node regression-test.mjs",
     "build": "node build.mjs"
   },
   "dependencies": {
@@ -13,5 +15,9 @@
   },
   "devDependencies": {
     "esbuild": "0.28.2"
+  },
+  "overrides": {
+    "dompurify": "3.4.16",
+    "katex": "0.18.2"
   }
 }

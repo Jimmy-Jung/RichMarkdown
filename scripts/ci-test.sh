@@ -11,22 +11,36 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-destination='platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6'
-richmarkdown_results_dir=$(mktemp -d /tmp/richmarkdown-results.XXXXXX)
+destination="${RICHMARKDOWN_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6}"
+richmarkdown_output_dir="${OUTPUT_DIR:-${TMPDIR:-/tmp}/richmarkdown-ci}"
+mkdir -p "$richmarkdown_output_dir"
+richmarkdown_results_dir=$(mktemp -d "$richmarkdown_output_dir/results.XXXXXX")
+swift_storage_args=()
+if [ -n "${SWIFT_SCRATCH_PATH:-}" ]; then
+    swift_storage_args+=(--scratch-path "$SWIFT_SCRATCH_PATH")
+fi
+if [ -n "${SWIFT_CACHE_PATH:-}" ]; then
+    swift_storage_args+=(--cache-path "$SWIFT_CACHE_PATH")
+fi
+
+richmarkdown_js_status=0
+node Sources/RichMarkdownMermaid/Web/regression-test.mjs \
+    > "$richmarkdown_output_dir/mermaid-regression.log" 2>&1 || richmarkdown_js_status=$?
 
 # 0) Foundation-only Core를 host에서 우선 검증한다.
 richmarkdown_core_status=0
-swift build --target RichMarkdownCore \
-    > /tmp/richmarkdown-core-build.log 2>&1 || richmarkdown_core_status=$?
+swift build --target RichMarkdownCore "${swift_storage_args[@]}" \
+    > "$richmarkdown_output_dir/core-build.log" 2>&1 || richmarkdown_core_status=$?
 
 # 1) Core 포함 전체 unit test는 iOS Simulator의 package scheme에서 실행한다.
 richmarkdown_package_status=0
 xcodebuild test \
     -scheme RichMarkdown-Package \
+    -parallel-testing-enabled NO \
     -destination "$destination" \
     -resultBundlePath "$richmarkdown_results_dir/package.xcresult" \
     -enableCodeCoverage YES \
-    > /tmp/richmarkdown-package-tests.log 2>&1 || richmarkdown_package_status=$?
+    > "$richmarkdown_output_dir/package-tests.log" 2>&1 || richmarkdown_package_status=$?
 
 # 2) UIKit lifecycle/UI test는 demo 프로젝트의 shared scheme/test plan으로 실행한다.
 richmarkdown_demo_status=0
@@ -37,7 +51,7 @@ xcodebuild test \
     -destination "$destination" \
     -resultBundlePath "$richmarkdown_results_dir/demo.xcresult" \
     -enableCodeCoverage YES \
-    > /tmp/richmarkdown-demo-tests.log 2>&1 || richmarkdown_demo_status=$?
+    > "$richmarkdown_output_dir/demo-tests.log" 2>&1 || richmarkdown_demo_status=$?
 
 # 3) Core line coverage 80% gate.
 richmarkdown_coverage_status=0
@@ -52,12 +66,14 @@ fi
 xcrun simctl shutdown all
 
 echo "core build:   $richmarkdown_core_status"
+echo "Mermaid JS:   $richmarkdown_js_status"
 echo "package test: $richmarkdown_package_status"
 echo "demo test:    $richmarkdown_demo_status"
 echo "coverage:     $richmarkdown_coverage_status"
 echo "results:      $richmarkdown_results_dir"
 
 test "$richmarkdown_core_status" -eq 0 \
+    && test "$richmarkdown_js_status" -eq 0 \
     && test "$richmarkdown_package_status" -eq 0 \
     && test "$richmarkdown_demo_status" -eq 0 \
     && test "$richmarkdown_coverage_status" -eq 0

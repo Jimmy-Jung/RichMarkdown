@@ -53,15 +53,21 @@ public enum EditorBlockKind: Codable, Equatable, Hashable, Sendable {
 /// 블록 하나의 값 타입.
 ///
 /// `markdown:` 이니셜라이저가 한 블록 분량의 markdown을 파싱하고
-/// `markdown(numberedListOrdinal:)`이 역직렬화한다. 파싱↔직렬화 왕복은 손실 없이
-/// 보존되는 것이 계약이다.
+/// `markdown(numberedListOrdinal:)`이 직렬화한다. 지원하는 본문과 인라인 서식의
+/// 의미를 보존하며, 원본 마커 표기·빈 문단 개수·UUID의 동일성은 보장하지 않는다.
 public struct EditorBlock: Identifiable, Equatable, Sendable {
     public let id: UUID
-    public var kind: EditorBlockKind
+    public var kind: EditorBlockKind {
+        didSet { kind = Self.normalizedKind(kind) }
+    }
     public var text: String
-    public var inlineMarks: [InlineMark]
+    public var inlineMarks: [InlineMark] {
+        didSet { inlineMarks = InlineMarkdownCodec.normalized(inlineMarks, text: text) }
+    }
     /// 들여쓰기 깊이. 0...3으로 clamp된다.
-    public var indentLevel: Int
+    public var indentLevel: Int {
+        didSet { indentLevel = min(max(indentLevel, 0), 3) }
+    }
 
     public init(
         id: UUID = UUID(),
@@ -71,10 +77,10 @@ public struct EditorBlock: Identifiable, Equatable, Sendable {
         indentLevel: Int = 0
     ) {
         self.id = id
-        self.kind = kind
+        self.kind = Self.normalizedKind(kind)
         self.text = text
         self.inlineMarks = InlineMarkdownCodec.normalized(inlineMarks, text: text)
-        self.indentLevel = indentLevel
+        self.indentLevel = min(max(indentLevel, 0), 3)
     }
 
     public init(markdown: String) {
@@ -91,9 +97,11 @@ public struct EditorBlock: Identifiable, Equatable, Sendable {
         }
 
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false)
-        if let first = lines.first, first.hasPrefix("```"), lines.count >= 2,
-           lines.last?.trimmingCharacters(in: .whitespaces) == "```" {
-            let language = String(first.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        if let first = lines.first, let last = lines.last, lines.count >= 2,
+           let fenceLength = Self.codeFenceLength(in: String(first)),
+           Self.closesCodeFence(String(last), length: fenceLength) {
+            let opening = first.trimmingCharacters(in: .whitespaces)
+            let language = String(opening.dropFirst(fenceLength)).trimmingCharacters(in: .whitespaces)
             kind = .code(language: language.isEmpty ? nil : language)
             text = lines.dropFirst().dropLast().joined(separator: "\n")
             inlineMarks = []
@@ -150,7 +158,7 @@ public struct EditorBlock: Identifiable, Equatable, Sendable {
         let inlineMarkdown = InlineMarkdownCodec.serialize(text: text, marks: inlineMarks)
         return switch kind {
         case .paragraph:
-            inlineMarkdown
+            Self.escapedParagraph(inlineMarkdown)
         case let .heading(level):
             String(repeating: "#", count: min(max(level, 1), 3)) + " " + inlineMarkdown
         case .bulletedList:
@@ -162,10 +170,55 @@ public struct EditorBlock: Identifiable, Equatable, Sendable {
         case .quote:
             "> " + inlineMarkdown
         case let .code(language):
-            "```\(language ?? "")\n\(text)\n```"
+            Self.fencedCode(text: text, language: language)
         case .equation:
             "\\[\(text)\\]"
         }
+    }
+
+    private static func normalizedKind(_ kind: EditorBlockKind) -> EditorBlockKind {
+        if case let .heading(level) = kind {
+            return .heading(level: min(max(level, 1), 3))
+        }
+        return kind
+    }
+
+    private static func escapedParagraph(_ markdown: String) -> String {
+        if markdown.hasPrefix("\\["), markdown.hasSuffix("\\]") {
+            return "\\" + String(markdown.dropLast(2)) + "\\\\]"
+        }
+        guard let range = markdown.range(
+            of: #"^[ \t]*(?:#{1,6}|[-+>]|\d+\.) "#,
+            options: .regularExpression
+        ) else { return markdown }
+        let marker = markdown[range].dropLast().drop { $0 == " " || $0 == "\t" }
+        let escapeIndex = marker.last == "." ? marker.index(before: marker.endIndex) : marker.startIndex
+        var result = markdown
+        result.insert("\\", at: escapeIndex)
+        return result
+    }
+
+    private static func fencedCode(text: String, language: String?) -> String {
+        let longestRun = text.split { $0 != "`" }.map(\.count).max() ?? 0
+        let fence = String(repeating: "`", count: max(3, longestRun + 1))
+        return "\(fence)\(language ?? "")\n\(text)\n\(fence)"
+    }
+
+    static func codeFenceLength(in line: String) -> Int? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let length = trimmed.prefix { $0 == "`" }.count
+        guard length >= 3, !trimmed.dropFirst(length).contains("`") else { return nil }
+        return length
+    }
+
+    static func closesCodeFence(_ line: String, length: Int) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.count >= length && trimmed.allSatisfy { $0 == "`" }
+    }
+
+    static func isValidRange(_ range: NSRange, length: Int) -> Bool {
+        range.location >= 0 && range.length >= 0
+            && range.location <= length && range.length <= length - range.location
     }
 
     private static func hasListMarker(_ source: String) -> Bool {
@@ -260,11 +313,11 @@ public enum InlineMarkdownCodec {
 
     public static func normalized(_ marks: [InlineMark], text: String) -> [InlineMark] {
         let latexRanges = inlineLatexRanges(in: text)
+        let textLength = text.utf16.count
         let valid = marks
             .filter {
-                $0.range.location >= 0
-                    && $0.range.length > 0
-                    && NSMaxRange($0.range) <= text.utf16.count
+                $0.range.length > 0
+                    && EditorBlock.isValidRange($0.range, length: textLength)
                     && Range($0.range, in: text) != nil
             }
             .flatMap { mark in
@@ -465,7 +518,8 @@ public enum InlineMarkdownCodec {
             let next = source.index(after: index)
             if character == "\\",
                next < source.endIndex,
-               (targets.contains(source[next]) || source[next] == "\\") {
+               (targets.contains(source[next]) || source[next] == "\\"
+                    || !insideCode && isEscapable(source[next])) {
                 result += "\\\\"
             } else {
                 if targets.contains(character) { result += "\\" }
@@ -524,6 +578,8 @@ public enum InlineMarkdownCodec {
     private static func isEscapable(_ character: Character) -> Bool {
         character == "\\" || character == "*" || character == "_"
             || character == "~" || character == "`" || character == "<"
+            || character == "#" || character == "-" || character == "+"
+            || character == ">" || character == "."
     }
 
     private static func isWord(_ character: Character) -> Bool {
@@ -594,9 +650,7 @@ public enum InlineMarkdownCodec {
 
 extension EditorBlock {
     func replacingText(in range: NSRange, with replacement: String) -> EditorBlock? {
-        guard range.location >= 0,
-              range.length >= 0,
-              NSMaxRange(range) <= text.utf16.count,
+        guard Self.isValidRange(range, length: text.utf16.count),
               let sourceRange = Range(range, in: text)
         else { return nil }
 

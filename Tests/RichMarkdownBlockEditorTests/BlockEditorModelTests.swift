@@ -34,6 +34,208 @@ private extension RichMarkdownTheme {
 
 @Suite("Notion 스타일 블록 편집 모델", .serialized)
 struct BlockEditorModelTests {
+    @Test("범위를 넘거나 합계가 overflow하는 인라인 마크는 원문을 바꾸지 않고 무시한다",
+          arguments: [NSRange(location: Int.max, length: 1), NSRange(location: 1, length: Int.max),
+                      NSRange(location: -1, length: 1), NSRange(location: 0, length: -1)])
+    func invalidInlineMarkRangesAreIgnored(_ range: NSRange) throws {
+        let valid = InlineMark(format: .bold, range: NSRange(location: 0, length: 1))
+        let invalid = InlineMark(format: .code, range: range)
+        let initialized = EditorBlock(text: "본문", inlineMarks: [invalid, valid])
+        var assigned = EditorBlock(text: "본문")
+        assigned.inlineMarks = [invalid, valid]
+
+        #expect(InlineMarkdownCodec.normalized([invalid, valid], text: "본문") == [valid])
+        #expect(initialized.inlineMarks == [valid])
+        #expect(assigned.inlineMarks == [valid])
+        try #require(assigned.inlineMarks == [valid])
+        #expect(assigned.text == "본문")
+        #expect(assigned.markdown == "**본**문")
+    }
+
+    @Test("overflow하거나 잘못된 공개 선택·편집 범위는 문서를 바꾸지 않고 거절한다",
+          arguments: [NSRange(location: Int.max, length: 1), NSRange(location: 1, length: Int.max),
+                      NSRange(location: -1, length: 1), NSRange(location: 0, length: -1)])
+    func invalidPublicEditRangesAreRejected(_ range: NSRange) {
+        let block = EditorBlock(text: "본문")
+        var model = BlockEditorModel(blocks: [block])
+        let original = model.blocks
+        let selection = BlockSelection(blockID: block.id, range: range)
+        let validSelection = NSRange(location: 0, length: 0)
+
+        #expect(model.documentRange(for: selection) == nil)
+        #expect(model.blockSelection(for: range) == nil)
+        model.updateDocumentSelection(validSelection)
+        model.updateDocumentSelection(range)
+        #expect(model.currentDocumentSelection == validSelection)
+        let documentReplacement = model.replaceDocumentText(in: range, with: "새")
+        let blockReplacement = model.replaceText(id: block.id, range: range, with: "새")
+        let split = model.splitBlock(id: block.id, replacing: range)
+        let formatting = model.applyInlineFormat(.italic, id: block.id, range: range)
+        #expect(documentReplacement == nil)
+        #expect(blockReplacement == nil)
+        #expect(split == nil)
+        #expect(formatting == nil)
+        model.updateSelection(selection)
+        #expect(model.currentSelection == nil)
+        #expect(model.blocks == original)
+    }
+
+    @Test("스타일러는 overflow하거나 문서를 벗어난 선택을 무시한다",
+          arguments: [NSRange(location: Int.max, length: 1), NSRange(location: 1, length: Int.max),
+                      NSRange(location: 0, length: Int.max), NSRange(location: -1, length: 1)])
+    @MainActor
+    func invalidStylerSelectionsAreIgnored(_ selection: NSRange) {
+        let block = EditorBlock(text: "앞 \\(x\\) 뒤")
+        let baseline = MarkdownStyler.styled(block)
+        let document = MarkdownStyler.styledDocument([block])
+
+        #expect(MarkdownStyler.styled(block, selection: selection).string == baseline.string)
+        #expect(MarkdownStyler.styledDocument([block], selection: selection).string == document.string)
+        #expect(MarkdownStyler.inlineMathRanges(
+            in: [block], intersecting: selection, parsesDollarMath: false
+        ).isEmpty)
+    }
+
+    @Test("입력 브리지는 overflow하는 선택을 안전하게 제한하고 원문을 유지한다",
+          arguments: [NSRange(location: Int.max, length: 1), NSRange(location: 1, length: Int.max),
+                      NSRange(location: 0, length: Int.max), NSRange(location: -1, length: 1)])
+    @MainActor
+    func coordinatorClampsOverflowingSelections(_ selection: NSRange) {
+        let block = EditorBlock(text: "본문")
+        let editor = BlockDocumentTextEditor(
+            blocks: [block], selection: nil, canUndo: false, canRedo: false,
+            onReplaceText: { _, _ in nil }, onSelectionChange: { _ in },
+            onToolbarAction: { _, _ in }
+        )
+        let coordinator = editor.makeCoordinator()
+        let view = BlockDocumentUITextView()
+
+        coordinator.applyDocumentStyle(to: view, selection: selection)
+
+        let location = min(max(selection.location, 0), block.text.utf16.count)
+        let length = min(max(selection.length, 0), block.text.utf16.count - location)
+        #expect(view.text == block.text)
+        #expect(view.selectedRange == NSRange(location: location, length: length))
+    }
+
+    @Test("들여쓰기는 직접 생성과 대입 모두 0...3으로 제한한다",
+          arguments: [Int.min, -1, 0, 3, 4, Int.max])
+    @MainActor
+    func directIndentValuesAreClamped(_ input: Int) throws {
+        let expected = min(max(input, 0), 3)
+        let id = UUID()
+        let initialized = EditorBlock(id: id, kind: .bulletedList, text: "항목", indentLevel: input)
+        var assigned = EditorBlock(id: id, kind: .bulletedList, text: "항목")
+        assigned.indentLevel = input
+
+        #expect(initialized.indentLevel == expected)
+        #expect(assigned.indentLevel == expected)
+        try #require(initialized.indentLevel == expected && assigned.indentLevel == expected)
+        #expect(initialized == assigned)
+        #expect(assigned.id == id)
+        #expect(assigned.text == "항목")
+        #expect(assigned.markdown == String(repeating: "  ", count: expected) + "- 항목")
+
+        let styled = MarkdownStyler.styledDocument([assigned])
+        let paragraphStyle = try #require(
+            styled.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+        #expect(paragraphStyle.textLists.count == expected + 1)
+    }
+
+    @Test("제목 레벨은 직접 생성·대입·모델 변환 모두 1...3으로 제한한다",
+          arguments: [Int.min, 0, 1, 3, 4, Int.max])
+    func directHeadingValuesAreClamped(_ input: Int) {
+        let expectedKind = EditorBlockKind.heading(level: min(max(input, 1), 3))
+        let initialized = EditorBlock(kind: .heading(level: input), text: "제목")
+        var assigned = EditorBlock(text: "제목")
+        assigned.kind = .heading(level: input)
+        var model = BlockEditorModel(blocks: [EditorBlock(text: "제목")])
+        model.transform(id: model.blocks[0].id, to: .heading(level: input))
+
+        #expect(initialized.kind == expectedKind)
+        #expect(assigned.kind == expectedKind)
+        #expect(model.blocks[0].kind == expectedKind)
+        #expect(EditorBlock(markdown: initialized.markdown).kind == expectedKind)
+    }
+
+    @Test("구조 마커로 시작하는 문단은 인라인 서식과 원문을 Markdown 왕복에서 보존한다",
+          arguments: ["# 리터럴 제목", "### 리터럴 제목", "###### 리터럴 제목",
+                      "- 리터럴 목록", "+ 리터럴 목록", "* 리터럴 목록",
+                      "1. 리터럴 번호", "2026. 리터럴 번호", "> 리터럴 인용",
+                      "  - 들여쓴 리터럴", "\\# 리터럴 escape"])
+    func literalParagraphMarkersRoundTrip(_ source: String) {
+        let markRange = (source as NSString).range(of: "리터럴")
+        let original = EditorBlock(
+            text: source,
+            inlineMarks: [InlineMark(format: .bold, range: markRange)]
+        )
+        let reparsed = EditorBlock(markdown: original.markdown)
+
+        #expect(reparsed.kind == .paragraph)
+        #expect(reparsed.text == original.text)
+        #expect(reparsed.inlineMarks == original.inlineMarks)
+    }
+
+    @Test("블록 수식처럼 생긴 문단도 Markdown 왕복에서 원문과 인라인 서식을 보존한다")
+    func literalEquationParagraphRoundTrip() {
+        let original = EditorBlock(text: "\\[리터럴\\]", inlineMarks: [
+            InlineMark(format: .bold, range: NSRange(location: 2, length: 3)),
+        ])
+        let reparsed = EditorBlock(markdown: original.markdown)
+        let model = BlockEditorModel(blocks: [original])
+        let document = BlockEditorModel(markdown: model.markdown)
+
+        #expect(reparsed.kind == .paragraph)
+        #expect(reparsed.text == original.text)
+        #expect(reparsed.inlineMarks == original.inlineMarks)
+        #expect(document.blocks.map(\.kind) == model.blocks.map(\.kind))
+        #expect(document.blocks.map(\.text) == model.blocks.map(\.text))
+        #expect(document.blocks.map(\.inlineMarks) == model.blocks.map(\.inlineMarks))
+    }
+
+    @Test("모호한 문단과 내부 fence가 있는 코드는 문서 Markdown 왕복에서 경계를 보존한다")
+    func ambiguousDocumentMarkdownRoundTrip() {
+        let model = BlockEditorModel(blocks: [
+            EditorBlock(text: "# 제목 모양", inlineMarks: [
+                InlineMark(format: .bold, range: NSRange(location: 2, length: 2)),
+            ]),
+            EditorBlock(text: "- 목록 모양"),
+            EditorBlock(text: "1. 번호 모양"),
+            EditorBlock(kind: .code(language: "swift"), text: "첫 줄\n```\n````\n마지막"),
+            EditorBlock(text: "뒤 문단"),
+        ])
+        let reparsed = BlockEditorModel(markdown: model.markdown)
+
+        #expect(reparsed.blocks.map(\.kind) == model.blocks.map(\.kind))
+        #expect(reparsed.blocks.map(\.text) == model.blocks.map(\.text))
+        #expect(reparsed.blocks.map(\.inlineMarks) == model.blocks.map(\.inlineMarks))
+    }
+
+    @Test("코드 fence는 본문 안의 backtick보다 길게 출력해 원문을 보존한다",
+          arguments: ["첫 줄\n```\n마지막", "````\n# 리터럴\n````",
+                      "let value = \"`````\"\n```suffix\n  ```\n마지막", "``````", ""])
+    func codeFenceContentsRoundTrip(_ source: String) {
+        let original = EditorBlock(kind: .code(language: "swift"), text: source)
+        let reparsed = EditorBlock(markdown: original.markdown)
+        let model = BlockEditorModel(markdown: original.markdown)
+
+        #expect(reparsed.kind == original.kind)
+        #expect(reparsed.text == original.text)
+        #expect(reparsed.inlineMarks.isEmpty)
+        #expect(model.blocks.map(\.kind) == [original.kind, .paragraph])
+        #expect(model.blocks.map(\.text) == [source, ""])
+    }
+
+    @Test("짧은 fence와 suffix가 있는 줄은 코드를 종료하지 않고 충분히 긴 fence만 종료한다")
+    func codeFenceClosingRequiresLengthAndEmptySuffix() {
+        let source = "````swift\n첫 줄\n```\n````suffix\n마지막\n`````\n# 뒤 제목"
+        let model = BlockEditorModel(markdown: source)
+
+        #expect(model.blocks.map(\.kind) == [.code(language: "swift"), .heading(level: 1), .paragraph])
+        #expect(model.blocks.map(\.text) == ["첫 줄\n```\n````suffix\n마지막", "뒤 제목", ""])
+    }
+
     @Test("Enter는 UTF-16 커서 위치에서 블록을 나누고 ID를 보존한다")
     func splitBlockAtCaret() throws {
         let firstID = UUID()

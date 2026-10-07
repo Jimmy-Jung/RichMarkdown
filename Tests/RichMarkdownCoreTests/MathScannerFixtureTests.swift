@@ -457,4 +457,73 @@ import Testing
         let many = Array(repeating: "- 항목 \\(x\\)", count: 500).joined(separator: "\n")
         #expect(!parse(many).blocks.isEmpty)
     }
+
+    @Test(arguments: ["\n", "\r", "\r\n"])
+    func commonMarkLineEndingsPreserveMathAndCodeBarriers(lineEnding: String) {
+        let source = "앞🙂\(lineEnding)\(lineEnding)"
+            + "```text\(lineEnding)\\(code\\)\(lineEnding)```\(lineEnding)\(lineEnding)"
+            + #"끝 \(x_[i]\) 뒤"#
+        let document = parse(source)
+
+        #expect(document.allMathSegments.map(\.source) == [#"\(x_[i]\)"#])
+        #expect(document.allMathSegments.map(\.latex) == ["x_[i]"])
+        #expect(plainText(of: firstParagraphRuns(document)) == "앞🙂")
+        #expect(document.blocks.contains {
+            if case .codeBlock(_, let code) = $0 { return code == #"\(code\)"# }
+            return false
+        })
+    }
+
+    @Test(arguments: ["\n", "\r", "\r\n"])
+    func inlineScannerRejectsExcessiveQuoteDepthWithoutChangingSource(lineEnding: String) {
+        let accepted = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth)
+        let excessive = accepted + "> "
+        let math = #"\(x\)"#
+        let source = "앞🙂\(lineEnding)\(excessive)\(math)"
+
+        #expect(RichMarkdownParser.scanInlineMathSpans(
+            markdown: source,
+            parsesDollarMath: false
+        ).isEmpty)
+        let allowed = accepted + math
+        let spans = RichMarkdownParser.scanInlineMathSpans(
+            markdown: allowed,
+            parsesDollarMath: false
+        )
+        #expect(spans.map(\.source) == [math])
+        #expect(spans.first?.originalUTF8Range == accepted.utf8.count..<allowed.utf8.count)
+    }
+
+    @Test func inlineScannerAllowsQuoteLikeFencedCodeAndKeepsOriginalOffsets() {
+        let deep = String(repeating: "> ", count: InputLimits.maxBlockQuoteDepth + 1)
+        let prefix = "```text\r\n\(deep)\\(code\\)\r\n```\r\n\r\n앞🙂 "
+        let math = #"\(x\)"#
+        let source = prefix + math
+        let spans = RichMarkdownParser.scanInlineMathSpans(
+            markdown: source,
+            parsesDollarMath: false
+        )
+
+        #expect(spans.map(\.source) == [math])
+        #expect(spans.first?.originalUTF8Range == prefix.utf8.count..<source.utf8.count)
+    }
+
+    @Test func canonicalEditorParagraphEscapesAndVariableCodeFenceStayLiteral() {
+        let literals = ["\\# 제목", "\\- 목록", "1\\. 번호", "\\> 인용"]
+        let code = "앞\n```\n````\n뒤"
+        let markdown = literals.joined(separator: "\n\n")
+            + "\n\n`````swift\n\(code)\n`````\n\n마지막"
+        let blocks = parse(markdown).blocks
+        let text = blocks.compactMap { block -> String? in
+            if case .paragraph(let runs) = block { return plainText(of: runs) }
+            return nil
+        }
+
+        #expect(text == ["# 제목", "- 목록", "1. 번호", "> 인용", "마지막"])
+        #expect(blocks.count == 6)
+        #expect(blocks.contains {
+            if case .codeBlock(let language, let body) = $0 { return language == "swift" && body == code }
+            return false
+        })
+    }
 }

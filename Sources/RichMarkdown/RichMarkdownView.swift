@@ -529,12 +529,21 @@ struct CodeBlockView: View {
     @Environment(\.richMarkdownTheme) private var theme
     @Environment(\.richMarkdownCodeBlocks) private var codeBlocks
 
-    /// 도착한 색 범위와 그 범위를 만든 원문. 스트리밍으로 원문이 바뀌면 이전 범위는 버린다 —
-    /// 위치가 밀린 색을 한 프레임도 보여 주지 않는다.
+    /// 도착한 색 범위는 원문·언어·공급자가 모두 같은 요청에만 사용한다.
     @State private var highlight: HighlightState?
 
-    private struct HighlightState {
+    private struct HighlightRequest: Sendable, Equatable {
         let code: String
+        let language: String?
+        let highlighter: (any RichMarkdownSyntaxHighlighting)?
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.code == rhs.code && lhs.language == rhs.language && lhs.highlighter === rhs.highlighter
+        }
+    }
+
+    private struct HighlightState {
+        let request: HighlightRequest
         let spans: [RichMarkdownHighlightSpan]
     }
 
@@ -565,8 +574,9 @@ struct CodeBlockView: View {
             diagram.makeSwiftUIView(source: code, theme: theme)
                 .background(theme.codeBlockBackground)
         } else {
+            let request = highlightRequest
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(attributedCode)
+                Text(attributedCode(for: request))
                     .richMarkdownFont(theme.codeFont)
                     .foregroundStyle(theme.textColor)
                     .textSelection(.enabled)
@@ -575,34 +585,33 @@ struct CodeBlockView: View {
             .background(theme.codeBlockBackground)
             // 색은 늦게 와도 된다. 먼저 plain으로 그리고 범위가 도착하면 색만 바꾼다 —
             // 글자·폰트가 그대로라 코드 블록 크기는 달라지지 않는다.
-            .task(id: highlightIdentity) { await loadHighlight() }
+            .task(id: request) { await loadHighlight(for: request) }
         }
     }
 
-    /// 색 범위 요청을 결정하는 입력. 언어와 원문이 바뀔 때만 다시 토큰화한다.
-    private var highlightIdentity: String {
-        // U+0001은 Markdown info string에도 코드 원문에도 나타나지 않아 구분자로 안전하다.
-        "\(language ?? "")\u{1}\(code)"
+    private var highlightRequest: HighlightRequest {
+        HighlightRequest(code: code, language: language, highlighter: codeBlocks.highlighter)
     }
 
-    private var attributedCode: AttributedString {
-        guard let highlight, highlight.code == code else { return AttributedString(code) }
+    private func attributedCode(for request: HighlightRequest) -> AttributedString {
+        guard let highlight, highlight.request == request else { return AttributedString(request.code) }
         return RichMarkdownHighlightSegments.attributedString(
-            code: code,
+            code: request.code,
             spans: highlight.spans,
             colors: theme.syntax
         )
     }
 
-    private func loadHighlight() async {
-        guard let highlighter = codeBlocks.highlighter, let language, !code.isEmpty else {
-            highlight = nil
-            return
-        }
-        let spans = await highlighter.spans(for: code, language: language)
+    private func loadHighlight(for request: HighlightRequest) async {
+        guard !Task.isCancelled, request == highlightRequest else { return }
+        highlight = nil
+        guard let highlighter = request.highlighter, let language = request.language,
+              !request.code.isEmpty
+        else { return }
+        let spans = await highlighter.spans(for: request.code, language: language)
         // 미지원 언어·실패는 빈 배열이다. 그대로 plain을 유지한다.
-        guard !Task.isCancelled, !spans.isEmpty else { return }
-        highlight = HighlightState(code: code, spans: spans)
+        guard !Task.isCancelled, request == highlightRequest else { return }
+        highlight = HighlightState(request: request, spans: spans)
     }
 }
 

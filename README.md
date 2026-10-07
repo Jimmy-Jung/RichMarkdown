@@ -3,9 +3,9 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.0%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.9.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.8.0 beta** — 수식 엔진을 iOS·Android 공통 native [RaTeX](https://github.com/erweixin/RaTeX)
+> **0.9.0 beta** — 수식 엔진을 iOS·Android 공통 native [RaTeX](https://github.com/erweixin/RaTeX)
 > `0.1.14`와 KaTeX 서체로 통일했다. `\underbrace`·`array` 복합 수식을 지원한다. SwiftMath 의존성과
 > `LatexMathFont`·`mathFont:` 인자를 제거했으므로 [설치](#설치)의 마이그레이션 안내를 본다.
 > `0.x`에서는 minor 버전에도 공개 API가 바뀔 수 있다. 변경 내역은
@@ -27,6 +27,12 @@ generation 관리를 공유한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
+
+## 0.9.0 베타 핵심
+
+- 입력 범위와 수식 스캔 보호, 코드 색 결과의 요청 소속, 편집기 Markdown 왕복을 개선했다.
+- Mermaid의 로드·취소·렌더 deadline과 최신 DOM 게시를 정리했다.
+- 모듈별 계약과 적용·보류 개선안은 [패키지 보고서](Docs/report/README.md)를 참고한다.
 
 ## 0.8.0 베타 핵심
 
@@ -121,7 +127,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 | Mermaid 다이어그램 | Prism 신택스 하이라이팅 |
 |---|---|
 | ![mermaid 코드 블록이 공식 Mermaid flowchart로 바뀐 화면](Docs/screenshots/09-mermaid.png) | ![Prism이 색을 입힌 swift·bash·json·python 코드 블록](Docs/screenshots/10-highlight.png) |
-| ` ```mermaid ` 블록을 `MermaidDiagramRenderer`가 공식 Mermaid 다이어그램으로 교체한다. 언어 라벨과 원문 복사 버튼은 그대로 남는다 | `PrismHighlighter`가 문법 16종의 토큰 범위에 `RichMarkdownTheme.syntax` 색을 입힌다. 미지원 언어와 실패는 원문 코드 블록으로 되돌린다 |
+| `mermaid` 코드 블록을 `MermaidDiagramRenderer`가 공식 Mermaid 다이어그램으로 교체한다. 언어 라벨과 원문 복사 버튼은 그대로 남는다 | `PrismHighlighter`가 문법 16종의 토큰 범위에 `RichMarkdownTheme.syntax` 색을 입힌다. 미지원 언어와 실패는 원문 코드 블록으로 되돌린다 |
 
 ---
 
@@ -132,7 +138,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.8.0")),
+    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.9.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["RichMarkdown"]),
@@ -874,8 +880,14 @@ xcodebuild test \
 전체 파이프라인 + Core line coverage 80% gate:
 
 ```bash
+OUTPUT_DIR="$BUILD_OUTPUT" \
+SWIFT_SCRATCH_PATH="$SWIFT_BUILD_CACHE" \
+SWIFT_CACHE_PATH="$SWIFT_PACKAGE_CACHE" \
 scripts/ci-test.sh
 ```
+
+세 경로는 프로젝트의 빌드 저장소 정책에 맞춰 지정한다. 결과 bundle은 실행별로 보존하고
+일반 로그는 출력 폴더에서 재사용한다. Mermaid JS 회귀도 이 파이프라인의 gate에 포함한다.
 
 스트리밍 30초 전체 측정 (기본은 CI용 5초):
 
@@ -894,6 +906,10 @@ TEST_RUNNER_RICHMARKDOWN_STREAM_SECONDS=30 xcodebuild test \
 - Core line coverage 80% 미만이면 `scripts/check-core-coverage.sh`가 nonzero로 종료한다.
 
 ---
+
+## 패키지 문서
+
+모듈별 architecture·spec·ADR과 별도 개선 제안은 [패키지 보고서](Docs/report/README.md)에서 확인한다.
 
 ## 기여
 

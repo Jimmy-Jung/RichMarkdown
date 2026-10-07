@@ -12,7 +12,7 @@ import Testing
 @Suite(.serialized) struct StreamingBaselineTests {
 
     /// 수식/코드/리스트가 섞인 약 50 KiB fixture.
-    static func makeFixture() -> String {
+    nonisolated static func makeFixture() -> String {
         let unit = """
         ## 스트리밍 단락
 
@@ -35,7 +35,7 @@ import Testing
         return text
     }
 
-    private func milliseconds(_ duration: Duration) -> Double {
+    private nonisolated func milliseconds(_ duration: Duration) -> Double {
         Double(duration.components.seconds) * 1_000 + Double(duration.components.attoseconds) / 1e15
     }
 
@@ -53,7 +53,7 @@ import Testing
         return String(text[..<index])
     }
 
-    @Test func parseTimingBaseline() {
+    @Test nonisolated func parseTimingBaseline() async {
         let fixture = Self.makeFixture()
         var durations: [Double] = []
         for _ in 0..<30 {

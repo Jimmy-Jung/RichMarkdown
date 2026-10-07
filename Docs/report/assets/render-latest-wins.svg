@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="598" viewBox="0 0 1280 598" role="img" aria-label="render-latest-wins">
+<title>render-latest-wins</title><g transform="translate(0.00,20.00)">
+<text x="40.00" y="42.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="22" fill="#1b1b1b" text-anchor="start"><tspan x="40.00" dy="0">Latest-wins — 현재 generation만 화면에 게시</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="40.00" y="68.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#2d5be3" text-anchor="start"><tspan x="40.00" dy="0">늦게 끝난 이전 작업의 결과를 새 요청의 화면에 섞지 않습니다.</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="40" y="130" width="160" height="56" rx="14" fill="#ffffff" stroke="none" />
+<rect x="40" y="130" width="160" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="120.00" y="163.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="120.00" dy="0">render model</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M200.00 158.00 C612.35 158.00,1024.70 158.00,1240.00 158.00 M200.00 158.00 C429.05 158.00,658.10 158.00,1240.00 158.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1227.01 165.50 L1240.00 158.00 L1227.01 150.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="40" y="260" width="160" height="56" rx="14" fill="#ffffff" stroke="none" />
+<rect x="40" y="260" width="160" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="120.00" y="293.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="120.00" dy="0">계산 worker</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M200.00 288.00 C612.37 288.00,1024.73 288.00,1240.00 288.00 M200.00 288.00 C495.67 288.00,791.33 288.00,1240.00 288.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1227.01 295.50 L1240.00 288.00 L1227.01 280.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="40" y="390" width="160" height="56" rx="14" fill="#ffffff" stroke="none" />
+<rect x="40" y="390" width="160" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="120.00" y="423.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="120.00" dy="0">화면 게시</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M200.00 418.00 C612.38 418.00,1024.76 418.00,1240.00 418.00 M200.00 418.00 C562.28 418.00,924.57 418.00,1240.00 418.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1227.01 425.50 L1240.00 418.00 L1227.01 410.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="645.00" y="90.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#e5533a" text-anchor="middle"><tspan x="645.00" dy="0">새 요청 g2</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M645.00 100.00 C645.00 108.72,645.00 117.45,645.00 122.00 M645.00 100.00 C645.00 108.60,645.00 117.21,645.00 122.00" stroke="#e5533a" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M636.00 106.41 L645.00 122.00 L654.00 106.41 Z" stroke="#e5533a" stroke-width="3" fill="#e5533a" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M645.00 122.00 C645.00 258.01,645.00 394.02,645.00 465.00 M645.00 122.00 C645.00 194.86,645.00 267.71,645.00 465.00" stroke="#7b6cf6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 6" />
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="235" y="130" width="370" height="56" rx="14" fill="#dcdcdc" stroke="none" />
+<rect x="235" y="130" width="370" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="420.00" y="163.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="420.00" dy="0">현재 generation = 1</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="680" y="130" width="440" height="56" rx="14" fill="#e4ff8d" stroke="none" />
+<rect x="680" y="130" width="440" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="900.00" y="163.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="900.00" dy="0">현재 generation = 2</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="235" y="260" width="490" height="56" rx="14" fill="#a9f4e4" stroke="none" />
+<rect x="235" y="260" width="490" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="480.00" y="293.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="480.00" dy="0">g1 계산은 이미 시작됨</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="775" y="260" width="140" height="56" rx="14" fill="#f6a79e" stroke="none" />
+<rect x="775" y="260" width="140" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="845.00" y="293.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="845.00" dy="0">g1 완료</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="985" y="260" width="180" height="56" rx="14" fill="#d797fb" stroke="none" />
+<rect x="985" y="260" width="180" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="1075.00" y="293.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="1075.00" dy="0">g2 계산 · 완료</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="775" y="390" width="160" height="56" rx="14" fill="#f6a79e" stroke="none" />
+<rect x="775" y="390" width="160" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="855.00" y="414.75" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="13" fill="#1b1b1b" text-anchor="middle"><tspan x="855.00" dy="0">g1 ≠ g2</tspan><tspan x="855.00" dy="16.25">게시하지 않음</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="1005" y="390" width="180" height="56" rx="14" fill="#e4ff8d" stroke="none" />
+<rect x="1005" y="390" width="180" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="1095.00" y="414.75" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="13" fill="#1b1b1b" text-anchor="middle"><tspan x="1095.00" dy="0">g2 = 현재</tspan><tspan x="1095.00" dy="16.25">화면 반영</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M845.00 316.00 C845.00 345.35,845.00 374.70,845.00 390.00 M845.00 316.00 C845.00 340.62,845.00 365.24,845.00 390.00" stroke="#e5533a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12 8" />
+<path d="M837.50 377.01 L845.00 390.00 L852.50 377.01 Z" stroke="#e5533a" stroke-width="2" fill="#e5533a" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M1095.00 316.00 C1095.00 345.35,1095.00 374.70,1095.00 390.00 M1095.00 316.00 C1095.00 342.20,1095.00 368.40,1095.00 390.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1087.50 377.01 L1095.00 390.00 L1102.50 377.01 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="235.00" y="504.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#2d5be3" text-anchor="start"><tspan x="235.00" dy="0">세대 검사는 화면 게시를 결정합니다. 계산의 즉시 중단을 보장하지 않습니다.</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="235.00" y="534.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#8c8c8c" text-anchor="start"><tspan x="235.00" dy="0">공유 수식 캐시의 재사용과 캐시 적재 시점은 별도 계약입니다.</tspan></text>
+</g>
+</svg>

@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="598" viewBox="0 0 1280 598" role="img" aria-label="mermaid-request-cancellation">
+<title>mermaid-request-cancellation</title><g transform="translate(0.00,20.00)">
+<text x="40.00" y="42.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="22" fill="#1b1b1b" text-anchor="start"><tspan x="40.00" dy="0">Mermaid — 최신 request ID만 DOM과 높이에 반영</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="40.00" y="68.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#2d5be3" text-anchor="start"><tspan x="40.00" dy="0">숨겨진 staging에서 계산하고 마지막 frame 확인 뒤 현재 결과를 게시합니다.</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="40" y="130" width="160" height="56" rx="14" fill="#ffffff" stroke="none" />
+<rect x="40" y="130" width="160" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="120.00" y="163.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="120.00" dy="0">native 뷰</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M200.00 158.00 C612.35 158.00,1024.70 158.00,1240.00 158.00 M200.00 158.00 C429.05 158.00,658.10 158.00,1240.00 158.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1227.01 165.50 L1240.00 158.00 L1227.01 150.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="40" y="260" width="160" height="56" rx="14" fill="#ffffff" stroke="none" />
+<rect x="40" y="260" width="160" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="120.00" y="293.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="120.00" dy="0">JavaScript</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M200.00 288.00 C612.37 288.00,1024.73 288.00,1240.00 288.00 M200.00 288.00 C495.67 288.00,791.33 288.00,1240.00 288.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1227.01 295.50 L1240.00 288.00 L1227.01 280.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="40" y="390" width="160" height="56" rx="14" fill="#ffffff" stroke="none" />
+<rect x="40" y="390" width="160" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="120.00" y="423.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="120.00" dy="0">DOM / 높이 게시</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M200.00 418.00 C612.38 418.00,1024.76 418.00,1240.00 418.00 M200.00 418.00 C562.28 418.00,924.57 418.00,1240.00 418.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1227.01 425.50 L1240.00 418.00 L1227.01 410.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="650.00" y="90.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#e5533a" text-anchor="middle"><tspan x="650.00" dy="0">B 요청 · A 취소</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M650.00 100.00 C650.00 108.72,650.00 117.45,650.00 122.00 M650.00 100.00 C650.00 108.60,650.00 117.21,650.00 122.00" stroke="#e5533a" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M641.00 106.41 L650.00 122.00 L659.00 106.41 Z" stroke="#e5533a" stroke-width="3" fill="#e5533a" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M650.00 122.00 C650.00 258.01,650.00 394.02,650.00 465.00 M650.00 122.00 C650.00 194.86,650.00 267.71,650.00 465.00" stroke="#7b6cf6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 6" />
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="235" y="130" width="200" height="56" rx="14" fill="#f8d088" stroke="none" />
+<rect x="235" y="130" width="200" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="335.00" y="163.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="335.00" dy="0">A 요청 시작</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="705" y="130" width="200" height="56" rx="14" fill="#e4ff8d" stroke="none" />
+<rect x="705" y="130" width="200" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="805.00" y="163.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="805.00" dy="0">B 요청 시작</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="235" y="260" width="350" height="56" rx="14" fill="#a9f4e4" stroke="none" />
+<rect x="235" y="260" width="350" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="410.00" y="293.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="410.00" dy="0">A 렌더 실행</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="705" y="260" width="450" height="56" rx="14" fill="#f6a79e" stroke="none" />
+<rect x="705" y="260" width="450" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="930.00" y="293.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="middle"><tspan x="930.00" dy="0">A 계산 완료 · 이전 ID</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="745" y="390" width="290" height="56" rx="14" fill="#ededed" stroke="none" />
+<rect x="745" y="390" width="290" height="56" rx="14" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="890.00" y="414.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="890.00" dy="0">A ID ≠ 최신 ID</tspan><tspan x="890.00" dy="18.75">DOM·높이 게시하지 않음</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M900.00 316.00 C900.00 345.35,900.00 374.69,900.00 390.00 M900.00 316.00 C900.00 334.30,900.00 352.60,900.00 390.00" stroke="#e5533a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12 8" />
+<path d="M892.50 377.01 L900.00 390.00 L907.50 377.01 Z" stroke="#e5533a" stroke-width="2" fill="#e5533a" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="235.00" y="504.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#e5533a" text-anchor="start"><tspan x="235.00" dy="0">최신 ID가 아니면 계산이 끝나도 화면과 높이에 반영하지 않습니다.</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="235.00" y="534.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#2d5be3" text-anchor="start"><tspan x="235.00" dy="0">native 취소와 JS 게시 검사를 연결하고, 남은 작업은 다음 요청에서 재로드로 격리합니다.</tspan></text>
+</g>
+</svg>

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1225" height="508" viewBox="0 0 1225 508" role="img" aria-label="highlight-utf16">
+<title>highlight-utf16</title><g transform="translate(0.00,20.00)">
+<text x="40.00" y="42.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="22" fill="#1b1b1b" text-anchor="start"><tspan x="40.00" dy="0">하이라이트 — 원문 동일성과 UTF-16 범위</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="40.00" y="68.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#2d5be3" text-anchor="start"><tspan x="40.00" dy="0">색을 입히기 위해 글자를 수정하거나 HTML로 바꾸지 않습니다.</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="60" y="160" width="240" height="110" rx="27.5" fill="#f8d088" stroke="none" />
+<rect x="60" y="160" width="240" height="110" rx="27.5" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="180.00" y="210.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="19" fill="#1b1b1b" text-anchor="middle"><tspan x="180.00" dy="0">원문 String</tspan><tspan x="180.00" dy="23.75">A + 이모지 + B</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="85.00" y="304.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#3aa387" text-anchor="start"><tspan x="85.00" dy="0">UTF-16 길이 = 4</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="420" y="150" width="300" height="150" rx="32" fill="#ffffff" stroke="none" />
+<rect x="420" y="150" width="300" height="150" rx="32" fill="none" stroke="#1b1b1b" stroke-width="3" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="570.00" y="220.50" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="18" fill="#1b1b1b" text-anchor="middle"><tspan x="570.00" dy="0">Prism 토큰화</tspan><tspan x="570.00" dy="22.5">원문 재조합 검증</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M460.00 120.00 C465.55 131.90,471.10 143.79,474.00 150.00 M460.00 120.00 C463.98 128.53,467.96 137.06,474.00 150.00" stroke="#1b1b1b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M540.00 120.00 C534.45 131.90,528.90 143.79,526.00 150.00 M540.00 120.00 C535.72 129.17,531.44 138.34,526.00 150.00" stroke="#1b1b1b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M600.00 300.00 C594.45 311.90,588.90 323.79,586.00 330.00 M600.00 300.00 C595.42 309.81,590.84 319.62,586.00 330.00" stroke="#1b1b1b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M680.00 300.00 C685.55 311.90,691.10 323.79,694.00 330.00 M680.00 300.00 C684.88 310.45,689.75 320.90,694.00 330.00" stroke="#1b1b1b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M305.00 210.00 C338.70 210.00,372.41 210.00,390.00 210.00 M305.00 210.00 C336.42 210.00,367.85 210.00,390.00 210.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M377.01 217.50 L390.00 210.00 L377.01 202.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<path d="M735.00 250.00 C760.77 250.00,786.55 250.00,800.00 250.00 M735.00 250.00 C760.42 250.00,785.84 250.00,800.00 250.00" stroke="#1b1b1b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M787.01 257.50 L800.00 250.00 L787.01 242.50 Z" stroke="#1b1b1b" stroke-width="2" fill="#1b1b1b" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="820" y="170" width="365" height="110" rx="27.5" fill="#d797fb" stroke="none" />
+<rect x="820" y="170" width="365" height="110" rx="27.5" fill="none" stroke="#1b1b1b" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="1002.50" y="221.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="16" fill="#1b1b1b" text-anchor="middle"><tspan x="1002.50" dy="0">범위 + 색 역할</tspan><tspan x="1002.50" dy="20">NSRange(location: 1, length: 2)</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<rect x="820" y="315" width="365" height="40" rx="10" fill="#ededed" stroke="none" />
+<rect x="820" y="315" width="365" height="40" rx="10" fill="none" stroke="#ededed" stroke-width="2" />
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="1002.50" y="341.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="16" fill="#1b1b1b" text-anchor="middle"><tspan x="1002.50" dy="0">A: 0 · 이모지: 1~2 · B: 3</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="60.00" y="409.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#2d5be3" text-anchor="start"><tspan x="60.00" dy="0">문자 3개와 UTF-16 단위 4개를 구분합니다.</tspan></text>
+</g>
+<g transform="translate(0.00,20.00)">
+<text x="60.00" y="444.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#e5533a" text-anchor="start"><tspan x="60.00" dy="0">원문 재조합이 다르거나 언어를 지원하지 않으면 빈 범위 목록을 반환합니다.</tspan></text>
+</g>
+</svg>

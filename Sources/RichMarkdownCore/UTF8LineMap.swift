@@ -10,8 +10,10 @@ package struct UTF8LineMap: Sendable {
     package init(utf8 bytes: [UInt8]) {
         var starts = [0]
         starts.reserveCapacity(64)
-        for (i, b) in bytes.enumerated() where b == 0x0A {
-            starts.append(i + 1)
+        for (i, byte) in bytes.enumerated() {
+            if byte == 0x0A || byte == 0x0D && (i + 1 == bytes.count || bytes[i + 1] != 0x0A) {
+                starts.append(i + 1)
+            }
         }
         self.lineStartOffsets = starts
         self.byteCount = bytes.count
@@ -20,8 +22,9 @@ package struct UTF8LineMap: Sendable {
     /// 1-based line/column → 0-based UTF-8 offset. 범위 밖이면 nil.
     package func offset(line: Int, column: Int) -> Int? {
         guard line >= 1, line <= lineStartOffsets.count, column >= 1 else { return nil }
-        let offset = lineStartOffsets[line - 1] + (column - 1)
-        guard offset <= byteCount else { return nil }
-        return offset
+        let start = lineStartOffsets[line - 1]
+        let columnOffset = column - 1
+        guard columnOffset <= byteCount - start else { return nil }
+        return start + columnOffset
     }
 }

@@ -789,12 +789,15 @@ public final class RichMarkdownUIView: UIView {
             }
         }
         let contentWidth = columnWidths.reduce(0, +)
-        let fitted = block.content.systemLayoutSizeFitting(
-            CGSize(width: contentWidth, height: UIView.layoutFittingCompressedSize.height),
-            withHorizontalFittingPriority: .required,
-            verticalFittingPriority: .fittingSizeLevel
-        )
-        block.setContentSize(CGSize(width: ceil(contentWidth), height: max(1, ceil(fitted.height))))
+        // content의 고정 높이를 다시 fit하면 초기 1pt 또는 이전 높이에 갇힌다.
+        // 확정 열 폭에서 셀을 측정하고 각 행의 최대 높이를 합산한다.
+        let contentHeight = block.cells.reduce(CGFloat.zero) { height, cells in
+            let rowHeight = zip(cells, columnWidths)
+                .map { Self.fittingSize($0.0, width: $0.1).height }
+                .max() ?? 0
+            return height + rowHeight
+        }
+        block.setContentSize(CGSize(width: ceil(contentWidth), height: max(1, ceil(contentHeight))))
     }
 
     private func textAlignment(
@@ -1179,9 +1182,12 @@ public final class RichMarkdownUIView: UIView {
     }
 
     /// 줄바꿈을 유지한 자연 크기. 가로 스크롤 콘텐츠 폭을 정하는 데 쓴다.
-    private static func fittingSize(_ view: UITextView) -> CGSize {
+    private static func fittingSize(
+        _ view: UITextView,
+        width: CGFloat = CGFloat.greatestFiniteMagnitude
+    ) -> CGSize {
         let size = view.sizeThatFits(
-            CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+            CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
         )
         return CGSize(width: ceil(size.width), height: ceil(size.height))
     }

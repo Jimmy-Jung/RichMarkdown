@@ -88,8 +88,8 @@ public struct BlockEditorModel: Sendable {
     }
 
     public func documentRange(for selection: BlockSelection) -> NSRange? {
-        guard let blockRange = documentRange(for: selection.blockID),
-              NSMaxRange(selection.range) <= blockRange.length
+        guard Self.validated(selection, in: blocks) != nil,
+              let blockRange = documentRange(for: selection.blockID)
         else { return nil }
         return NSRange(
             location: blockRange.location + selection.range.location,
@@ -474,10 +474,8 @@ public struct BlockEditorModel: Sendable {
     ) -> BlockSelection? {
         guard let current = block(id: id),
               !current.kind.preservesLineBreaks,
-              range.location >= 0,
               range.length > 0,
-              NSMaxRange(range) <= current.text.utf16.count,
-              Range(range, in: current.text) != nil
+              Self.validated(range, in: current.text) != nil
         else {
             return nil
         }
@@ -675,19 +673,14 @@ public struct BlockEditorModel: Sendable {
     ) -> BlockSelection? {
         guard let selection,
               let block = blocks.first(where: { $0.id == selection.blockID }),
-              selection.range.location >= 0,
-              selection.range.length >= 0,
-              NSMaxRange(selection.range) <= block.text.utf16.count,
-              Range(selection.range, in: block.text) != nil
+              Self.validated(selection.range, in: block.text) != nil
         else { return nil }
         return selection
     }
 
     private static func validated(_ range: NSRange?, in text: String) -> NSRange? {
         guard let range,
-              range.location >= 0,
-              range.length >= 0,
-              NSMaxRange(range) <= text.utf16.count,
+              EditorBlock.isValidRange(range, length: text.utf16.count),
               Range(range, in: text) != nil
         else { return nil }
         return range
@@ -733,7 +726,7 @@ public struct BlockEditorModel: Sendable {
     private static func split(_ markdown: String) -> [String] {
         var result: [String] = []
         var current: [Substring] = []
-        var inFence = false
+        var openFenceLength: Int?
 
         func flush() {
             if !current.isEmpty {
@@ -745,19 +738,19 @@ public struct BlockEditorModel: Sendable {
         for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if inFence {
+            if let fenceLength = openFenceLength {
                 current.append(line)
-                if trimmed.hasPrefix("```") {
-                    inFence = false
+                if EditorBlock.closesCodeFence(trimmed, length: fenceLength) {
+                    openFenceLength = nil
                     flush()
                 }
                 continue
             }
 
-            if trimmed.hasPrefix("```") {
+            if let fenceLength = EditorBlock.codeFenceLength(in: trimmed) {
                 flush()
                 current = [line]
-                inFence = true
+                openFenceLength = fenceLength
                 continue
             }
 

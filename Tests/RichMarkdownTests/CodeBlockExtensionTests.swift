@@ -99,6 +99,27 @@ import UIKit
         #expect(segments.filter { $0.kind != nil }.count == 1)
     }
 
+    @Test func extremeHighlightRangesPreserveSourceInBothRenderers() {
+        let code = "let 한글 = \"🙂e\u{301}\""
+        let spans = [
+            RichMarkdownHighlightSpan(range: NSRange(location: 0, length: 3), kind: .keyword),
+            RichMarkdownHighlightSpan(range: NSRange(location: -1, length: 1), kind: .string),
+            RichMarkdownHighlightSpan(range: NSRange(location: 4, length: -1), kind: .string),
+            RichMarkdownHighlightSpan(range: NSRange(location: 1, length: Int.max), kind: .number),
+            RichMarkdownHighlightSpan(range: NSRange(location: Int.max, length: 1), kind: .number),
+        ]
+        let segments = RichMarkdownHighlightSegments.segments(code: code, spans: spans)
+        #expect(segments.map { String($0.text) }.joined() == code)
+        #expect(segments.compactMap(\.kind) == [.keyword])
+        #expect(RichMarkdownHighlightSegments.attributed(
+            code: code, spans: spans, colors: .default,
+            font: .monospacedSystemFont(ofSize: 14, weight: .regular), textColor: .label
+        ).string == code)
+        #expect(String(RichMarkdownHighlightSegments.attributedString(
+            code: code, spans: spans, colors: .default
+        ).characters) == code)
+    }
+
     @Test func spansOutOfOrderAreSortedBeforeUse() {
         let code = "abcdef"
         let spans = [

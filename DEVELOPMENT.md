@@ -772,7 +772,7 @@ P0가 scheme을 만든 뒤 현재 로컬 최소 runtime에서는 다음 형태�
 고정한다. 빌드 출력은 파일로 보내고 exit code로 판정한다.
 
 ```bash
-richmarkdown_results_dir=$(mktemp -d /tmp/richmarkdown-results.XXXXXX)
+richmarkdown_results_dir=$(mktemp -d "$BUILD_OUTPUT/results.XXXXXX")
 
 richmarkdown_package_status=0
 # test action을 가진 package scheme은 `RichMarkdown-Package`다. 같은 이름의 `RichMarkdown`
@@ -784,7 +784,7 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -resultBundlePath "$richmarkdown_results_dir/package.xcresult" \
   -enableCodeCoverage YES \
-  > /tmp/richmarkdown-package-tests.log 2>&1 || richmarkdown_package_status=$?
+  > "$BUILD_OUTPUT/package-tests.log" 2>&1 || richmarkdown_package_status=$?
 
 richmarkdown_demo_status=0
 xcodebuild test \
@@ -794,7 +794,7 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
   -resultBundlePath "$richmarkdown_results_dir/demo.xcresult" \
   -enableCodeCoverage YES \
-  > /tmp/richmarkdown-demo-tests.log 2>&1 || richmarkdown_demo_status=$?
+  > "$BUILD_OUTPUT/demo-tests.log" 2>&1 || richmarkdown_demo_status=$?
 
 richmarkdown_coverage_status=0
 xcrun xccov view --report --json \
