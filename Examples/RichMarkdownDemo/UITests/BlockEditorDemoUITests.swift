@@ -204,6 +204,98 @@ final class BlockEditorDemoUITests: XCTestCase {
         }
     }
 
+    /// README 블록 편집 GIF(`Docs/screenshots/13-block-editor.gif`)용 프레임을 남긴다.
+    /// `scripts/capture-sse-gifs.sh block-editor`가 켜는 촬영 모드에서만 실행한다.
+    @MainActor
+    func testBlockEditorGifFrames() throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["RICHMARKDOWN_CAPTURE_GIFS"] == "1",
+            "README GIF 촬영 모드(TEST_RUNNER_RICHMARKDOWN_CAPTURE_GIFS=1)에서만 실행한다"
+        )
+        let app = launchBlockEditor()
+        let document = app.textViews["blockDocumentTextView"]
+        XCTAssertTrue(document.waitForExistence(timeout: 15))
+        recordGifFrames(for: 1)
+
+        // 인용 줄은 행 내 수식으로 끝나므로 그 수식 요소의 높이에서 오른쪽 빈 곳을 눌러
+        // 줄 끝에 커서를 둔다. 제목(H1)은 기본 글꼴이 굵어 굵게가 화면에 드러나지 않는다.
+        // 하드웨어 키(typeKey)는 소프트웨어 키보드를 숨겨 툴바가 움직이므로 쓰지 않는다(실측).
+        // 키보드는 typeText에서 올라오므로 입력이 끝난 화면부터 다시 촬영한다.
+        let quoteEquation = document.otherElements
+            .matching(NSPredicate(format: "label CONTAINS %@", "\\frac{1}{n}"))
+            .firstMatch
+        XCTAssertTrue(quoteEquation.waitForExistence(timeout: 5))
+        let quoteLineEnd = quoteEquation
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .withOffset(CGVector(dx: document.frame.maxX - 40 - quoteEquation.frame.midX, dy: 0))
+        quoteLineEnd.tap()
+        XCTAssertTrue(app.otherElements["blockKeyboardToolbar"].waitForExistence(timeout: 5))
+        document.typeText(" 데모")
+        XCTAssertTrue(waitForValue(containing: " 데모", in: document))
+        recordGifFrames(for: 1)
+
+        // 방금 입력한 단어를 편집 메뉴의 선택으로 고르고 굵게 바꾼 뒤 서식 도구를 닫는다.
+        quoteLineEnd.press(forDuration: 1)
+        try tapEditMenuItem(["Select", "선택"], in: app)
+        recordGifFrames(for: 0.75)
+        let formatButton = app.buttons["blockToolbar.format"]
+        formatButton.tap()
+        let boldButton = app.buttons["blockToolbar.bold"]
+        XCTAssertTrue(boldButton.waitForExistence(timeout: 5))
+        recordGifFrames(for: 0.75)
+        boldButton.tap()
+        recordGifFrames(for: 1)
+        formatButton.tap()
+        recordGifFrames(for: 0.5)
+
+        // 실행 취소·다시 실행으로 굵게를 되돌렸다가 다시 적용한다.
+        let undoButton = app.buttons["blockToolbar.undo"]
+        XCTAssertTrue(waitForEnabled(undoButton))
+        undoButton.tap()
+        recordGifFrames(for: 1)
+        app.buttons["blockToolbar.redo"].tap()
+        recordGifFrames(for: 1)
+
+        // 블록 추가 메뉴로 제목 아래에 할 일 블록을 넣고 내용을 입력한다.
+        let original = try XCTUnwrap(document.value as? String)
+        app.buttons["blockToolbar.add"].tap()
+        let toDoItem = app.buttons["할 일"]
+        XCTAssertTrue(toDoItem.waitForExistence(timeout: 5))
+        recordGifFrames(for: 1)
+        toDoItem.tap()
+        XCTAssertTrue(waitForValueDifferent(from: original, in: document))
+        document.typeText("README GIF 촬영")
+        XCTAssertTrue(waitForValue(containing: "README GIF 촬영", in: document))
+        recordGifFrames(for: 1.5)
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "입력 이후 마지막 프레임까지 소프트웨어 키보드가 보여야 한다")
+    }
+
+    private var gifFrameIndex = 0
+
+    /// 약 4Hz로 화면을 첨부한다. 스크립트가 첨부 timestamp로 프레임 간격을 복원한다.
+    @MainActor
+    private func recordGifFrames(for duration: TimeInterval) {
+        let start = Date()
+        var tick = 0.0
+        repeat {
+            let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            attachment.name = String(format: "block-editor-frame-%03d", gifFrameIndex)
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            gifFrameIndex += 1
+            tick += 0.25
+            Thread.sleep(until: start.addingTimeInterval(tick))
+        } while Date().timeIntervalSince(start) < duration
+    }
+
+    private func waitForValue(containing text: String, in element: XCUIElement) -> Bool {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS %@", text),
+            object: element
+        )
+        return XCTWaiter.wait(for: [expectation], timeout: 5) == .completed
+    }
+
     @MainActor
     private func launchBlockEditor() -> XCUIApplication {
         let app = XCUIApplication()

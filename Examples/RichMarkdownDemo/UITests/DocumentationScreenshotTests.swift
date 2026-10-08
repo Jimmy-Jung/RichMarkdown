@@ -6,14 +6,20 @@ import XCTest
 /// 러너 프로세스에는 `TEST_RUNNER_` 접두사가 붙은 변수만 전달된다(접두사는 벗겨진다).
 ///
 /// ```bash
-/// TEST_RUNNER_RICHMARKDOWN_CAPTURE_DOCS=1 xcodebuild test \
+/// # AGENTS.md에 따라 외장 작업 경로 agent_build_dir와 tmp/를 먼저 준비한다.
+/// capture_path="$agent_build_dir/readme-screenshots-$(date +%Y%m%d-%H%M%S)"
+/// TMPDIR="$agent_build_dir/tmp/" TEST_RUNNER_RICHMARKDOWN_CAPTURE_DOCS=1 xcodebuild test \
 ///   -project RichMarkdownDemo.xcodeproj -scheme RichMarkdownDemo \
 ///   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.6' \
+///   -parallel-testing-enabled NO \
 ///   -only-testing:RichMarkdownDemoUITests/DocumentationScreenshotTests \
-///   -resultBundlePath /tmp/docs.xcresult
-/// xcrun xcresulttool export attachments --path /tmp/docs.xcresult --output-path /tmp/shots
+///   -resultBundlePath "$capture_path.xcresult" \
+///   > "$agent_build_dir/readme-screenshots.log" 2>&1
+/// xcrun xcresulttool export attachments --path "$capture_path.xcresult" \
+///   --output-path "$capture_path"
 /// # manifest.json의 suggestedHumanReadableName으로 파일명을 되돌린 뒤
-/// # sips --resampleWidth 276 으로 줄여 Docs/screenshots/에 넣는다.
+/// # 원본 픽셀 크기를 유지해 Docs/screenshots/에 넣는다. 표시 폭은 README에서 정한다.
+/// xcrun simctl shutdown all
 /// ```
 final class DocumentationScreenshotTests: XCTestCase {
     private var capturesDocumentation: Bool {

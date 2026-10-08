@@ -206,7 +206,7 @@ final class RichMarkdownDemoUITests: XCTestCase {
 
         // 표가 도착하는 지점(약 500자)을 지나면 셀이 개별 텍스트로 렌더되어야 한다.
         XCTAssertTrue(
-            app.staticTexts["68.27%"].waitForExistence(timeout: 40),
+            waitForStreamingContent(app.staticTexts["68.27%"], timeout: 40),
             "스트리밍 중에도 렌더가 착지해야 한다"
         )
         XCTAssertFalse(
@@ -249,13 +249,32 @@ final class RichMarkdownDemoUITests: XCTestCase {
         let tableCell = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "68.27%", "68.27%"))
             .firstMatch
-        XCTAssertTrue(tableCell.waitForExistence(timeout: 40), "스트리밍 중 표가 렌더되어야 한다")
+        XCTAssertTrue(waitForStreamingContent(tableCell, timeout: 40), "스트리밍 중 표가 렌더되어야 한다")
 
         startStop.tap()
         XCTAssertEqual(startStop.label, "시작", "중지하면 버튼이 시작으로 돌아온다")
         let status = app.staticTexts["uikitSseDemo.status"]
         XCTAssertTrue(status.waitForExistence(timeout: 5))
         XCTAssertNotEqual(status.label, "0 청크 · 0자", "중지 시점까지 받은 답변은 남는다")
+    }
+
+    /// 문서 촬영 모드에서만 프레임을 남긴다. 일반 회귀 테스트의 대기는 그대로 유지한다.
+    @MainActor
+    private func waitForStreamingContent(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        guard ProcessInfo.processInfo.environment["RICHMARKDOWN_CAPTURE_GIFS"] == "1" else {
+            return element.waitForExistence(timeout: timeout)
+        }
+        let deadline = Date().addingTimeInterval(timeout)
+        for frame in 0..<Int(timeout * 4) {
+            let appeared = element.waitForExistence(timeout: 0.25)
+            let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            attachment.name = String(format: "sse-frame-%04d", frame)
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            if appeared { return true }
+            if Date() >= deadline { break }
+        }
+        return false
     }
 
     @MainActor

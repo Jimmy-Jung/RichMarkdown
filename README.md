@@ -97,36 +97,42 @@ generation 관리를 공유한다.
 
 `Examples/RichMarkdownDemo`의 실제 화면. iPhone 16 Pro / iOS 18.6에서 촬영했다.
 정지컷은 `RichMarkdownDemoUITests/DocumentationScreenshotTests`로 (실행법은 해당 파일 주석),
-SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로 재생성한다.
+SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로, 블록 편집 GIF는 `scripts/capture-sse-gifs.sh block-editor`로 재생성한다.
+2026-10-08에 재촬영한 1206×2622 원본을 유지하고 표에서는 폭 360px로 표시한다. 이미지를 누르면 원본을 볼 수 있다.
 
 | 인라인·블록 수식 | Markdown 요소 |
 |---|---|
-| ![인라인과 블록 수식](Docs/screenshots/01-math.png) | ![Markdown 블록과 인라인 강조](Docs/screenshots/02-markdown.png) |
+| <a href="Docs/screenshots/01-math.png"><img src="Docs/screenshots/01-math.png" alt="인라인과 블록 수식" width="360"></a> | <a href="Docs/screenshots/02-markdown.png"><img src="Docs/screenshots/02-markdown.png" alt="Markdown 블록과 인라인 강조" width="360"></a> |
 | 문장 흐름 안에 baseline 정렬된 `\( A = \pi r^2 \)`, 가로 스크롤과 복사 버튼이 붙은 블록 수식(적분·행렬) | 헤딩, 굵게·기울임·취소선, 둥근 인라인 코드 칩, 링크, 리스트, 왼쪽 세로 바로 구분한 인용, 구분선. `\*별표\*` 같은 escape 해제도 함께 |
 
 | 복합 수식 (SwiftUI) | 복합 수식 (UIKit) |
 |---|---|
-| ![array와 두 underbrace로 나눈 보상 함수 수식을 SwiftUI로 렌더한 화면](Docs/screenshots/11-complex-math-swiftui.png) | ![같은 복합 수식을 UIKit RichMarkdownUIView로 렌더한 화면](Docs/screenshots/12-complex-math-uikit.png) |
+| <a href="Docs/screenshots/11-complex-math-swiftui.png"><img src="Docs/screenshots/11-complex-math-swiftui.png" alt="array와 두 underbrace로 나눈 보상 함수 수식을 SwiftUI로 렌더한 화면" width="360"></a> | <a href="Docs/screenshots/12-complex-math-uikit.png"><img src="Docs/screenshots/12-complex-math-uikit.png" alt="같은 복합 수식을 UIKit RichMarkdownUIView로 렌더한 화면" width="360"></a> |
 | `array` 열 정렬, 분수, 두 `\underbrace`와 아래 라벨을 RaTeX로 조판한다. 화면보다 넓은 열은 가로 스크롤로 본다 | 같은 fixture를 `RichMarkdownUIView` 셀로 그린다. 블록 수식은 native 벡터 뷰라 SwiftUI raster와 같은 KaTeX 서체·메트릭을 쓴다 |
 
 | GFM 표 | Notion 스타일 블록 편집 |
 |---|---|
-| ![정렬과 인라인 콘텐츠를 포함한 GFM 표](Docs/screenshots/03-table.png) | ![하나의 연속 문서에서 편집하는 Notion 스타일 블록 편집기](Docs/screenshots/04-block-editor.png) |
+| <a href="Docs/screenshots/03-table.png"><img src="Docs/screenshots/03-table.png" alt="정렬과 인라인 콘텐츠를 포함한 GFM 표" width="360"></a> | <a href="Docs/screenshots/04-block-editor.png"><img src="Docs/screenshots/04-block-editor.png" alt="하나의 연속 문서에서 편집하는 Notion 스타일 블록 편집기" width="360"></a> |
 | 좌·중앙·우 정렬과 셀 안의 강조·인라인 코드·수식을 지원하며 좁은 화면에서는 가로 스크롤 | 하나의 연속 `UITextView`에서 제목·목록·할 일·인용·코드·수식을 편집하고 키보드 툴바로 블록과 인라인 서식을 바꾼다 |
+
+| 블록 편집 (GIF) |
+|---|
+| <a href="Docs/screenshots/13-block-editor.gif"><img src="Docs/screenshots/13-block-editor.gif" alt="블록 편집 데모에서 인용 줄 끝에 '데모'를 입력해 선택하고, 키보드 툴바의 서식에서 굵게를 적용한 뒤 실행 취소와 다시 실행을 거쳐, 블록 추가 메뉴로 할 일 블록을 넣고 'README GIF 촬영'을 입력하는 과정" width="360"></a> |
+| 인용 줄 끝에 한글을 입력하고 편집 메뉴로 단어를 선택한 뒤 키보드 툴바의 서식 → 굵게로 인라인 서식을 입힌다. 실행 취소·다시 실행으로 서식을 되돌렸다가 다시 적용하고, 블록 추가 메뉴에서 할 일을 골라 새 블록에 바로 입력한다. 모든 편집이 하나의 연속 문서 안에서 일어난다 |
 
 | 수식 Attachment 직접 구성 | MarkdownStyler 읽기 전용 |
 |---|---|
-| ![임의 문서에 EquationTextAttachment를 직접 배치한 화면](Docs/screenshots/05-attachment-hand-built.png) | ![블록 모델을 읽기 전용으로 스타일링한 화면](Docs/screenshots/06-attachment-styler.png) |
+| <a href="Docs/screenshots/05-attachment-hand-built.png"><img src="Docs/screenshots/05-attachment-hand-built.png" alt="임의 문서에 EquationTextAttachment를 직접 배치한 화면" width="360"></a> | <a href="Docs/screenshots/06-attachment-styler.png"><img src="Docs/screenshots/06-attachment-styler.png" alt="블록 모델을 읽기 전용으로 스타일링한 화면" width="360"></a> |
 | 블록 편집기 없이 `EquationTextAttachment`를 `UITextView` 문서에 직접 넣는다. 인라인 baseline, display 블록 배치, `$` 스캔 토글, 주변 폰트를 따라가는 크기 | `MarkdownStyler.styledDocument`만으로 만든 읽기 전용 문서. 둥근 테두리/체크 완료 상태의 할 일, 왼쪽 세로 바 인용, 인라인 코드 칩, 코드 블록 리터럴 보호 |
 
 | SSE 실시간 렌더링 (SwiftUI) | SSE 실시간 렌더링 (UIKit) |
 |---|---|
-| ![SSE 프레임이 도착하는 대로 렌더되는 SwiftUI 스트리밍 데모](Docs/screenshots/07-sse-swiftui.gif) | ![같은 스트림을 UIKit 렌더러로 배선한 스트리밍 데모](Docs/screenshots/08-sse-uikit.gif) |
+| <a href="Docs/screenshots/07-sse-swiftui.gif"><img src="Docs/screenshots/07-sse-swiftui.gif" alt="SSE 프레임이 도착하는 대로 렌더되는 SwiftUI 스트리밍 데모" width="360"></a> | <a href="Docs/screenshots/08-sse-uikit.gif"><img src="Docs/screenshots/08-sse-uikit.gif" alt="같은 스트림을 UIKit 렌더러로 배선한 스트리밍 데모" width="360"></a> |
 | 5Hz SSE 프레임이 도착하는 대로 누적 문자열을 다시 넘긴다. 스트리밍 append가 이전 렌더를 유지해 원문 플래시 없이 새 블록이 이어 붙는다 | 같은 스트림을 UIKit `RichMarkdownUIView`로 배선. 스트리밍 append에서 블록 뷰를 증분 재사용한다 |
 
 | Mermaid 다이어그램 | Prism 신택스 하이라이팅 |
 |---|---|
-| ![mermaid 코드 블록이 공식 Mermaid flowchart로 바뀐 화면](Docs/screenshots/09-mermaid.png) | ![Prism이 색을 입힌 swift·bash·json·python 코드 블록](Docs/screenshots/10-highlight.png) |
+| <a href="Docs/screenshots/09-mermaid.png"><img src="Docs/screenshots/09-mermaid.png" alt="mermaid 코드 블록이 공식 Mermaid flowchart로 바뀐 화면" width="360"></a> | <a href="Docs/screenshots/10-highlight.png"><img src="Docs/screenshots/10-highlight.png" alt="Prism이 색을 입힌 swift·bash·json·python 코드 블록" width="360"></a> |
 | `mermaid` 코드 블록을 `MermaidDiagramRenderer`가 공식 Mermaid 다이어그램으로 교체한다. 언어 라벨과 원문 복사 버튼은 그대로 남는다 | `PrismHighlighter`가 문법 16종의 토큰 범위에 `RichMarkdownTheme.syntax` 색을 입힌다. 미지원 언어와 실패는 원문 코드 블록으로 되돌린다 |
 
 ---
@@ -547,6 +553,8 @@ Notion 스타일 블록 문서 편집기. 논리 블록(`제목·목록·할 일
 모델이 유지하고, 화면에는 하나의 TextKit 2 `UITextView`만 노출해 UIKit 기본
 선택기가 블록 경계와 무관하게 선택·복사·전체 선택을 처리한다. 한글 IME composition
 처리와 수식 attachment ↔ 원문 전환의 선택 경계 보정을 포함한다.
+입력, 굵게, 실행 취소·다시 실행, 블록 추가가 이어지는 실제 편집 흐름은
+[스크린샷](#스크린샷)의 [블록 편집 GIF](Docs/screenshots/13-block-editor.gif)에서 볼 수 있다.
 
 ```swift
 import RichMarkdownBlockEditor
