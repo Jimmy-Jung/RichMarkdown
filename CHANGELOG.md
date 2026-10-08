@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-08
+
+### 추가
+
+- README에 블록 편집기 데모 GIF(`Docs/screenshots/13-block-editor.gif`)와 설명을 추가했다. 인용 줄에 입력한 단어를
+  굵게 바꾸고 실행 취소·다시 실행한 뒤 할 일 블록을 추가하는 흐름을 보여 준다. `scripts/capture-sse-gifs.sh block-editor`로 다시 만든다.
+- 블록 편집기 GIF 캡처 UI 테스트 `testBlockEditorGifFrames`를 추가했다. `RICHMARKDOWN_CAPTURE_GIFS=1`일 때만 실행한다.
+
+### 변경
+
+- README 스크린샷 01~12를 1206×2622 원본으로 다시 촬영하고, 표에서는 폭 360px로 표시해 원본을 눌러 볼 수 있게 했다.
+- `scripts/capture-sse-gifs.sh`가 `[sse|block-editor] [udid]` 대상을 받는다. 인자가 없으면 기존처럼 SSE GIF를 만든다.
+
+### 호환성
+
+- 라이브러리 소스와 공개 API는 0.9.0과 같다. 문서와 예제 앱만 바뀌었다.
+
 ## [0.9.0] - 2026-10-07
 
 ### 수정
