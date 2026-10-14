@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import SwiftUI
 import UIKit
 import WebKit
 @testable import RichMarkdown
@@ -50,8 +51,10 @@ import WebKit
         }
     }
 
+    /// 기한은 제품의 페이지 로드 기한(15초)과 같다. 방금 부팅한 시뮬레이터에서는 첫 WebContent 프로세스 기동만으로
+    /// 5초를 넘겨 첫 실제 렌더 테스트가 실패했다(2026-10-14, iPhone 15 iOS 18.6 콜드 부팅, 재실행 2회는 통과).
     private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(15)
         while !condition() {
             if Date() > deadline { throw MermaidError.loadTimeout }
             try await Task.sleep(nanoseconds: 10_000_000)
@@ -518,6 +521,20 @@ import WebKit
         #expect(options.diagramRenderer(for: "Mermaid") != nil, "언어 이름은 대소문자를 가리지 않는다")
         #expect(options.diagramRenderer(for: "swift") == nil)
         #expect(options.diagramRenderer(for: nil) == nil)
+    }
+
+    /// UIKit 스트리밍 재사용 계약: 자기가 만든 뷰는 원문·테마만 바꾸고, 다른 뷰는 거절해 호출자가 새로 만들게 한다.
+    @Test func rendererUpdatesOnlyItsOwnDiagramViewInPlace() {
+        let renderer = MermaidDiagramRenderer()
+        let view = renderer.makeUIView(source: "flowchart LR\n  A", theme: .default) {}
+        var dark = RichMarkdownTheme.default
+        dark.textColor = .white
+
+        #expect(renderer.updateUIView(view, source: "flowchart LR\n  A --> B", theme: dark))
+        let diagram = view as? MermaidDiagramUIView
+        #expect(diagram?.source == "flowchart LR\n  A --> B")
+        #expect(diagram?.theme == dark)
+        #expect(!renderer.updateUIView(UIView(), source: "flowchart LR", theme: .default))
     }
 
     @Test func diagramViewStartsAtPlaceholderHeight() {

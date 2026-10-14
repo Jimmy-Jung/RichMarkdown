@@ -96,6 +96,16 @@ import UIKit
         #expect(vector.intrinsicContentSize.height.isFinite && vector.intrinsicContentSize.height > 0)
     }
 
+    /// 다크 모드 회귀(2026-10-14 렌더 스냅샷에서 발견): 동적 색 `.label`을 다크로 해석하면
+    /// extended range라 RGB 성분이 1.0000001이 된다. 이 값을 RaTeX에 그대로 넘기면 parse가
+    /// 실패해 블록 수식이 원문 LaTeX로 떨어졌다(라이트는 성분이 정확히 0이라 통과).
+    @MainActor @Test(arguments: [UIUserInterfaceStyle.light, .dark])
+    func vectorAcceptsResolvedDynamicTextColor(style: UIUserInterfaceStyle) {
+        let color = UIColor.label.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+        let key = makeKey(latex: #"x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"#, rgba: color.rgbaValue, display: true)
+        #expect(BlockMathVectorView.make(key: key, textColor: color) != nil, "블록 수식이 원문으로 떨어졌다")
+    }
+
     @Test func oversizedComplexLayoutFailsBeforeBitmapAllocation() async {
         let service = MathRenderService()
         let key = makeKey(latex: #"\underbrace{\rule{9000pt}{1pt}}_{q}"#)

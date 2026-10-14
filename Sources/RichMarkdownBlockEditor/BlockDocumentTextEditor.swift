@@ -36,6 +36,8 @@ public final class BlockDocumentUITextView: UITextView {
     public var fullDocumentMarkdown: String?
     public var fullDocumentBlocks: [EditorBlock] = []
     public var onPasteDocumentBlocks: ((NSRange, [EditorBlock]) -> Bool)?
+    /// 블록 문서 복사·붙여넣기 대상. 테스트가 이름 있는 pasteboard로 격리할 때만 바꾼다.
+    var pasteboard: UIPasteboard = .general
     private let ownedContentStorage: NSTextContentStorage
     public private(set) var inlineCodeDecoration: InlineCodeDecorationView?
     public private(set) var quoteBarDecoration: QuoteBarDecorationView?
@@ -88,12 +90,12 @@ public final class BlockDocumentUITextView: UITextView {
         if let data = BlockDocumentPasteboardPayload.encode(fullDocumentBlocks) {
             item[Self.blockDocumentPasteboardType] = data
         }
-        UIPasteboard.general.setItems([item])
+        pasteboard.setItems([item])
     }
 
     override public func paste(_ sender: Any?) {
         guard
-            let data = UIPasteboard.general.data(
+            let data = pasteboard.data(
                 forPasteboardType: Self.blockDocumentPasteboardType
             ),
             let blocks = BlockDocumentPasteboardPayload.decode(data),

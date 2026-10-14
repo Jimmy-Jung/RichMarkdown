@@ -47,6 +47,9 @@ public final class LatexEquationUIView: UIView {
         super.init(frame: .zero)
 
         isAccessibilityElement = true
+        // 누를 수 없는 수식 텍스트다. trait이 없으면 접근성 audit이 상호작용 요소로 보고 인라인
+        // 크기(약 10×20pt)를 "Hit area is too small"로 잡는다. staticText는 VoiceOver 낭독을 바꾸지 않는다.
+        accessibilityTraits = .staticText
         rebuild()
 
         if #available(iOS 17.0, *) {

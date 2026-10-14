@@ -312,7 +312,8 @@ public final class RichMarkdownUIView: UIView {
 
             if index < reusable.count {
                 let previous = reusable[index]
-                if previous.block == block, previous.mathImageCount == mathCount, previous.tail == tail {
+                if previous.block == block, previous.mathImageCount == mathCount,
+                   previous.tail == tail || Self.ignoresStreamingTail(block) {
                     rendered.append(previous)
                     if stablePrefix { stableCount += 1 }
                     continue
@@ -346,6 +347,13 @@ public final class RichMarkdownUIView: UIView {
         setBlockViews(rendered.map(\.view), reusedCount: stableCount)
         renderedBlocks = rendered
         renderedAppearance = appearance
+    }
+
+    /// 꼬리 표시(마지막 글자 페이드·미닫힌 강조 숨김)를 쓰지 않는 블록. 스트림이 끝나 tail만 바뀐 경우
+    /// 다시 만들지 않는다 — 코드 블록은 다시 만들면 하이라이트를 다시 돌리고 다이어그램은 WKWebView를 새로 띄운다.
+    private static func ignoresStreamingTail(_ block: ParsedBlock) -> Bool {
+        if case .codeBlock = block { return true }
+        return false
     }
 
     /// 같은 종류의 블록이면 기존 뷰의 내용만 바꾸고 true. 구조(언어·열 수·행 수·항목 수)가
@@ -452,11 +460,20 @@ public final class RichMarkdownUIView: UIView {
     /// 같은 언어의 코드 블록이면 본문·복사 원문·색 범위 요청만 바꾼다. 다이어그램으로 대체된
     /// 블록은 뷰 구조가 달라 false다.
     private func updateCodeBlock(_ view: UIView, language: String?, code: String) -> Bool {
-        guard codeBlocks.diagramRenderer(for: language) == nil,
-              let container = view as? UIStackView, container.arrangedSubviews.count == 2,
+        guard let container = view as? UIStackView, container.arrangedSubviews.count == 2,
               let header = container.arrangedSubviews[0] as? UIStackView,
-              let copy = header.arrangedSubviews.last as? RichMarkdownCopyButton,
-              let scroll = container.arrangedSubviews[1] as? HorizontalScrollBlock,
+              let copy = header.arrangedSubviews.last as? RichMarkdownCopyButton
+        else { return false }
+
+        // 다이어그램 뷰는 WKWebView라 만들 때마다 콘텐츠 프로세스를 띄운다. 렌더러가 원문 갱신을 지원하면
+        // tick마다 새로 만들지 않는다 (2026-10-14 iPad Pro M5 실측: 6 스칼라 조각 스트리밍에서 25회 생성).
+        if let diagram = codeBlocks.diagramRenderer(for: language) {
+            guard diagram.updateUIView(container.arrangedSubviews[1], source: code, theme: theme) else { return false }
+            copy.payload = code
+            return true
+        }
+
+        guard let scroll = container.arrangedSubviews[1] as? HorizontalScrollBlock,
               let body = scroll.content as? RichMarkdownTextView
         else { return false }
 

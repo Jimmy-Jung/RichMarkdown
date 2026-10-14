@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+import { at, canParse, structuredClonePolyfill } from './polyfills.js';
 
 const pages = [
   new URL('../Resources/WebAssets/index.html', import.meta.url),
@@ -91,3 +92,28 @@ for (const page of pages) {
   assert.equal(element.innerHTML, '<svg>recovered</svg>');
 }
 console.log(`Mermaid latest DOM, serialized engine, cancellation and recovery regression passed on ${pages.length} page(s).`);
+
+// WebView 91용 polyfill (polyfills.js). Node에는 내장돼 있어 함수를 직접 검사한다.
+assert.equal(at.call([1, 2, 3], -1), 3);
+assert.equal(at.call([1, 2, 3], 0), 1);
+assert.equal(at.call([1, 2, 3], 3), undefined);
+assert.equal(at.call('abc', -2), 'b');
+assert.equal(at.call(new Uint8Array([7, 8]), 1.9), 8);
+const cyclic = {list: [1, {deep: true}], when: new Date(0), map: new Map([['k', new Set([1])]]), pattern: /a/gi};
+cyclic.self = cyclic;
+const copied = structuredClonePolyfill(cyclic);
+assert.notEqual(copied, cyclic);
+assert.equal(copied.self, copied);
+assert.notEqual(copied.list[1], cyclic.list[1]);
+assert.deepEqual(copied.list, cyclic.list);
+assert.equal(copied.when.getTime(), 0);
+assert.ok(copied.map.get('k').has(1));
+assert.equal(copied.pattern.flags, 'gi');
+const error = structuredClonePolyfill(new TypeError('boom'));
+assert.ok(error instanceof TypeError);
+assert.equal(error.message, 'boom');
+assert.throws(() => structuredClonePolyfill({fn() {}}), TypeError);
+assert.equal(canParse('https://a.example/p'), true);
+assert.equal(canParse('/p', 'https://a.example'), true);
+assert.equal(canParse('not a url'), false);
+console.log('polyfills: ok');

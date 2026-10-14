@@ -32,6 +32,15 @@ public final class MermaidDiagramRenderer: RichMarkdownDiagramRendering {
         return view
     }
 
+    /// 스트리밍으로 원문이 자라도 WKWebView를 새로 만들지 않고 원문만 바꿔 다시 그린다 (SwiftUI 경로와 같은 재사용).
+    @MainActor
+    public func updateUIView(_ view: UIView, source: String, theme: RichMarkdownTheme) -> Bool {
+        guard let view = view as? MermaidDiagramUIView else { return false }
+        view.source = source
+        view.theme = theme
+        return true
+    }
+
     @MainActor
     public func makeSwiftUIView(source: String, theme: RichMarkdownTheme) -> AnyView {
         AnyView(MermaidDiagramView(source: source, theme: theme))

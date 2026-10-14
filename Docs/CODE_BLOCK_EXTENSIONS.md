@@ -201,13 +201,16 @@ Prism 토큰은 문법마다 이름이 다르다. 표시에 쓰는 역할은 7�
 ## 5. Mermaid 번들
 
 - 고정 버전: Mermaid `11.17.2` (`Sources/RichMarkdownMermaid/Web/package-lock.json`)
-- 번들러: esbuild `0.28.2`, `format: 'iife'`, `target: 'safari16'`, `legalComments: 'eof'`
+- 번들러: esbuild `0.28.2`, `format: 'iife'`, `target: ['safari16', 'chrome91']`, `legalComments: 'eof'`
+- 최소 WebView: iOS 16 WKWebView, Android System WebView 91(API 30 기본 이미지). 문법은 esbuild가 낮추고, 번들이 쓰는
+  내장 API 중 WebView 91에 없는 `Object.hasOwn`·`.at()`·`structuredClone`·`URL.canParse`는 `Web/polyfills.js`가 없을 때만 채운다
+  (2026-10-14 API 30 에뮬레이터 실측: polyfill 전에는 번들 로드 실패로 모든 다이어그램이 원문 표시).
 - 보안 patch override: DOMPurify `3.4.16`, JavaScript KaTeX `0.18.2` (native RaTeX 의존과 별도)
 - 서드파티 고지: `Resources/WebAssets/MERMAID-THIRD-PARTY-NOTICES.txt` (64개 패키지)
 
 | 번들 파일 | 바이트 | SHA-256 |
 | --- | ---: | --- |
-| `mermaid.bundle.js` | 3454027 | `a08fc0af7b41dbcda5da2a5aa03381ea83b1d5be3f71ee2dc20b4edbb76105b9` |
+| `mermaid.bundle.js` | 3455900 | `3943f6033ce743d1b8e41ce2ad3c266c2fb4e3ae4f16bb27fd15800caea0c7f6` |
 | `index.html` | 4676 | `552bfb357b33777902e230cf9ee53efebb75a353c169b61866b7fecdb30f2e37` |
 
 ### 5.1 번들 다시 만들기

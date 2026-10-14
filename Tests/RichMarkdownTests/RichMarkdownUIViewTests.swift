@@ -299,6 +299,14 @@ import UIKit
         #expect(fallback.intrinsicContentSize.height > 0)
     }
 
+    /// 접근성 audit 회귀(2026-10-14, 수식 Attachment 데모): trait이 없으면 인라인 크기의 수식 뷰가
+    /// 상호작용 요소로 취급돼 "Hit area is too small"로 잡힌다. 누를 수 없는 수식 텍스트다.
+    @Test func standaloneEquationViewIsNonInteractiveStaticText() {
+        let view = LatexEquationUIView(latex: #"\frac{a}{b}"#, isDisplay: false)
+        #expect(view.isAccessibilityElement)
+        #expect(view.accessibilityTraits == .staticText)
+    }
+
     @Test func inlineMathScannerUsesCanonicalRulesAndPreservesUTF16Ranges() throws {
         let source = #"\(x\) `$code$` $y$ \$escaped\$ $5 and $10 [\(link\)](https://example.com) ![\(image\)](https://example.com/i.png) 한글😀"#
         let code = try #require(source.range(of: "$code$"))

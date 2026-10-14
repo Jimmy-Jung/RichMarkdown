@@ -93,9 +93,20 @@ public protocol RichMarkdownDiagramRendering: AnyObject, Sendable {
         onSizeChange: @escaping @MainActor () -> Void
     ) -> UIView
 
+    /// UIKit 렌더러가 스트리밍 중 같은 다이어그램 블록의 원문이 자랄 때 호출한다. `view`가 이 렌더러의
+    /// `makeUIView`가 만든 뷰이고 원문·테마만 바꿔 다시 그릴 수 있으면 갱신하고 true를 돌려준다.
+    /// false면 호출자가 `makeUIView`로 새 뷰를 만든다. 기본 구현은 false다.
+    @MainActor
+    func updateUIView(_ view: UIView, source: String, theme: RichMarkdownTheme) -> Bool
+
     /// SwiftUI 렌더러용 뷰.
     @MainActor
     func makeSwiftUIView(source: String, theme: RichMarkdownTheme) -> AnyView
+}
+
+extension RichMarkdownDiagramRendering {
+    @MainActor
+    public func updateUIView(_ view: UIView, source: String, theme: RichMarkdownTheme) -> Bool { false }
 }
 
 // MARK: - 주입

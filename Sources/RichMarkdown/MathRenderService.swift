@@ -242,7 +242,10 @@ package enum BlockMathVectorView {
     /// UIView 생성은 MainActor 전용이다. raster와 같은 입력/실측 layout 상한을 쓴다.
     package static func make(key: MathRenderKey, textColor: UIColor) -> UIView? {
         guard MathRenderService.preflightAllows(key) else { return nil }
-        guard let renderer = MathRenderer.measure(key: key, color: textColor) else { return nil }
+        // 동적 색을 해석한 UIColor는 extended range라 성분이 1을 살짝 넘을 수 있다(다크 `.label`은
+        // 1.0000001). RaTeX는 그 색으로 parse에 실패하므로 raster와 같은 clamp된 RGBA로 넘긴다.
+        let color = UIColor(rgba: textColor.rgbaValue)
+        guard let renderer = MathRenderer.measure(key: key, color: color) else { return nil }
         return NativeMathVectorView(renderer: renderer)
     }
 }

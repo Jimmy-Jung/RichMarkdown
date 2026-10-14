@@ -35,6 +35,39 @@ import UIKit
         }
     }
 
+    /// 만든 뷰 수와 원문 갱신 호출을 센다. `supportsUpdate`가 false면 기본 구현(갱신 불가)을 흉내 낸다.
+    @MainActor
+    private final class CountingDiagramRenderer: RichMarkdownDiagramRendering {
+        nonisolated let languages: Set<String> = ["diagram"]
+        let supportsUpdate: Bool
+        var created = 0
+        var lastSource = ""
+
+        init(supportsUpdate: Bool) { self.supportsUpdate = supportsUpdate }
+
+        func makeUIView(
+            source: String,
+            theme: RichMarkdownTheme,
+            onSizeChange: @escaping @MainActor () -> Void
+        ) -> UIView {
+            created += 1
+            lastSource = source
+            let view = UIView()
+            view.accessibilityIdentifier = "stub.diagram"
+            return view
+        }
+
+        func updateUIView(_ view: UIView, source: String, theme: RichMarkdownTheme) -> Bool {
+            guard supportsUpdate, view.accessibilityIdentifier == "stub.diagram" else { return false }
+            lastSource = source
+            return true
+        }
+
+        func makeSwiftUIView(source: String, theme: RichMarkdownTheme) -> AnyView {
+            AnyView(Color.clear)
+        }
+    }
+
     private func waitForRender(_ view: RichMarkdownUIView, timeout: TimeInterval = 10) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while view.model.hasOutstandingWork || view.hasPendingRebuild {
@@ -237,5 +270,51 @@ import UIKit
 
         #expect(findView(in: view, identifier: "stub.diagram") == nil)
         #expect(textViews(in: view).contains { $0.text == "let a = 1" })
+    }
+
+    /// 스트리밍으로 다이어그램 원문이 자라는 동안 UIKit 렌더러가 tick마다 다이어그램 뷰(실제로는 WKWebView)를
+    /// 새로 만들지 않는다. SwiftUI 경로(`updateUIView`)와 같은 재사용 계약이다 (iPad Pro M5 실측: 6 스칼라 조각에서 25회 생성).
+    @Test func streamingDiagramReusesViewWhenRendererSupportsUpdate() async throws {
+        let renderer = CountingDiagramRenderer(supportsUpdate: true)
+        let view = RichMarkdownUIView()
+        view.codeBlocks = RichMarkdownCodeBlockOptions(diagram: renderer)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+
+        for source in ["A", "A --> B", "A --> B\nB --> C"] {
+            view.markdown = "앞 문단\n\n```diagram\n\(source)"
+            try await waitForRender(view)
+        }
+        view.streaming = nil
+        try await waitForRender(view)
+
+        #expect(renderer.created == 1, "같은 다이어그램 블록은 뷰를 한 번만 만든다")
+        #expect(renderer.lastSource == "A --> B\nB --> C", "기존 뷰에 마지막 원문이 전달돼야 한다")
+        let copy = view.blockStack.arrangedSubviews.last.flatMap { findCopyButton(in: $0) }
+        #expect(copy?.payload == "A --> B\nB --> C", "복사 버튼도 마지막 원문을 복사해야 한다")
+    }
+
+    @Test func streamingDiagramFallsBackToRecreationWithoutUpdateSupport() async throws {
+        let renderer = CountingDiagramRenderer(supportsUpdate: false)
+        let view = RichMarkdownUIView()
+        view.codeBlocks = RichMarkdownCodeBlockOptions(diagram: renderer)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+
+        for source in ["A", "A --> B"] {
+            view.markdown = "```diagram\n\(source)"
+            try await waitForRender(view)
+        }
+
+        #expect(renderer.created == 2, "갱신을 지원하지 않는 렌더러는 지금처럼 새 뷰를 받는다")
+        #expect(renderer.lastSource == "A --> B")
+    }
+
+    private func findCopyButton(in view: UIView) -> RichMarkdownCopyButton? {
+        if let button = view as? RichMarkdownCopyButton { return button }
+        for subview in view.subviews {
+            if let found = findCopyButton(in: subview) { return found }
+        }
+        return nil
     }
 }

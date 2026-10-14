@@ -15,7 +15,9 @@ const result = await build({
     bundle: true,
     format: 'iife',
     platform: 'browser',
-    target: ['safari16'],
+    // iOS 16 WKWebView와 Android API 30 기본 WebView(Chrome 91)에서 모두 파싱되는 문법으로 낮춘다.
+    // 내장 API는 문법 변환으로 채워지지 않으므로 polyfills.js가 맡는다.
+    target: ['safari16', 'chrome91'],
     minify: true,
     legalComments: 'eof',
     metafile: true,

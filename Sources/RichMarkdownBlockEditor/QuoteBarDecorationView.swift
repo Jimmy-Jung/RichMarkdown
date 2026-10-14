@@ -1,6 +1,7 @@
 // Created by JunyoungJung on 2026-08-24.
 
 import RichMarkdown
+import SwiftUI
 import UIKit
 
 /// 인용문 왼쪽 세로 바의 색 정보. attribute 값으로 실린다.
@@ -9,9 +10,21 @@ import UIKit
 /// 바는 이 값을 읽는 `QuoteBarDecorationView`가 텍스트 뒤에 직접 그린다.
 public final class QuoteBarStyle: NSObject, Sendable {
     public let color: UIColor
+    private let themeColor: Color
 
     public init(theme: RichMarkdownTheme) {
+        themeColor = theme.quoteBar
         color = UIColor(theme.quoteBar)
+    }
+
+    /// 같은 테마 색이면 같은 값이다. 블록마다 새로 만든 인스턴스라도 연속 인용 블록과
+    /// 그 사이 개행의 attribute run이 하나로 합쳐져 바가 끊기지 않는다.
+    override public func isEqual(_ object: Any?) -> Bool {
+        (object as? QuoteBarStyle)?.themeColor == themeColor
+    }
+
+    override public var hash: Int {
+        themeColor.hashValue
     }
 }
 
@@ -117,6 +130,7 @@ public final class QuoteBarDecorationView: UIView {
         }
 
         let inset = textView.textContainerInset
+        let text = attributed.string as NSString
         let path = CGMutablePath()
         var style: QuoteBarStyle?
         attributed.enumerateAttribute(
@@ -125,9 +139,19 @@ public final class QuoteBarDecorationView: UIView {
         ) { value, range, _ in
             guard let bar = value as? QuoteBarStyle else { return }
             style = bar
+            // 끝 개행은 텍스트와 같은 줄에 있지만, iOS 26 TextKit 2는 문서 끝 빈 문단 앞의
+            // 개행에 다음 줄 segment도 보고해 바가 한 줄 길어진다. 마지막 인용 줄에 내용이
+            // 있으면 개행을 빼고 잰다 (빈 인용 줄은 개행이 그 줄의 유일한 문자라 남긴다).
+            let last = NSMaxRange(range) - 1
+            let trimsNewline = range.length > 1
+                && text.character(at: last) == 0x0A
+                && text.character(at: last - 1) != 0x0A
+            let measured = trimsNewline
+                ? NSRange(location: range.location, length: range.length - 1)
+                : range
             let documentStart = contentManager.documentRange.location
-            guard let start = contentManager.location(documentStart, offsetBy: range.location),
-                  let end = contentManager.location(start, offsetBy: range.length),
+            guard let start = contentManager.location(documentStart, offsetBy: measured.location),
+                  let end = contentManager.location(start, offsetBy: measured.length),
                   let textRange = NSTextRange(location: start, end: end)
             else { return }
 
