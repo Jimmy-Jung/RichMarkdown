@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"indented first "},{"c":"math","kind":"inlineParen","latex":"x","source":"\\(x\\)"},{"c":"text","v":" end"}],"t":"p"}],"diagnostics":[],"truncated":false}

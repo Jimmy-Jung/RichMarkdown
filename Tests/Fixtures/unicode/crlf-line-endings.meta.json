@@ -1,0 +1,12 @@
+{
+  "expect": {
+    "mathLatex": [
+      "x"
+    ],
+    "blockTypes": [
+      "h",
+      "p",
+      "ul"
+    ]
+  }
+}

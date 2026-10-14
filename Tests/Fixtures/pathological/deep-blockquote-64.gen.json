@@ -1,0 +1,7 @@
+{
+  "kind": "repeat",
+  "unit": "> ",
+  "count": 64,
+  "suffix": "깊이 64 인용",
+  "budgetMs": 1000
+}

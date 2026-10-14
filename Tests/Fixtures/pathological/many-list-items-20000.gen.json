@@ -1,0 +1,9 @@
+{
+  "kind": "repeat-lines",
+  "line": "- 항목 \\(x\\)",
+  "count": 20000,
+  "budgetMs": 3000,
+  "expect": {
+    "truncated": true
+  }
+}

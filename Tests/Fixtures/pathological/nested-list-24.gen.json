@@ -1,0 +1,13 @@
+{
+  "kind": "nested-list",
+  "depth": 24,
+  "indent": "  ",
+  "item": "- 항목",
+  "budgetMs": 2000,
+  "expect": {
+    "truncated": false,
+    "blockTypes": [
+      "ul"
+    ]
+  }
+}

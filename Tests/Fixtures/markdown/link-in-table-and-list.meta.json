@@ -1,0 +1,9 @@
+{
+  "expect": {
+    "blockTypes": [
+      "table",
+      "ul"
+    ],
+    "linkCount": 2
+  }
+}

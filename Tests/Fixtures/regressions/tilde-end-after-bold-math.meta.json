@@ -1,0 +1,12 @@
+{
+  "dollarMath": [],
+  "expect": {
+    "mathLatex": [
+      "x"
+    ],
+    "plainTextContains": [
+      " 끝~"
+    ]
+  },
+  "note": "2026-10-14 퍼즈 패리티로 발견: swift-cmark 인라인 위치 결함(취소선 확장의 빈 범위·역슬래시 줄바꿈 뒤 CRLF·여러 줄 코드 span) 또는 cmark-gfm 작업 목록 상태 오인"
+}

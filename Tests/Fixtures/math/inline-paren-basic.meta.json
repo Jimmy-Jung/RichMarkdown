@@ -1,0 +1,13 @@
+{
+  "expect": {
+    "mathLatex": [
+      "A = \\pi r^2"
+    ],
+    "mathKinds": [
+      "inlineParen"
+    ],
+    "blockTypes": [
+      "p"
+    ]
+  }
+}

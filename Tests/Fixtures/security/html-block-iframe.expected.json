@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"<iframe src=\"https://evil.example\"></iframe>"}],"t":"p"},{"runs":[{"c":"text","v":"<object data=\"x\">"},{"c":"text","v":"</object>"}],"t":"p"},{"runs":[{"c":"text","v":"본문"}],"t":"p"}],"diagnostics":[],"truncated":false}

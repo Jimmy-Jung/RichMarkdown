@@ -1,0 +1,8 @@
+{
+  "expect": {
+    "blockTypes": [
+      "code",
+      "code"
+    ]
+  }
+}

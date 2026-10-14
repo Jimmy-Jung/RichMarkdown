@@ -1,0 +1,13 @@
+{
+  "expect": {
+    "blockTypes": [
+      "p",
+      "math",
+      "p",
+      "table",
+      "p",
+      "math",
+      "p"
+    ]
+  }
+}

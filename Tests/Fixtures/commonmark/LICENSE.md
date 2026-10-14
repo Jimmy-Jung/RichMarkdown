@@ -1,0 +1,1 @@
+`spec-0.31.2.json`은 CommonMark Spec 0.31.2(John MacFarlane 외)의 예제 데이터다. 출처 <https://spec.commonmark.org/0.31.2/spec.json>, 라이선스 CC-BY-SA 4.0. 2026-10-14 다운로드, SHA-256 `d431b29d97b6f73e69d547109cf5081578fac931e72afe95639ebe766c1b2a20`. 이 저장소는 입력(`markdown`)만 사용하며 HTML 기대값으로 판정하지 않는다.

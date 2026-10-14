@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"b":true,"c":"text","v":"판별식"},{"c":"math","kind":"inlineParen","latex":"D = b^2","source":"\\(D = b^2\\)"},{"c":"text","v":"의 부호"}],"t":"p"},{"align":[null,null],"header":[[{"c":"text","v":"a"}],[{"c":"text","v":"b"}]],"rows":[[[{"c":"text","v":"1"}],[{"c":"text","v":"2"}]]],"t":"table"}],"diagnostics":[],"truncated":false}

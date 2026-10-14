@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"para line one"},{"c":"sbr"},{"c":"text","v":"indented "},{"b":true,"c":"text","v":"bold"},{"c":"text","v":" and "},{"c":"math","kind":"inlineParen","latex":"y","source":"\\(y\\)"},{"c":"text","v":" tail"}],"t":"p"}],"diagnostics":[],"truncated":false}

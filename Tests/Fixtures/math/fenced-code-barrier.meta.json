@@ -1,0 +1,14 @@
+{
+  "dollarMath": [
+    "single"
+  ],
+  "expect": {
+    "mathLatex": [
+      "z"
+    ],
+    "blockTypes": [
+      "code",
+      "p"
+    ]
+  }
+}

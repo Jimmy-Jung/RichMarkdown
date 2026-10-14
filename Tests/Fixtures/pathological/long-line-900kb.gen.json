@@ -1,0 +1,10 @@
+{
+  "kind": "repeat",
+  "unit": "가",
+  "count": 300000,
+  "suffix": "",
+  "budgetMs": 3000,
+  "expect": {
+    "truncated": true
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "kind": "repeat-lines",
+  "line": "[r]: https://example.com",
+  "count": 5000,
+  "budgetMs": 2000
+}

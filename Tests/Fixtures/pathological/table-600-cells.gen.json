@@ -1,0 +1,12 @@
+{
+  "kind": "table",
+  "columns": 10,
+  "rows": 60,
+  "cell": "c",
+  "budgetMs": 1000,
+  "expect": {
+    "blockTypes": [
+      "p"
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "expect": {
+    "blockTypes": [
+      "p",
+      "code",
+      "p",
+      "code",
+      "p",
+      "code"
+    ]
+  }
+}

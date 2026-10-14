@@ -1,0 +1,11 @@
+{
+  "expect": {
+    "blockTypes": [
+      "table"
+    ],
+    "mathLatex": [
+      "x^2",
+      "\\frac{1}{2}"
+    ]
+  }
+}

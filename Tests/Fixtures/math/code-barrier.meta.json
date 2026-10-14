@@ -1,0 +1,10 @@
+{
+  "dollarMath": [
+    "single"
+  ],
+  "expect": {
+    "mathLatex": [
+      "y"
+    ]
+  }
+}

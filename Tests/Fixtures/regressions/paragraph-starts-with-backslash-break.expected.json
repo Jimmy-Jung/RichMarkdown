@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"앞 문단"}],"t":"p"},{"runs":[{"c":"br"},{"c":"text","v":"\\begin{aligned}"},{"c":"sbr"},{"c":"text","v":"a &= b"},{"c":"sbr"},{"c":"text","v":"\\end{aligned}"},{"c":"sbr"},{"c":"text","v":"\\]"}],"t":"p"},{"runs":[{"c":"text","v":"끝"}],"t":"p"}],"diagnostics":[],"truncated":false}

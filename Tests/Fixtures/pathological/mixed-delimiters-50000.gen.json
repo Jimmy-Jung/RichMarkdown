@@ -1,0 +1,11 @@
+{
+  "kind": "repeat",
+  "unit": "\\(a\\)$b$\\[c\\]$$d$$ ",
+  "count": 5000,
+  "suffix": "",
+  "dollarMath": [
+    "single",
+    "inlineDouble"
+  ],
+  "budgetMs": 3000
+}

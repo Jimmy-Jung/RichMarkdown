@@ -1,0 +1,14 @@
+{
+  "kind": "math-oversize",
+  "open": "\\(",
+  "close": "\\)",
+  "fill": "x",
+  "count": 4096,
+  "budgetMs": 500,
+  "expect": {
+    "diagnostics": [],
+    "mathKinds": [
+      "inlineParen"
+    ]
+  }
+}

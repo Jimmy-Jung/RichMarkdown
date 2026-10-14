@@ -1,0 +1,1 @@
+{"blocks":[{"blocks":[{"runs":[{"c":"text","v":"인용 "},{"c":"math","kind":"inlineParen","latex":"c","source":"\\(c\\)"}],"t":"p"},{"blocks":[{"runs":[{"c":"text","v":"깊은 (a\\)"},{"c":"sbr"},{"c":"text","v":"둘째 "},{"c":"math","kind":"inlineParen","latex":"b","source":"\\(b\\)"}],"t":"p"}],"t":"quote"}],"t":"quote"}],"diagnostics":[],"truncated":false}

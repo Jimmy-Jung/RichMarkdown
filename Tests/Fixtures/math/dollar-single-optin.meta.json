@@ -1,0 +1,13 @@
+{
+  "dollarMath": [
+    "single"
+  ],
+  "expect": {
+    "mathLatex": [
+      "x^2"
+    ],
+    "mathKinds": [
+      "inlineDollar"
+    ]
+  }
+}

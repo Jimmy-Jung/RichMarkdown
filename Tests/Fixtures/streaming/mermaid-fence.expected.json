@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"흐름은 다음과 같습니다."}],"t":"p"},{"code":"graph TD\n  A[질의] --> B{캐시?}\n  B -->|예| C[응답]\n  B -->|아니오| D[검색] --> C","lang":"mermaid","t":"code"},{"runs":[{"c":"text","v":"이후 "},{"c":"math","kind":"inlineParen","latex":"O(\\log n)","source":"\\(O(\\log n)\\)"},{"c":"text","v":" 탐색을 수행합니다."}],"t":"p"}],"diagnostics":[],"truncated":false}

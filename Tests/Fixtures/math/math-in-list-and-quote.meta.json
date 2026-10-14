@@ -1,0 +1,14 @@
+{
+  "expect": {
+    "blockTypes": [
+      "ul",
+      "quote"
+    ],
+    "mathLatex": [
+      "a",
+      "b",
+      "c",
+      "d"
+    ]
+  }
+}

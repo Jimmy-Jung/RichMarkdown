@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"앞 "},{"b":true,"c":"text","v":"굵게"},{"c":"text","v":" 값 "},{"c":"math","kind":"inlineParen","latex":"x","source":"\\(x\\)"},{"c":"text","v":" 끝~"}],"t":"p"}],"diagnostics":[],"truncated":false}

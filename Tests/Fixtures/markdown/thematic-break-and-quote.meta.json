@@ -1,0 +1,9 @@
+{
+  "expect": {
+    "blockTypes": [
+      "hr",
+      "hr",
+      "quote"
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+{"blocks":[{"align":[null,null],"header":[[{"c":"text","v":"a "},{"c":"math","kind":"inlineParen","latex":"x","source":"\\(x\\)"},{"c":"text","v":" b"}],[{"c":"text","v":"c"}]],"rows":[[[{"c":"text","v":"d "},{"c":"math","kind":"inlineParen","latex":"y","source":"\\(y\\)"},{"c":"text","v":" e"}],[{"c":"text","v":"f"}]]],"t":"table"}],"diagnostics":[],"truncated":false}

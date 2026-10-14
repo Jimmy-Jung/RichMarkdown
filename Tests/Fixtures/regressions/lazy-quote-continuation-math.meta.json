@@ -1,0 +1,16 @@
+{
+  "expect": {
+    "blockTypes": [
+      "quote"
+    ],
+    "mathLatex": [
+      "a",
+      "b"
+    ],
+    "plainTextContains": [
+      "게으른 줄 ",
+      " 끝"
+    ]
+  },
+  "note": "2026-10-14 퍼즈 패리티로 발견: swift-cmark 인라인 위치가 게으른 연속 줄에서 오른쪽으로 밀리거나, 일부만 쓰인 강조 구분자를 Text 범위에 포함"
+}

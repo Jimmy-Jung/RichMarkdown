@@ -1,0 +1,5 @@
+%% expect: rejected
+%% Mermaid 11.17.2는 classDef 값의 url(을 parse error로 거부한다(안전한 결과, 2026-10-14 실측).
+graph TD
+  A[노드]:::bad --> B[끝]
+  classDef bad fill:url(javascript:window.__richmarkdownPwned=1),stroke:#f00

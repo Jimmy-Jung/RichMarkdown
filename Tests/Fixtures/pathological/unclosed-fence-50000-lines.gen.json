@@ -1,0 +1,7 @@
+{
+  "kind": "repeat-lines",
+  "line": "code line",
+  "count": 50000,
+  "prefix": "```\n",
+  "budgetMs": 3000
+}

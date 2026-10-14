@@ -1,0 +1,36 @@
+{
+  "exceptions": [
+    {
+      "id": "security/link-idn-homoglyph",
+      "ignore": [
+        "href"
+      ],
+      "reason": "iOS Foundation URL은 IDN 호스트를 punycode(xn--pple-43d.com)로, Android java.net.URI는 원문(키릴 а)으로 보존한다. 두 플랫폼 모두 https 링크로 허용하며 동형이의 호스트 차단은 앱 정책 영역이다.",
+      "decided": "2026-10-14",
+      "kind": "url-type"
+    },
+    {
+      "id": "security/link-percent-encoded",
+      "ignore": [
+        "href"
+      ],
+      "reason": "iOS 17 이상 URL(string:)은 경로의 비ASCII를 퍼센트 인코딩하고 Android URI는 원문을 보존한다. 링크 수·대상은 같다. iOS 16 동작은 별도 확인 항목.",
+      "decided": "2026-10-14",
+      "kind": "url-type"
+    },
+    {
+      "id": "commonmark/28",
+      "ignore": [],
+      "reason": "상위 파서 차이: iOS cmark-gfm은 8자리 숫자 문자 참조 &#87654321;을 U+FFFD로 해석한다. CommonMark 0.31.2는 1~7자리만 참조로 보므로 원문 유지가 명세 동작이며 Android(commonmark-java 0.30)가 명세와 같다.",
+      "decided": "2026-10-14",
+      "kind": "upstream"
+    },
+    {
+      "id": "commonmark/354",
+      "ignore": [],
+      "reason": "상위 파서 차이: CommonMark 0.31에서 구두점 정의에 기호(Sc 통화 등)가 포함됐다. iOS cmark-gfm은 이전 정의라 *£*bravo를 기울임으로 만들고 Android는 명세대로 원문을 유지한다.",
+      "decided": "2026-10-14",
+      "kind": "upstream"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "dollarMath": [
+    "single"
+  ],
+  "expect": {
+    "blockTypes": [
+      "p",
+      "math",
+      "p"
+    ],
+    "mathKinds": [
+      "displayDollar"
+    ]
+  }
+}

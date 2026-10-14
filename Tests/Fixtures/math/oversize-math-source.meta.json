@@ -1,0 +1,10 @@
+{
+  "expect": {
+    "mathKinds": [
+      "inlineParen"
+    ],
+    "diagnostics": [
+      "oversizedMathSource"
+    ]
+  }
+}

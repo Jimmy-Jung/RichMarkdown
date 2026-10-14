@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"a"},{"c":"br"},{"c":"text","v":"b"},{"c":"sbr"},{"c":"text","v":"c "},{"c":"math","kind":"inlineParen","latex":"x","source":"\\(x\\)"},{"c":"text","v":" d"}],"t":"p"}],"diagnostics":[],"truncated":false}

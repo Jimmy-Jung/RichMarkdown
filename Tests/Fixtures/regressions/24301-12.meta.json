@@ -1,0 +1,9 @@
+{
+  "expect": {
+    "mathKinds": [
+      "inlineParen"
+    ],
+    "diagnostics": []
+  },
+  "note": "Android 퍼즈 seed 24301 n=12 최소화 입력: \\( + x×4093 + \\) = source 4097 B, latex 4093 B — 제한은 latex 기준이라 통과해야 한다 (2026-10-14)"
+}

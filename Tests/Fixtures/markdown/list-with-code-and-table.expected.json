@@ -1,0 +1,1 @@
+{"blocks":[{"items":[[{"runs":[{"c":"text","v":"코드"}],"t":"p"},{"code":"val a = 1","lang":"kotlin","t":"code"}],[{"runs":[{"c":"text","v":"표"}],"t":"p"},{"align":[null,null],"header":[[{"c":"text","v":"a"}],[{"c":"text","v":"b"}]],"rows":[[[{"c":"text","v":"1"}],[{"c":"text","v":"2"}]]],"t":"table"}]],"start":1,"t":"ol"}],"diagnostics":[],"truncated":false}

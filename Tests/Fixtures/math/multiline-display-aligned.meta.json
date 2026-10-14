@@ -1,0 +1,12 @@
+{
+  "expect": {
+    "mathKinds": [
+      "displayBracket"
+    ],
+    "blockTypes": [
+      "p",
+      "math",
+      "p"
+    ]
+  }
+}

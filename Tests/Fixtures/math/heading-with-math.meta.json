@@ -1,0 +1,11 @@
+{
+  "expect": {
+    "blockTypes": [
+      "h",
+      "p"
+    ],
+    "mathLatex": [
+      "\\sum_{i=1}^n i"
+    ]
+  }
+}

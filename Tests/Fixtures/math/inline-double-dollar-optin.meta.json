@@ -1,0 +1,16 @@
+{
+  "dollarMath": [
+    "single",
+    "inlineDouble"
+  ],
+  "expect": {
+    "mathLatex": [
+      "f(1)",
+      "f(0)"
+    ],
+    "mathKinds": [
+      "inlineDoubleDollar",
+      "inlineDoubleDollar"
+    ]
+  }
+}

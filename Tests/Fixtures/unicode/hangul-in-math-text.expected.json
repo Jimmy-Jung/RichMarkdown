@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"math","kind":"inlineParen","latex":"\\text{넓이} = \\pi r^2","source":"\\(\\text{넓이} = \\pi r^2\\)"},{"c":"text","v":" 와 "},{"c":"math","kind":"inlineParen","latex":"\\text{한글 변수}_i","source":"\\(\\text{한글 변수}_i\\)"}],"t":"p"}],"diagnostics":[],"truncated":false}

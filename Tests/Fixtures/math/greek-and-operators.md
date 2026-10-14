@@ -1,0 +1,1 @@
+\(\alpha\beta\gamma\) \(\leq \geq \neq \approx\) \(\int_0^\infty e^{-x}\,dx = 1\)

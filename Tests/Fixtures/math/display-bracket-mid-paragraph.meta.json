@@ -1,0 +1,8 @@
+{
+  "expect": {
+    "mathLatex": [],
+    "diagnostics": [
+      "nonParagraphDisplayDelimiter"
+    ]
+  }
+}

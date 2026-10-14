@@ -1,0 +1,12 @@
+{
+  "expect": {
+    "mathLatex": [
+      "y"
+    ],
+    "plainTextContains": [
+      " after ",
+      " z"
+    ]
+  },
+  "note": "2026-10-14 퍼즈 패리티로 발견: swift-cmark 인라인 위치가 연속 줄 앞 공백만큼 밀려 iOS에서 끝 글자가 사라지거나 한글이 잘림"
+}

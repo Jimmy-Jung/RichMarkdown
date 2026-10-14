@@ -1,0 +1,15 @@
+{
+  "expect": {
+    "blockTypes": [
+      "p",
+      "math",
+      "p"
+    ],
+    "mathKinds": [
+      "displayBracket"
+    ],
+    "mathLatex": [
+      "E = mc^2"
+    ]
+  }
+}

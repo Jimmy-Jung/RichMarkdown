@@ -1,0 +1,6 @@
+%% expect: rendered
+sequenceDiagram
+  participant A
+  participant B
+  A->>B: <script>window.__richmarkdownPwned=1</script>
+  Note over A,B: <img src=x onerror='window.__richmarkdownPwned=1'>

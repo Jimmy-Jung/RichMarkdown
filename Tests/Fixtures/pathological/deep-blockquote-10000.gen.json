@@ -1,0 +1,7 @@
+{
+  "kind": "repeat",
+  "unit": "> ",
+  "count": 10000,
+  "suffix": "깊은 인용",
+  "budgetMs": 2000
+}

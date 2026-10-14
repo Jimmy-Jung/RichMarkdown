@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"유도 과정:"}],"t":"p"},{"kind":"displayBracket","latex":"\\begin{aligned}\na &= b + c \\\\\nd &= e \\cdot f\n\\end{aligned}","source":"\\[\n\\begin{aligned}\na &= b + c \\\\\nd &= e \\cdot f\n\\end{aligned}\n\\]","t":"math"},{"runs":[{"c":"text","v":"끝"}],"t":"p"}],"diagnostics":[],"truncated":false}

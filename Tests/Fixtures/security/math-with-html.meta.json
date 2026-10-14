@@ -1,0 +1,11 @@
+{
+  "expect": {
+    "mathLatex": [
+      "\\href{javascript:alert(1)}{x}",
+      "\\url{https://evil.example}"
+    ],
+    "plainTextContains": [
+      "<script>alert(1)</script>"
+    ]
+  }
+}

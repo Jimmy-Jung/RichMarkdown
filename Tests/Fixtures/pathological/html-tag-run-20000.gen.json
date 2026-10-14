@@ -1,0 +1,7 @@
+{
+  "kind": "repeat",
+  "unit": "<div>",
+  "count": 20000,
+  "suffix": "",
+  "budgetMs": 3000
+}

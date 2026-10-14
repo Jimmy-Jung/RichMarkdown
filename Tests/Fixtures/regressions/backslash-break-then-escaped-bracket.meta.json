@@ -1,0 +1,10 @@
+{
+  "dollarMath": [],
+  "expect": {
+    "plainTextContains": [
+      "sigma b",
+      "\\]"
+    ]
+  },
+  "note": "2026-10-14 퍼즈 패리티로 발견: 역슬래시 줄바꿈 뒤 swift-cmark가 문단의 이후 줄 번호를 줄바꿈 수만큼 앞당겨 보고(글자 쓰레기·수식 손실)"
+}

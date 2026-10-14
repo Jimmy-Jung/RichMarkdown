@@ -1,0 +1,10 @@
+{
+  "kind": "repeat",
+  "unit": "$",
+  "count": 100000,
+  "suffix": "",
+  "dollarMath": [
+    "single"
+  ],
+  "budgetMs": 3000
+}

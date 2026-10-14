@@ -1,0 +1,10 @@
+{
+  "kind": "repeat",
+  "unit": "a",
+  "count": 262144,
+  "suffix": "",
+  "budgetMs": 3000,
+  "expect": {
+    "truncated": false
+  }
+}

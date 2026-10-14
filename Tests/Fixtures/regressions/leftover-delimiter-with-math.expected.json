@@ -1,0 +1,1 @@
+{"blocks":[{"runs":[{"c":"text","v":"수식 "},{"c":"math","kind":"inlineParen","latex":"W_{1}","source":"\\(W_{1}\\)"},{"c":"text","v":"가 부분공간이려면 *"},{"c":"text","i":true,"v":"영벡터"}],"t":"p"}],"diagnostics":[],"truncated":false}
