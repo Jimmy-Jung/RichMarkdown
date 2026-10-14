@@ -50,9 +50,12 @@ package struct ProtectedMathSpan: Sendable, Hashable {
         case .displayDollar, .inlineDoubleDollar: dropCount = (2, 2)
         case .inlineDollar: dropCount = (1, 1)
         }
-        var s = source
-        s = String(s.dropFirst(dropCount.leading).dropLast(dropCount.trailing))
-        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 문자 묶음이 아니라 스칼라 단위로 구분자를 뗀다. `$` 뒤 결합 문자(`$\u{301}`)는 한 문자 묶음이라
+        // dropFirst가 결합 문자까지 지웠다(퍼즈 패리티, Android는 UTF-16 단위). 구분자는 모두 ASCII 한 스칼라다.
+        let scalars = source.unicodeScalars
+        guard scalars.count >= dropCount.leading + dropCount.trailing else { return "" }
+        let inner = String(String.UnicodeScalarView(scalars.dropFirst(dropCount.leading).dropLast(dropCount.trailing)))
+        return inner.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

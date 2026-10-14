@@ -8,6 +8,10 @@ package enum InputLimits {
     package static let maxInputUTF8Bytes = 262_144        // 256 KiB
     package static let displayPrefixUTF8Bytes = 65_536    // 초과 시 표시 상한 64 KiB
     package static let maxBlockQuoteDepth = 64
+    /// 목록 항목 표식 앞 들여쓰기 열 상한(탭 = 4열). 목록은 들여쓰기로 중첩되고 swift-markdown 변환이 재귀라
+    /// 깊이에 비례해 스택을 쓴다. 실측(2026-10-14, 협력 스레드 512 KB 스택): 56단계 통과, 65단계 SIGBUS → 48열(2칸 들여쓰기
+    /// 기준 24단계)로 제한해 2배 이상 여유를 둔다 (fixture pathological/nested-list-24·26·500).
+    package static let maxListIndentColumns = 48
     package static let maxMathSourceUTF8Bytes = 4_096     // 수식 parser 진입 전 source 상한
     package static let maxTableColumns = 32
     package static let maxTableCells = 512
@@ -25,8 +29,8 @@ package enum InputLimits {
 
     /// 상한 초과 입력을 Character 경계의 bounded prefix + 명시적 생략 marker로 바꾼다.
     package static func bound(_ input: String) -> BoundedInput {
-        let byteBounded = boundUTF8Bytes(input)
-        guard let lineStart = firstLineExceedingBlockQuoteDepth(in: byteBounded.text) else {
+        let byteBounded = boundUTF8Bytes(normalizedForParsing(input))
+        guard let lineStart = firstLineExceedingNestingLimits(in: byteBounded.text) else {
             return byteBounded
         }
 
@@ -34,6 +38,15 @@ package enum InputLimits {
             text: truncatedText(prefix: String(byteBounded.text[..<lineStart])),
             wasTruncated: true
         )
+    }
+
+    /// 선두 BOM(U+FEFF)은 내용이 아니므로 버리고, NUL은 U+FFFD로 바꾼다. cmark는 NUL을 내부에서 U+FFFD(3바이트)로
+    /// 치환하므로 그대로 두면 1차·2차 파싱의 UTF-8 offset이 어긋나 수식 mask가 복원되지 않는다 (fixture security/null-and-control-chars).
+    private static func normalizedForParsing(_ input: String) -> String {
+        var text = input
+        while text.hasPrefix("\u{FEFF}") { text.removeFirst() }
+        if text.utf8.contains(0) { text = text.replacingOccurrences(of: "\0", with: "\u{FFFD}") }
+        return text
     }
 
     private static func boundUTF8Bytes(_ input: String) -> BoundedInput {
@@ -60,8 +73,8 @@ package enum InputLimits {
         return BoundedInput(text: truncatedText(prefix: String(input[..<end])), wasTruncated: true)
     }
 
-    /// Block quote는 swift-markdown 변환과 내부 모델 모두 재귀로 처리하므로 parse 전에 제한한다.
-    package static func firstLineExceedingBlockQuoteDepth(in input: String) -> String.Index? {
+    /// Block quote와 목록은 swift-markdown 변환과 내부 모델 모두 재귀로 처리하므로 parse 전에 깊이를 제한한다.
+    package static func firstLineExceedingNestingLimits(in input: String) -> String.Index? {
         var lineStart = input.startIndex
         var openFence: CodeFence?
 
@@ -93,6 +106,9 @@ package enum InputLimits {
             if quotePrefix.depth > maxBlockQuoteDepth {
                 return lineStart
             }
+            if listMarkerIndentColumns(in: line[quotePrefix.contentStart...]) > maxListIndentColumns {
+                return lineStart
+            }
             if let fence = openingFence(
                 in: line[quotePrefix.contentStart...],
                 quoteDepth: quotePrefix.depth
@@ -115,6 +131,35 @@ package enum InputLimits {
         // Swift `Character`는 CRLF를 하나의 extended grapheme cluster로 다룬다.
         // 따라서 한 번 전진하면 CR, LF, CRLF 모두 정확히 다음 logical line을 가리킨다.
         return input.index(after: terminator)
+    }
+
+    /// 줄이 목록 표식(`-`·`+`·`*`, 또는 1~9자리 숫자 뒤 `.`·`)`)으로 시작하면 그 앞 들여쓰기 열 수(탭 = 4열), 아니면 0.
+    private static func listMarkerIndentColumns(in content: Substring) -> Int {
+        var columns = 0
+        var index = content.startIndex
+        while index < content.endIndex {
+            if content[index] == " " { columns += 1 } else if content[index] == "\t" { columns += 4 - columns % 4 } else { break }
+            index = content.index(after: index)
+        }
+        guard columns > 0, index < content.endIndex, startsWithListMarker(content[index...]) else { return 0 }
+        return columns
+    }
+
+    private static func startsWithListMarker(_ text: Substring) -> Bool {
+        guard let first = text.first else { return false }
+        var afterMarker = text.index(after: text.startIndex)
+        if first.isASCII, first.isNumber {
+            var digits = 1
+            while afterMarker < text.endIndex, text[afterMarker].isASCII, text[afterMarker].isNumber, digits < 9 {
+                digits += 1
+                afterMarker = text.index(after: afterMarker)
+            }
+            guard afterMarker < text.endIndex, text[afterMarker] == "." || text[afterMarker] == ")" else { return false }
+            afterMarker = text.index(after: afterMarker)
+        } else if first != "-", first != "+", first != "*" {
+            return false
+        }
+        return afterMarker == text.endIndex || text[afterMarker] == " " || text[afterMarker] == "\t"
     }
 
     private struct QuotePrefix {

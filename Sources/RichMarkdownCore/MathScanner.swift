@@ -24,6 +24,9 @@ package struct MathScanner: Sendable {
     private let softRanges: [Range<Int>]
     private let paragraphRanges: [Range<Int>]
     private let dollarMath: DollarMathOptions
+    /// 줄 종료(LF·CR) byte 위치(오름차순). opener마다 줄 끝까지 훑으면 한 줄에 구분자가 많을 때 O(n²)다
+    /// (fixture pathological/mixed-delimiters-50000: 95 KB 한 줄에 span 2만 개).
+    private let newlinePositions: [Int]
 
     package init(
         bytes: [UInt8],
@@ -33,6 +36,7 @@ package struct MathScanner: Sendable {
         dollarMath: DollarMathOptions
     ) {
         self.bytes = bytes
+        self.newlinePositions = bytes.indices.filter { bytes[$0] == 0x0A || bytes[$0] == 0x0D }
         self.hardRanges = Self.merged(forbiddenRanges)
         self.softRanges = Self.merged(softRanges)
         self.paragraphRanges = paragraphRanges
@@ -75,6 +79,11 @@ package struct MathScanner: Sendable {
         }
 
         spans.sort { $0.originalUTF8Range.lowerBound < $1.originalUTF8Range.lowerBound }
+        // 3) 엔진에 들어갈 latex(구분자 제외)가 4 KiB를 넘으면 진단을 남긴다. span은 그대로 보호해
+        //    Markdown이 내부를 해석하지 않게 하고, 렌더 단계가 원문으로 표시한다 (InputLimits §6).
+        for span in spans where span.latex.utf8.count > InputLimits.maxMathSourceUTF8Bytes {
+            diagnostics.append(MathDiagnostic(kind: .oversizedMathSource, utf8Range: span.originalUTF8Range))
+        }
         return Result(spans: spans, diagnostics: diagnostics)
     }
 
@@ -147,11 +156,20 @@ package struct MathScanner: Sendable {
         diagnostics: inout [MathDiagnostic]
     ) {
         var i = segment.lowerBound
+        // 같은 줄에서 한 번 `\)`가 없다고 판정되면 그 줄의 나머지 `\(`도 닫히지 않는다. opener마다 줄 끝까지
+        // 다시 훑으면 O(n²)다 (fixture pathological/paren-math-open-run-10000).
+        var unterminatedParenLine: Range<Int>?
         while i < segment.upperBound {
             let b = bytes[i]
             if b == UInt8(ascii: "\\"), i + 1 < segment.upperBound,
                bytes[i + 1] == UInt8(ascii: "("), !isBackslashEscaped(at: i) {
+                if let line = unterminatedParenLine, line.contains(i) {
+                    diagnostics.append(MathDiagnostic(kind: .unterminatedDelimiter, utf8Range: i..<line.upperBound))
+                    i += 2
+                    continue
+                }
                 let outcome = inlineParenSpan(openingAt: i, segment: segment, diagnostics: &diagnostics)
+                if let lineEnd = outcome.unterminatedLineEnd { unterminatedParenLine = i..<lineEnd }
                 if let span = outcome.span {
                     spans.append(span)
                     i = span.originalUTF8Range.upperBound
@@ -204,33 +222,33 @@ package struct MathScanner: Sendable {
         openingAt open: Int,
         segment: Range<Int>,
         diagnostics: inout [MathDiagnostic]
-    ) -> (span: ProtectedMathSpan?, nextIndex: Int) {
+    ) -> (span: ProtectedMathSpan?, nextIndex: Int, unterminatedLineEnd: Int?) {
         // 여는 delimiter가 link/image 내부에 있으면 수식이 아니다.
-        guard !insideSoftRange(open) else { return (nil, open + 2) }
+        guard !insideSoftRange(open) else { return (nil, open + 2, nil) }
         let contentStart = open + 2
         let lineEnd = endOfLine(from: contentStart, limit: segment.upperBound)
         guard let close = firstUnescapedDelimiter(prefixByte: UInt8(ascii: "\\"), byte: UInt8(ascii: ")"),
                                                   in: contentStart..<lineEnd)
         else {
             diagnostics.append(MathDiagnostic(kind: .unterminatedDelimiter, utf8Range: open..<lineEnd))
-            return (nil, open + 2)
+            return (nil, open + 2, lineEnd)
         }
         let end = close + 2
         // 중첩 opener는 구간 전체가 plain text + diagnostic이다.
         if firstUnescapedDelimiter(prefixByte: UInt8(ascii: "\\"), byte: UInt8(ascii: "("),
                                    in: contentStart..<close) != nil {
             diagnostics.append(MathDiagnostic(kind: .nestedDelimiter, utf8Range: open..<end))
-            return (nil, end)
+            return (nil, end, nil)
         }
         let inner = trimWhitespace(contentStart..<close)
         guard !inner.isEmpty else {
             diagnostics.append(MathDiagnostic(kind: .emptyMath, utf8Range: open..<end))
-            return (nil, end)
+            return (nil, end, nil)
         }
         guard softRangesAllow(span: open..<end, content: contentStart..<close) else {
-            return (nil, end)
+            return (nil, end, nil)
         }
-        return (makeSpan(range: open..<end, kind: .inlineParen), end)
+        return (makeSpan(range: open..<end, kind: .inlineParen), end, nil)
     }
 
     /// `$ ... $` — v1 자체 규칙 (DEVELOPMENT.md §3):
@@ -353,13 +371,14 @@ package struct MathScanner: Sendable {
     }
 
     private func endOfLine(from start: Int, limit: Int) -> Int {
-        var i = start
-        while i < limit {
-            let b = bytes[i]
-            if b == 0x0A || b == 0x0D { return i }
-            i += 1
+        // newlinePositions에서 start 이상인 첫 위치를 이진 탐색한다.
+        var low = 0
+        var high = newlinePositions.count
+        while low < high {
+            let mid = (low + high) / 2
+            if newlinePositions[mid] < start { low = mid + 1 } else { high = mid }
         }
-        return limit
+        return low < newlinePositions.count ? min(newlinePositions[low], limit) : limit
     }
 
     private func trimWhitespace(_ range: Range<Int>) -> Range<Int> {

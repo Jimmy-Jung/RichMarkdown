@@ -307,6 +307,34 @@ import Testing
         #expect(plainText(of: runs).contains("라벨"))
     }
 
+    /// iOS 16 `URL(string:)`은 규격에 맞지 않는 글자가 있으면 nil이고 iOS 17 이상은 구성 요소 단위로 인코딩한다.
+    /// 대체 인코딩이 최신 파서와 같은 문자열을 만들어야 iOS 16에서도 같은 링크가 된다. 기대값은 macOS 26 Foundation
+    /// `URL(string:)` 실측(2026-10-14). 호스트·포트는 인코딩하지 않아 깨진 호스트는 계속 링크가 아니다.
+    @Test(arguments: [
+        ("https://exam#ple.co/exam#ple.com", "https://exam#ple.co/exam%23ple.com"),
+        ("https://a.com/b c", "https://a.com/b%20c"),
+        ("https://a.com/[x]?q=[1]#f[2]", "https://a.com/%5Bx%5D?q=%5B1%5D#f%5B2%5D"),
+        ("https://a.com/%zz%41", "https://a.com/%25zz%2541"),
+        ("https://a.com/%41 b", "https://a.com/%2541%20b"),
+        ("https://a.com/%41#x#y", "https://a.com/%41#x%23y"),
+        ("https://a.com/a\"b<c>d\\e^f`g{h|i}j", "https://a.com/a%22b%3Cc%3Ed%5Ce%5Ef%60g%7Bh%7Ci%7Dj"),
+        ("https://a.com/한글?q=값#조각", "https://a.com/%ED%95%9C%EA%B8%80?q=%EA%B0%92#%EC%A1%B0%EA%B0%81"),
+        ("https://u[1]@a.com/p", "https://u%5B1%5D@a.com/p"),
+        ("https://a.com?x=%e2%82%ac&y=ü", "https://a.com?x=%25e2%2582%25ac&y=%C3%BC"),
+        ("mailto:a@b.com?subject=hi there", "mailto:a@b.com?subject=hi%20there"),
+        ("https://[::1]:8080/p", "https://[::1]:8080/p"),
+        ("https://a.com/'()*!$&+,;=:@~", "https://a.com/'()*!$&+,;=:@~"),
+    ])
+    func legacyFallbackEncodingMatchesModernURLParser(input: String, expected: String) {
+        #expect(LinkPolicy.percentEncodingInvalidCharacters(input) == expected)
+        #expect(LinkPolicy.allowedURL(from: input)?.absoluteString == expected)
+    }
+
+    @Test(arguments: ["https://ex ample.com/", "http://a.com:80[/p"])
+    func invalidHostOrPortStaysPlainText(destination: String) {
+        #expect(LinkPolicy.allowedURL(from: destination) == nil)
+    }
+
     // MARK: - Markdown escape 해제
 
     @Test func escapedPunctuationLosesBackslashInDisplayText() {
