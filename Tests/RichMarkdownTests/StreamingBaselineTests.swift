@@ -66,11 +66,20 @@ import Testing
         let p95 = durations[Int(Double(durations.count) * 0.95)]
         let worst = durations.last ?? 0
         print("[baseline] 50KiB parse ms p50=\(String(format: "%.1f", p50)) p95=\(String(format: "%.1f", p95)) max=\(String(format: "%.1f", worst))")
+        // 새니타이저 계측은 실행 시간을 몇 배 늘린다(2026-10-14 같은 기기: ASan p50 285ms, TSan 581ms).
+        // 이 경우 수치만 남기고 절대 시간 게이트는 적용하지 않는다. 메모리·경합 검사는 다른 테스트가 그대로 받는다.
+        guard !Self.isRunningUnderSanitizer else { return }
         // P1 gate. 측정 기준(Debug/simulator, idle): p50 119–136ms, p95 129–230ms.
         // 게이트는 p50로 둔다. p95는 CI에서 다른 테스트와 경합하면 300ms를 넘길 수
         // 있어(관측 302ms) 경계 flake가 된다. p95에는 넉넉한 천장만 둔다.
         #expect(p50 < 300, "50 KiB parse p50가 300ms를 넘으면 스트리밍 계약(10Hz)이 깨진다")
         #expect(p95 < 800, "p95 회귀 천장")
+    }
+
+    /// ASan·TSan 런타임이 프로세스에 로드됐는가. `RTLD_DEFAULT`(-2)에서 런타임 초기화 심볼을 찾는다.
+    nonisolated static var isRunningUnderSanitizer: Bool {
+        let everyImage = UnsafeMutableRawPointer(bitPattern: -2)
+        return dlsym(everyImage, "__asan_init") != nil || dlsym(everyImage, "__tsan_init") != nil
     }
 
     /// MainActor는 generation 관리와 게시만 한다 (DEVELOPMENT.md §4).
