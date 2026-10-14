@@ -36,6 +36,7 @@ swift build --target RichMarkdownCore "${swift_storage_args[@]}" \
 richmarkdown_package_status=0
 xcodebuild test \
     -scheme RichMarkdown-Package \
+    -skip-testing:RichMarkdownBenchmarks \
     -parallel-testing-enabled NO \
     -destination "$destination" \
     -resultBundlePath "$richmarkdown_results_dir/package.xcresult" \

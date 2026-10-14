@@ -1,0 +1,146 @@
+# Author: JunyoungJung
+# Date: 2026-10-14
+#
+# 커밋마다 도는 게이트 (Docs/report/verification 그림 5). 순서: 빌드 → 테스트(fixture·퍼즈 1만 회 포함)
+# → 커버리지 기준 → 정적 분석 → 의존성 감사. 실기기 성능·퍼즈 10만 회는 workflow_dispatch로 따로 실행한다.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      fuzz_iterations:
+        description: "Core 퍼즈 반복 횟수 (기본 10000, 릴리스 전 100000)"
+        required: false
+        default: "10000"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RICHMARKDOWN_FUZZ_ITERATIONS: ${{ github.event.inputs.fuzz_iterations || '10000' }}
+
+# 액션은 커밋 SHA로 고정한다(태그는 옮겨질 수 있다, semgrep github-actions-mutable-action-tag). 주석이 버전이다.
+jobs:
+  core-and-js:
+    name: Core 호스트 빌드 · Mermaid JS 회귀
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Xcode 26.6 선택
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - name: Core 호스트 빌드 (Foundation-only)
+        run: swift build --target RichMarkdownCore
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+      - name: Mermaid 번들 회귀 (CSP · 설정 잠금 · 취소)
+        run: node Sources/RichMarkdownMermaid/Web/regression-test.mjs
+      - name: fixture manifest 해시 검사
+        run: python3 scripts/fixtures-manifest.py --check
+
+  package-tests:
+    name: 패키지 테스트 · 커버리지 게이트
+    needs: core-and-js
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Xcode 26.6 선택
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - name: 시뮬레이터 선택 (설치된 iPhone 중 최신 iOS)
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          c = [(rt, x["udid"]) for rt, xs in d.items() if "iOS" in rt for x in xs if x["name"].startswith("iPhone")]
+          print(sorted(c)[-1][1])')
+          echo "destination=platform=iOS Simulator,id=$udid" >> "$GITHUB_OUTPUT"
+      - name: 패키지 테스트 (벤치마크 제외)
+        run: |
+          set -o pipefail
+          xcodebuild test -scheme RichMarkdown-Package -parallel-testing-enabled NO \
+            -skip-testing:RichMarkdownBenchmarks \
+            -destination "${{ steps.sim.outputs.destination }}" \
+            -resultBundlePath "$RUNNER_TEMP/package.xcresult" -enableCodeCoverage YES \
+            > "$RUNNER_TEMP/package-tests.log" 2>&1 || { tail -200 "$RUNNER_TEMP/package-tests.log"; exit 1; }
+          grep -E "Test run with|\*\* TEST" "$RUNNER_TEMP/package-tests.log" | tail -10
+      - name: 커버리지 게이트 (Core 90% · 전체 80%)
+        run: |
+          xcrun xccov view --report --json "$RUNNER_TEMP/package.xcresult" > "$RUNNER_TEMP/coverage.json"
+          python3 scripts/coverage-gate.py "$RUNNER_TEMP/coverage.json" --core 0.90 --total 0.80
+      - name: 결과 보존
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-xcresult
+          path: |
+            ${{ runner.temp }}/package.xcresult
+            ${{ runner.temp }}/package-tests.log
+          retention-days: 14
+
+  demo-tests:
+    name: 데모 앱 단위 · UI · 접근성 테스트
+    needs: core-and-js
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Xcode 26.6 선택
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - name: 시뮬레이터 선택
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          c = [(rt, x["udid"]) for rt, xs in d.items() if "iOS" in rt for x in xs if x["name"].startswith("iPhone")]
+          print(sorted(c)[-1][1])')
+          echo "destination=platform=iOS Simulator,id=$udid" >> "$GITHUB_OUTPUT"
+      - name: 데모 테스트 (성능 측정 테스트 제외)
+        run: |
+          set -o pipefail
+          xcodebuild test -project Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj -scheme RichMarkdownDemo \
+            -testPlan RichMarkdownDemo -destination "${{ steps.sim.outputs.destination }}" \
+            -skip-testing:RichMarkdownDemoUITests/LaunchPerformanceTests \
+            -skip-testing:RichMarkdownDemoUITests/PerfScenarioUITests \
+            -resultBundlePath "$RUNNER_TEMP/demo.xcresult" \
+            > "$RUNNER_TEMP/demo-tests.log" 2>&1 || { tail -200 "$RUNNER_TEMP/demo-tests.log"; exit 1; }
+          grep -E "Executed [0-9]+ tests|\*\* TEST" "$RUNNER_TEMP/demo-tests.log" | tail -5
+      - name: 결과 보존
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: demo-xcresult
+          path: ${{ runner.temp }}/demo.xcresult
+          retention-days: 14
+
+  static-analysis:
+    name: 정적 분석 · 의존성 감사
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: semgrep (swift · javascript · OWASP Top 10 · secrets)
+        run: |
+          pipx install semgrep
+          semgrep scan --metrics=off --error \
+            --config p/swift --config p/javascript --config p/owasp-top-ten --config p/secrets \
+            --exclude Resources --exclude node_modules --exclude '*.min.js' \
+            Sources Examples scripts
+      - name: osv-scanner (Package.resolved · Mermaid package-lock)
+        run: |
+          curl -fsSL -o osv-scanner https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
+          chmod +x osv-scanner
+          ./osv-scanner scan --lockfile Package.resolved --lockfile Sources/RichMarkdownMermaid/Web/package-lock.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+      - name: npm audit (Mermaid 번들 원본)
+        working-directory: Sources/RichMarkdownMermaid/Web
+        run: npm audit --audit-level=low
