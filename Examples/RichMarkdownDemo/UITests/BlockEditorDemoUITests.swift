@@ -106,7 +106,9 @@ final class BlockEditorDemoUITests: XCTestCase {
         let app = launchBlockEditor()
         let document = app.textViews["blockDocumentTextView"]
         XCTAssertTrue(document.waitForExistence(timeout: 15))
-        document.tap()
+        // 가운데를 탭하면 기기·OS별 배치에 따라 코드 블록에 캐럿이 놓여 인라인 서식 버튼이 없다(iOS 26.5 실측).
+        // 위쪽 본문 문단을 탭한다.
+        document.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.1)).tap()
 
         let toolbar = app.otherElements["blockKeyboardToolbar"]
         let addButton = app.buttons["blockToolbar.add"]
@@ -330,12 +332,22 @@ final class BlockEditorDemoUITests: XCTestCase {
         return XCTWaiter.wait(for: [expectation], timeout: 5) == .completed
     }
 
+    /// 편집 메뉴의 전체 선택. 캐럿을 놓은 자리를 한 번 더 탭해 편집 메뉴를 연다. iOS 26 시뮬레이터에서는
+    /// 길게 눌러도 메뉴가 뜨지 않았다(2026-10-14 실측). 두 번째 탭은 이중 탭(단어 선택)으로 읽히지 않게 간격을 둔다.
+    /// 하드웨어 키(⌘A)는 소프트웨어 키보드를 내려 화면 갱신이 선택을 되돌리므로 쓰지 않는다.
     private func selectAll(in element: XCUIElement, app: XCUIApplication) throws {
         let textCoordinate = element.coordinate(
             withNormalizedOffset: CGVector(dx: 0.2, dy: 0.05)
         )
         textCoordinate.tap()
-        textCoordinate.press(forDuration: 1)
+        Thread.sleep(forTimeInterval: 0.8)
+        textCoordinate.tap()
+        let menuItem = app.menuItems.matching(
+            NSPredicate(format: "label IN %@", ["Select All", "전체 선택"])
+        ).firstMatch
+        if !menuItem.waitForExistence(timeout: 3) {
+            textCoordinate.press(forDuration: 1)  // iOS 18 이하에서 쓰던 길게 누르기
+        }
         try tapEditMenuItem(["Select All", "전체 선택"], in: app)
     }
 
