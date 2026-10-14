@@ -54,7 +54,8 @@ import WebKit
     /// 기한은 제품의 페이지 로드 기한(15초)과 같다. 방금 부팅한 시뮬레이터에서는 첫 WebContent 프로세스 기동만으로
     /// 5초를 넘겨 첫 실제 렌더 테스트가 실패했다(2026-10-14, iPhone 15 iOS 18.6 콜드 부팅, 재실행 2회는 통과).
     private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(15)
+        // 느린 CI 시뮬레이터의 첫 WKWebView 로드(WebContent 프로세스 기동)를 기다린다. 조건이 맞으면 바로 끝난다.
+        let deadline = Date().addingTimeInterval(60)
         while !condition() {
             if Date() > deadline { throw MermaidError.loadTimeout }
             try await Task.sleep(nanoseconds: 10_000_000)
@@ -125,6 +126,8 @@ import WebKit
     @Test func concurrentLoadWaitersCancelIndependentlyAndShareOneNavigation() async throws {
         let host = Host()
         defer { host.tearDown() }
+        // 내비게이션을 붙잡는 동안 렌더러의 로드 상한이 먼저 끝나지 않게 한다(느린 CI 시뮬레이터의 첫 로드).
+        host.renderer.loadTimeoutNanoseconds = 60_000_000_000
         let held = HeldNavigation()
         host.renderer.webView.navigationDelegate = held
         var firstCancelled = false
@@ -176,6 +179,7 @@ import WebKit
     @Test func terminationAfterLoadSuccessIsReportedBeforeJavaScriptDispatch() async throws {
         let host = Host()
         defer { host.tearDown() }
+        host.renderer.loadTimeoutNanoseconds = 60_000_000_000  // 위 테스트와 같은 이유
         let held = HeldNavigation()
         host.renderer.webView.navigationDelegate = held
         let task = Task {

@@ -59,6 +59,8 @@ public final class MermaidWebRenderer: NSObject, WKNavigationDelegate {
     private var reportedTermination = false
     // 공개 설정은 추가하지 않는다. 테스트는 완료되지 않는 JS 응답의 deadline만 짧게 주입한다.
     var renderTimeoutNanoseconds: UInt64 = 15_000_000_000
+    /// 페이지 로드 상한. 테스트가 느린 CI 시뮬레이터의 첫 WebContent 프로세스 기동을 기다릴 때만 늘린다.
+    var loadTimeoutNanoseconds: UInt64 = 15_000_000_000
 
     public override init() {
         let configuration = WKWebViewConfiguration()
@@ -205,7 +207,8 @@ public final class MermaidWebRenderer: NSObject, WKNavigationDelegate {
                 loadGeneration = generation
                 loadNavigation = webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
                 loadTimeout = Task { [weak self] in
-                    do { try await Task.sleep(nanoseconds: 15_000_000_000) } catch { return }
+                    guard let limit = self?.loadTimeoutNanoseconds else { return }
+                    do { try await Task.sleep(nanoseconds: limit) } catch { return }
                     guard self?.loadGeneration == generation else { return }
                     self?.finishLoading(.failure(MermaidError.loadTimeout))
                 }
