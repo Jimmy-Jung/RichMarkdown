@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1460" height="600" viewBox="0 0 1460 600" role="img" aria-label="rmv-01-pipeline">
+<title>rmv-01-pipeline</title><g transform="translate(0.00,0.00)">
+<path d="M40.00 40.00 L290.00 40.00 L290.00 560.00 L40.00 560.00" stroke="none" fill="#f6f6f6" />
+<path d="M40.00 40.00 C139.12 40.00,238.24 40.00,290.00 40.00 M40.00 40.00 C123.71 40.00,207.42 40.00,290.00 40.00 M290.00 40.00 C290.00 176.53,290.00 313.05,290.00 560.00 M290.00 40.00 C290.00 181.56,290.00 323.12,290.00 560.00 M290.00 560.00 C190.78 560.00,91.57 560.00,40.00 560.00 M290.00 560.00 C229.43 560.00,168.86 560.00,40.00 560.00 M40.00 560.00 C40.00 382.71,40.00 205.41,40.00 40.00 M40.00 560.00 C40.00 363.36,40.00 166.72,40.00 40.00" stroke="#b5b5b5" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="54.00" y="68.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="18" fill="#1b1b1b" text-anchor="start"><tspan x="54.00" dy="0">공용 입력</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M65.00 95.00 L265.00 95.00 L265.00 167.00 L65.00 167.00" stroke="none" fill="#ffffff" />
+<path d="M65.00 95.00 C144.30 95.00,223.59 95.00,265.00 95.00 M65.00 95.00 C140.51 95.00,216.01 95.00,265.00 95.00 M265.00 95.00 C265.00 116.42,265.00 137.85,265.00 167.00 M265.00 95.00 C265.00 110.05,265.00 125.10,265.00 167.00 M265.00 167.00 C219.36 167.00,173.71 167.00,65.00 167.00 M265.00 167.00 C186.18 167.00,107.36 167.00,65.00 167.00 M65.00 167.00 C65.00 144.35,65.00 121.70,65.00 95.00 M65.00 167.00 C65.00 144.99,65.00 122.98,65.00 95.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="165.00" y="127.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="165.00" dy="0">fixture 코퍼스</tspan><tspan x="165.00" dy="18.75">.md + 기대값 JSON</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M65.00 207.00 L265.00 207.00 L265.00 279.00 L65.00 279.00" stroke="none" fill="#ffffff" />
+<path d="M65.00 207.00 C144.30 207.00,223.60 207.00,265.00 207.00 M65.00 207.00 C109.05 207.00,153.10 207.00,265.00 207.00 M265.00 207.00 C265.00 230.94,265.00 254.89,265.00 279.00 M265.00 207.00 C265.00 231.90,265.00 256.80,265.00 279.00 M265.00 279.00 C213.09 279.00,161.18 279.00,65.00 279.00 M265.00 279.00 C195.81 279.00,126.63 279.00,65.00 279.00 M65.00 279.00 C65.00 258.25,65.00 237.50,65.00 207.00 M65.00 279.00 C65.00 262.21,65.00 245.42,65.00 207.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="165.00" y="239.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="165.00" dy="0">병리 입력 생성 규칙</tspan><tspan x="165.00" dy="18.75">.gen.json</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M65.00 319.00 L265.00 319.00 L265.00 391.00 L65.00 391.00" stroke="none" fill="#ffffff" />
+<path d="M65.00 319.00 C144.30 319.00,223.60 319.00,265.00 319.00 M65.00 319.00 C117.59 319.00,170.18 319.00,265.00 319.00 M265.00 319.00 C265.00 345.46,265.00 371.93,265.00 391.00 M265.00 319.00 C265.00 339.35,265.00 359.69,265.00 391.00 M265.00 391.00 C206.82 391.00,148.64 391.00,65.00 391.00 M265.00 391.00 C205.45 391.00,145.90 391.00,65.00 391.00 M65.00 391.00 C65.00 372.15,65.00 353.30,65.00 319.00 M65.00 391.00 C65.00 365.03,65.00 339.05,65.00 319.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="165.00" y="351.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="165.00" dy="0">퍼즈 생성기</tspan><tspan x="165.00" dy="18.75">같은 알고리즘·같은 시드</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M65.00 431.00 L265.00 431.00 L265.00 503.00 L65.00 503.00" stroke="none" fill="#ffffff" />
+<path d="M65.00 431.00 C144.30 431.00,223.60 431.00,265.00 431.00 M65.00 431.00 C126.13 431.00,187.26 431.00,265.00 431.00 M265.00 431.00 C265.00 445.58,265.00 460.17,265.00 503.00 M265.00 431.00 C265.00 446.80,265.00 462.59,265.00 503.00 M265.00 503.00 C200.55 503.00,136.10 503.00,65.00 503.00 M265.00 503.00 C215.08 503.00,165.17 503.00,65.00 503.00 M65.00 503.00 C65.00 486.05,65.00 469.10,65.00 431.00 M65.00 503.00 C65.00 482.24,65.00 461.49,65.00 431.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="165.00" y="463.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="165.00" dy="0">manifest.json</tspan><tspan x="165.00" dy="18.75">파일별 SHA-256</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="65.00" y="524.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="12" fill="#8a8a8a" text-anchor="start"><tspan x="65.00" dy="0">정본: iOS 저장소</tspan><tspan x="65.00" dy="15">Android는 해시 대조 후 사용</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M330.00 40.00 L990.00 40.00 L990.00 285.00 L330.00 285.00" stroke="none" fill="#f6f6f6" />
+<path d="M330.00 40.00 C591.71 40.00,853.41 40.00,990.00 40.00 M330.00 40.00 C574.00 40.00,818.01 40.00,990.00 40.00 M990.00 40.00 C990.00 102.49,990.00 164.99,990.00 285.00 M990.00 40.00 C990.00 95.02,990.00 150.04,990.00 285.00 M990.00 285.00 C746.28 285.00,502.57 285.00,330.00 285.00 M990.00 285.00 C740.97 285.00,491.93 285.00,330.00 285.00 M330.00 285.00 C330.00 212.52,330.00 140.03,330.00 40.00 M330.00 285.00 C330.00 192.00,330.00 99.00,330.00 40.00" stroke="#b5b5b5" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="344.00" y="68.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="18" fill="#1b1b1b" text-anchor="start"><tspan x="344.00" dy="0">iOS · Swift</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M350.00 95.00 L540.00 95.00 L540.00 159.00 L350.00 159.00" stroke="none" fill="#ffffff" />
+<path d="M350.00 95.00 C425.34 95.00,500.68 95.00,540.00 95.00 M350.00 95.00 C390.36 95.00,430.71 95.00,540.00 95.00 M540.00 95.00 C540.00 113.57,540.00 132.13,540.00 159.00 M540.00 95.00 C540.00 118.13,540.00 141.26,540.00 159.00 M540.00 159.00 C501.88 159.00,463.77 159.00,350.00 159.00 M540.00 159.00 C477.46 159.00,414.92 159.00,350.00 159.00 M350.00 159.00 C350.00 141.75,350.00 124.51,350.00 95.00 M350.00 159.00 C350.00 139.34,350.00 119.69,350.00 95.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="445.00" y="123.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="445.00" dy="0">XCTest metrics</tspan><tspan x="445.00" dy="18.75">시간·메모리·CPU</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M560.00 95.00 L750.00 95.00 L750.00 159.00 L560.00 159.00" stroke="none" fill="#ffffff" />
+<path d="M560.00 95.00 C635.34 95.00,710.69 95.00,750.00 95.00 M560.00 95.00 C608.47 95.00,656.94 95.00,750.00 95.00 M750.00 95.00 C750.00 115.81,750.00 136.61,750.00 159.00 M750.00 95.00 C750.00 114.08,750.00 133.16,750.00 159.00 M750.00 159.00 C705.93 159.00,661.86 159.00,560.00 159.00 M750.00 159.00 C696.61 159.00,643.23 159.00,560.00 159.00 M560.00 159.00 C560.00 143.44,560.00 127.88,560.00 95.00 M560.00 159.00 C560.00 143.98,560.00 128.96,560.00 95.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="655.00" y="123.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="655.00" dy="0">xctrace</tspan><tspan x="655.00" dy="18.75">Time Profiler·Hitches</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M800.00 95.00 L970.00 95.00 L970.00 159.00 L800.00 159.00" stroke="none" fill="#ffffff" />
+<path d="M800.00 95.00 C867.41 95.00,934.83 95.00,970.00 95.00 M800.00 95.00 C850.63 95.00,901.26 95.00,970.00 95.00 M970.00 95.00 C970.00 118.05,970.00 141.09,970.00 159.00 M970.00 95.00 C970.00 110.04,970.00 125.07,970.00 159.00 M970.00 159.00 C925.24 159.00,880.48 159.00,800.00 159.00 M970.00 159.00 C930.42 159.00,890.85 159.00,800.00 159.00 M800.00 159.00 C800.00 145.13,800.00 131.26,800.00 95.00 M800.00 159.00 C800.00 135.82,800.00 112.64,800.00 95.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="885.00" y="132.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="885.00" dy="0">원시 측정 JSON</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M350.00 195.00 L750.00 195.00 L750.00 259.00 L350.00 259.00" stroke="none" fill="#ffffff" />
+<path d="M350.00 195.00 C508.62 195.00,667.25 195.00,750.00 195.00 M350.00 195.00 C486.21 195.00,622.41 195.00,750.00 195.00 M750.00 195.00 C750.00 220.29,750.00 245.57,750.00 259.00 M750.00 195.00 C750.00 218.79,750.00 242.58,750.00 259.00 M750.00 259.00 C632.14 259.00,514.28 259.00,350.00 259.00 M750.00 259.00 C596.15 259.00,442.30 259.00,350.00 259.00 M350.00 259.00 C350.00 234.02,350.00 209.04,350.00 195.00 M350.00 259.00 C350.00 240.46,350.00 221.92,350.00 195.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="550.00" y="232.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="550.00" dy="0">Swift Testing — fixture·병리 입력·퍼즈 러너</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M800.00 195.00 L970.00 195.00 L970.00 259.00 L800.00 259.00" stroke="none" fill="#ffffff" />
+<path d="M800.00 195.00 C867.42 195.00,934.83 195.00,970.00 195.00 M800.00 195.00 C865.15 195.00,930.30 195.00,970.00 195.00 M970.00 195.00 C970.00 209.73,970.00 224.45,970.00 259.00 M970.00 195.00 C970.00 214.75,970.00 234.49,970.00 259.00 M970.00 259.00 C914.58 259.00,859.16 259.00,800.00 259.00 M970.00 259.00 C912.80 259.00,855.61 259.00,800.00 259.00 M800.00 259.00 C800.00 235.71,800.00 212.42,800.00 195.00 M800.00 259.00 C800.00 245.10,800.00 231.19,800.00 195.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="885.00" y="232.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="885.00" dy="0">정규화 JSON</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M750.00 127.00 C769.83 127.00,789.66 127.00,800.00 127.00 M750.00 127.00 C761.30 127.00,772.59 127.00,800.00 127.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M787.01 134.50 L800.00 127.00 L787.01 119.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M750.00 227.00 C769.83 227.00,789.66 227.00,800.00 227.00 M750.00 227.00 C762.36 227.00,774.73 227.00,800.00 227.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M787.01 234.50 L800.00 227.00 L787.01 219.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M330.00 315.00 L990.00 315.00 L990.00 560.00 L330.00 560.00" stroke="none" fill="#f6f6f6" />
+<path d="M330.00 315.00 C591.75 315.00,853.49 315.00,990.00 315.00 M330.00 315.00 C507.29 315.00,684.59 315.00,990.00 315.00 M990.00 315.00 C990.00 388.53,990.00 462.05,990.00 560.00 M990.00 315.00 C990.00 408.62,990.00 502.24,990.00 560.00 M990.00 560.00 C733.47 560.00,476.94 560.00,330.00 560.00 M990.00 560.00 C831.53 560.00,673.07 560.00,330.00 560.00 M330.00 560.00 C330.00 483.76,330.00 407.52,330.00 315.00 M330.00 560.00 C330.00 493.28,330.00 426.57,330.00 315.00" stroke="#b5b5b5" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="344.00" y="343.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="18" fill="#1b1b1b" text-anchor="start"><tspan x="344.00" dy="0">Android · Kotlin</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M350.00 370.00 L750.00 370.00 L750.00 434.00 L350.00 434.00" stroke="none" fill="#ffffff" />
+<path d="M350.00 370.00 C508.64 370.00,667.28 370.00,750.00 370.00 M350.00 370.00 C474.53 370.00,599.07 370.00,750.00 370.00 M750.00 370.00 C750.00 391.45,750.00 412.89,750.00 434.00 M750.00 370.00 C750.00 390.41,750.00 410.82,750.00 434.00 M750.00 434.00 C661.99 434.00,573.98 434.00,350.00 434.00 M750.00 434.00 C593.23 434.00,436.46 434.00,350.00 434.00 M350.00 434.00 C350.00 415.77,350.00 397.55,350.00 370.00 M350.00 434.00 C350.00 408.41,350.00 382.82,350.00 370.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="550.00" y="407.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="550.00" dy="0">JUnit 5 — fixture·병리 입력·퍼즈 러너</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M800.00 370.00 L970.00 370.00 L970.00 434.00 L800.00 434.00" stroke="none" fill="#ffffff" />
+<path d="M800.00 370.00 C867.42 370.00,934.85 370.00,970.00 370.00 M800.00 370.00 C860.19 370.00,920.37 370.00,970.00 370.00 M970.00 370.00 C970.00 393.69,970.00 417.37,970.00 434.00 M970.00 370.00 C970.00 386.36,970.00 402.73,970.00 434.00 M970.00 434.00 C927.27 434.00,884.53 434.00,800.00 434.00 M970.00 434.00 C911.56 434.00,853.12 434.00,800.00 434.00 M800.00 434.00 C800.00 417.46,800.00 400.92,800.00 370.00 M800.00 434.00 C800.00 413.05,800.00 392.10,800.00 370.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="885.00" y="407.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="885.00" dy="0">정규화 JSON</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M350.00 470.00 L540.00 470.00 L540.00 534.00 L350.00 534.00" stroke="none" fill="#ffffff" />
+<path d="M350.00 470.00 C425.36 470.00,500.71 470.00,540.00 470.00 M350.00 470.00 C425.38 470.00,500.76 470.00,540.00 470.00 M540.00 470.00 C540.00 483.13,540.00 496.26,540.00 534.00 M540.00 470.00 C540.00 495.12,540.00 520.24,540.00 534.00 M540.00 534.00 C486.28 534.00,432.57 534.00,350.00 534.00 M540.00 534.00 C483.84 534.00,427.68 534.00,350.00 534.00 M350.00 534.00 C350.00 519.15,350.00 504.30,350.00 470.00 M350.00 534.00 C350.00 517.69,350.00 501.37,350.00 470.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="445.00" y="498.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="445.00" dy="0">Microbenchmark</tspan><tspan x="445.00" dy="18.75">중앙값·할당 수</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M560.00 470.00 L750.00 470.00 L750.00 534.00 L560.00 534.00" stroke="none" fill="#ffffff" />
+<path d="M560.00 470.00 C635.36 470.00,710.72 470.00,750.00 470.00 M560.00 470.00 C605.49 470.00,650.99 470.00,750.00 470.00 M750.00 470.00 C750.00 485.37,750.00 500.74,750.00 534.00 M750.00 470.00 C750.00 491.07,750.00 512.15,750.00 534.00 M750.00 534.00 C690.33 534.00,630.66 534.00,560.00 534.00 M750.00 534.00 C702.99 534.00,655.99 534.00,560.00 534.00 M560.00 534.00 C560.00 520.84,560.00 507.68,560.00 470.00 M560.00 534.00 C560.00 509.52,560.00 485.05,560.00 470.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="655.00" y="498.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="655.00" dy="0">Macrobenchmark</tspan><tspan x="655.00" dy="18.75">+ Perfetto</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M800.00 470.00 L970.00 470.00 L970.00 534.00 L800.00 534.00" stroke="none" fill="#ffffff" />
+<path d="M800.00 470.00 C867.43 470.00,934.85 470.00,970.00 470.00 M800.00 470.00 C847.97 470.00,895.93 470.00,970.00 470.00 M970.00 470.00 C970.00 487.61,970.00 505.22,970.00 534.00 M970.00 470.00 C970.00 487.03,970.00 504.06,970.00 534.00 M970.00 534.00 C911.28 534.00,852.56 534.00,800.00 534.00 M970.00 534.00 C902.13 534.00,834.26 534.00,800.00 534.00 M800.00 534.00 C800.00 509.73,800.00 485.45,800.00 470.00 M800.00 534.00 C800.00 514.16,800.00 494.32,800.00 470.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="885.00" y="507.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="885.00" dy="0">원시 측정 JSON</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M750.00 402.00 C769.83 402.00,789.66 402.00,800.00 402.00 M750.00 402.00 C766.24 402.00,782.49 402.00,800.00 402.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M787.01 409.50 L800.00 402.00 L787.01 394.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M750.00 502.00 C769.83 502.00,789.66 502.00,800.00 502.00 M750.00 502.00 C767.31 502.00,784.62 502.00,800.00 502.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M787.01 509.50 L800.00 502.00 L787.01 494.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M290.00 230.00 C305.87 230.00,321.73 230.00,330.00 230.00 M290.00 230.00 C304.70 230.00,319.40 230.00,330.00 230.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M317.01 237.50 L330.00 230.00 L317.01 222.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M290.00 400.00 C305.87 400.00,321.73 400.00,330.00 400.00 M290.00 400.00 C305.56 400.00,321.11 400.00,330.00 400.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M317.01 407.50 L330.00 400.00 L317.01 392.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M1050.00 270.00 L1220.00 270.00 L1220.00 342.00 L1050.00 342.00" stroke="none" fill="#e6ecf3" />
+<path d="M1050.00 270.00 C1117.43 270.00,1184.86 270.00,1220.00 270.00 M1050.00 270.00 C1085.74 270.00,1121.49 270.00,1220.00 270.00 M1220.00 270.00 C1220.00 297.37,1220.00 324.74,1220.00 342.00 M1220.00 270.00 C1220.00 289.90,1220.00 309.81,1220.00 342.00 M1220.00 342.00 C1179.29 342.00,1138.59 342.00,1050.00 342.00 M1220.00 342.00 C1176.70 342.00,1133.40 342.00,1050.00 342.00 M1050.00 342.00 C1050.00 320.39,1050.00 298.78,1050.00 270.00 M1050.00 342.00 C1050.00 320.93,1050.00 299.87,1050.00 270.00" stroke="#355579" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="1135.00" y="302.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="1135.00" dy="0">패리티 비교</tspan><tspan x="1135.00" dy="18.75">fixtures-parity.py</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M970.00 227.00 C985.87 227.00,1001.73 227.00,1010.00 227.00 M970.00 227.00 C980.12 227.00,990.24 227.00,1010.00 227.00 M1010.00 227.00 C1010.00 240.55,1010.00 254.11,1010.00 290.00 M1010.00 227.00 C1010.00 240.43,1010.00 253.87,1010.00 290.00 M1010.00 290.00 C1020.83 290.00,1031.66 290.00,1050.00 290.00 M1010.00 290.00 C1018.26 290.00,1026.52 290.00,1050.00 290.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1037.01 297.50 L1050.00 290.00 L1037.01 282.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M970.00 402.00 C985.87 402.00,1001.73 402.00,1010.00 402.00 M970.00 402.00 C980.97 402.00,991.95 402.00,1010.00 402.00 M1010.00 402.00 C1010.00 383.39,1010.00 364.78,1010.00 322.00 M1010.00 402.00 C1010.00 379.47,1010.00 356.94,1010.00 322.00 M1010.00 322.00 C1021.46 322.00,1032.92 322.00,1050.00 322.00 M1010.00 322.00 C1025.30 322.00,1040.60 322.00,1050.00 322.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1037.01 329.50 L1050.00 322.00 L1037.01 314.50 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="1135.00" y="365.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="13" fill="#555555" text-anchor="middle"><tspan x="1135.00" dy="0">일치 · 승인 예외 · 미해결</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M1270.00 262.00 L1420.00 262.00 L1420.00 350.00 L1270.00 350.00" stroke="none" fill="#ffffff" />
+<path d="M1270.00 262.00 C1329.50 262.00,1389.00 262.00,1420.00 262.00 M1270.00 262.00 C1317.55 262.00,1365.11 262.00,1420.00 262.00 M1420.00 262.00 C1420.00 285.55,1420.00 309.11,1420.00 350.00 M1420.00 262.00 C1420.00 281.22,1420.00 300.44,1420.00 350.00 M1420.00 350.00 C1372.33 350.00,1324.66 350.00,1270.00 350.00 M1420.00 350.00 C1369.86 350.00,1319.72 350.00,1270.00 350.00 M1270.00 350.00 C1270.00 320.59,1270.00 291.18,1270.00 262.00 M1270.00 350.00 C1270.00 322.60,1270.00 295.19,1270.00 262.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<text x="1345.00" y="292.88" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="1345.00" dy="0">수치 집계</tspan><tspan x="1345.00" dy="18.75">data/*.csv</tspan><tspan x="1345.00" dy="18.75">→ 그래프 · 표</tspan></text>
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M970.00 127.00 C1118.76 127.00,1267.52 127.00,1345.00 127.00 M970.00 127.00 C1104.90 127.00,1239.79 127.00,1345.00 127.00 M1345.00 127.00 C1345.00 167.86,1345.00 208.72,1345.00 262.00 M1345.00 127.00 C1345.00 174.96,1345.00 222.91,1345.00 262.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1337.50 249.01 L1345.00 262.00 L1352.50 249.01 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(0.00,0.00)">
+<path d="M970.00 502.00 C1118.76 502.00,1267.52 502.00,1345.00 502.00 M970.00 502.00 C1112.90 502.00,1255.81 502.00,1345.00 502.00 M1345.00 502.00 C1345.00 453.34,1345.00 404.67,1345.00 350.00 M1345.00 502.00 C1345.00 468.01,1345.00 434.02,1345.00 350.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M1352.50 362.99 L1345.00 350.00 L1337.50 362.99 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+</svg>

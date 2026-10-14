@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1413" height="514" viewBox="0 0 1413 514" role="img" aria-label="rmv-02-test-layers">
+<title>rmv-02-test-layers</title><g transform="translate(-20.00,26.00)">
+<path d="M510.00 40.00 L870.00 40.00 L870.00 112.00 L510.00 112.00" stroke="none" fill="#ffffff" />
+<path d="M510.00 40.00 C652.73 40.00,795.46 40.00,870.00 40.00 M510.00 40.00 C630.54 40.00,751.08 40.00,870.00 40.00 M870.00 40.00 C870.00 58.90,870.00 77.81,870.00 112.00 M870.00 40.00 C870.00 59.60,870.00 79.20,870.00 112.00 M870.00 112.00 C727.13 112.00,584.25 112.00,510.00 112.00 M870.00 112.00 C782.78 112.00,695.55 112.00,510.00 112.00 M510.00 112.00 C510.00 87.45,510.00 62.90,510.00 40.00 M510.00 112.00 C510.00 84.77,510.00 57.55,510.00 40.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="690.00" y="81.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="690.00" dy="0">실기기 성능 측정 · 사람이 보는 확인</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="1210.00" y="80.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#555555" text-anchor="start"><tspan x="1210.00" dy="0">실기기 · 릴리스 전 수동</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<path d="M430.00 124.00 L950.00 124.00 L950.00 196.00 L430.00 196.00" stroke="none" fill="#ffffff" />
+<path d="M430.00 124.00 C636.17 124.00,842.35 124.00,950.00 124.00 M430.00 124.00 C637.42 124.00,844.84 124.00,950.00 124.00 M950.00 124.00 C950.00 146.68,950.00 169.37,950.00 196.00 M950.00 124.00 C950.00 143.97,950.00 163.95,950.00 196.00 M950.00 196.00 C823.18 196.00,696.36 196.00,430.00 196.00 M950.00 196.00 C757.59 196.00,565.17 196.00,430.00 196.00 M430.00 196.00 C430.00 181.50,430.00 167.00,430.00 124.00 M430.00 196.00 C430.00 176.60,430.00 157.20,430.00 124.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="690.00" y="165.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="690.00" dy="0">데모 앱 UI · 접근성 감사</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="1210.00" y="164.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#555555" text-anchor="start"><tspan x="1210.00" dy="0">시뮬레이터 · 에뮬레이터</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<path d="M350.00 208.00 L1030.00 208.00 L1030.00 280.00 L350.00 280.00" stroke="none" fill="#ffffff" />
+<path d="M350.00 208.00 C619.62 208.00,889.24 208.00,1030.00 208.00 M350.00 208.00 C528.80 208.00,707.60 208.00,1030.00 208.00 M1030.00 208.00 C1030.00 234.46,1030.00 260.93,1030.00 280.00 M1030.00 208.00 C1030.00 228.35,1030.00 248.69,1030.00 280.00 M1030.00 280.00 C832.18 280.00,634.37 280.00,350.00 280.00 M1030.00 280.00 C827.52 280.00,625.04 280.00,350.00 280.00 M350.00 280.00 C350.00 261.15,350.00 242.30,350.00 208.00 M350.00 280.00 C350.00 254.03,350.00 228.05,350.00 208.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="690.00" y="249.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="690.00" dy="0">확장 모듈 — 코드 하이라이트 엔진 · Mermaid WebView 보안 입력</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="1210.00" y="248.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#555555" text-anchor="start"><tspan x="1210.00" dy="0">시뮬레이터 · 에뮬레이터</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<path d="M270.00 292.00 L1110.00 292.00 L1110.00 364.00 L270.00 364.00" stroke="none" fill="#ffffff" />
+<path d="M270.00 292.00 C603.07 292.00,936.14 292.00,1110.00 292.00 M270.00 292.00 C544.68 292.00,819.36 292.00,1110.00 292.00 M1110.00 292.00 C1110.00 307.85,1110.00 323.69,1110.00 364.00 M1110.00 292.00 C1110.00 312.72,1110.00 333.44,1110.00 364.00 M1110.00 364.00 C826.15 364.00,542.29 364.00,270.00 364.00 M1110.00 364.00 C920.58 364.00,731.16 364.00,270.00 364.00 M270.00 364.00 C270.00 340.80,270.00 317.60,270.00 292.00 M270.00 364.00 C270.00 345.85,270.00 327.70,270.00 292.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="690.00" y="333.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="690.00" dy="0">렌더 모델 · 뷰 — 스트리밍 동등성 · 렌더 스냅샷 · 수식 이미지</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="1210.00" y="332.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#555555" text-anchor="start"><tspan x="1210.00" dy="0">시뮬레이터 · 에뮬레이터</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<path d="M190.00 376.00 L1190.00 376.00 L1190.00 448.00 L190.00 448.00" stroke="none" fill="#e6ecf3" />
+<path d="M190.00 376.00 C586.53 376.00,983.06 376.00,1190.00 376.00 M190.00 376.00 C581.05 376.00,972.11 376.00,1190.00 376.00 M1190.00 376.00 C1190.00 395.63,1190.00 415.25,1190.00 448.00 M1190.00 376.00 C1190.00 397.09,1190.00 418.19,1190.00 448.00 M1190.00 448.00 C805.06 448.00,420.12 448.00,190.00 448.00 M1190.00 448.00 C836.76 448.00,483.52 448.00,190.00 448.00 M190.00 448.00 C190.00 420.45,190.00 392.90,190.00 376.00 M190.00 448.00 C190.00 423.28,190.00 398.56,190.00 376.00" stroke="#355579" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="690.00" y="417.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="690.00" dy="0">Core 파서 — 단위 · fixture 코퍼스 · 병리 입력 · 퍼즈</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="1210.00" y="416.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#555555" text-anchor="start"><tspan x="1210.00" dy="0">macOS 호스트 · JVM · 수 ms</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="1210.00" y="28.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="14" fill="#1b1b1b" text-anchor="start"><tspan x="1210.00" dy="0">실행 환경</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<path d="M60.00 448.00 C60.00 286.21,60.00 124.42,60.00 40.00 M60.00 448.00 C60.00 335.20,60.00 222.41,60.00 40.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+<path d="M67.50 52.99 L60.00 40.00 L52.50 52.99 Z" stroke="#5f5f5f" stroke-width="1.2" fill="#5f5f5f" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="72.00" y="53.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="13" fill="#555555" text-anchor="start"><tspan x="72.00" dy="0">실행 비용 큼</tspan><tspan x="72.00" dy="16.25">실제 환경에 가까움</tspan></text>
+</g>
+<g transform="translate(-20.00,26.00)">
+<text x="72.00" y="419.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="13" fill="#555555" text-anchor="start"><tspan x="72.00" dy="0">실행 빈도 높음</tspan><tspan x="72.00" dy="16.25">(매 커밋)</tspan></text>
+</g>
+</svg>
