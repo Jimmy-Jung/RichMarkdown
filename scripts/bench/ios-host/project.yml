@@ -1,0 +1,67 @@
+# 실기기 마이크로 벤치마크 호스트 (xcodegen). scripts/bench/ios-micro.sh가 빌드 슬롯에 생성한다:
+#   RICHMARKDOWN_ROOT=<저장소 절대 경로> xcodegen generate --spec scripts/bench/ios-host/project.yml --project <슬롯>/BenchHost
+# 프로젝트를 저장소 밖에 만들므로 경로는 모두 `${RICHMARKDOWN_ROOT}` 기준 절대 경로다(xcodegen 환경 변수 치환).
+# 테스트 번들은 Tests/RichMarkdownBenchmarks 소스를 그대로 컴파일하고, 패키지와 같은
+# `-package-name richmarkdown`으로 RichMarkdown·RichMarkdownCore의 `package` 심볼을 쓴다
+# (SwiftPM이 이 패키지에 넘기는 이름, 빌드 로그 실측). DEVELOPMENT_TEAM은 명령행으로만 넘긴다.
+name: RichMarkdownBenchmarkHost
+options:
+  bundleIdPrefix: dev.richmarkdown
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  RichMarkdown:
+    path: ${RICHMARKDOWN_ROOT}
+targets:
+  RichMarkdownBenchmarkHost:
+    type: application
+    platform: iOS
+    # 단일 파일 경로는 --project를 다른 곳에 두면 상대 경로가 깨진다(실측) — 폴더로 넣는다.
+    sources:
+      - path: ${RICHMARKDOWN_ROOT}/scripts/bench/ios-host
+        includes: ["*.swift"]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        CODE_SIGN_STYLE: Automatic
+        PRODUCT_BUNDLE_IDENTIFIER: dev.richmarkdown.BenchmarkHost
+        SWIFT_VERSION: "6.0"
+  # 패키지 테스트 타깃(RichMarkdownBenchmarks)과 이름이 같으면 scheme이 패키지 쪽 타깃으로 풀려
+  # 도구 호스팅 오류가 난다(실측). 이름을 달리한다.
+  RichMarkdownDeviceBenchmarks:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ${RICHMARKDOWN_ROOT}/Tests/RichMarkdownBenchmarks
+        excludes: ["Samples", "Samples/**"]
+      # 폴더 참조(type: folder)는 --project를 다른 곳에 둘 때 상대 경로가 깨진다(xcodegen 2.45.3 실측).
+      # 파일 그룹으로 넣어 .md를 번들 루트에 복사한다.
+      - path: ${RICHMARKDOWN_ROOT}/Tests/Fixtures/samples
+        includes: ["*.md"]
+        buildPhase: resources
+    dependencies:
+      - target: RichMarkdownBenchmarkHost
+        link: false
+      - package: RichMarkdown
+        product: RichMarkdown
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        PRODUCT_BUNDLE_IDENTIFIER: dev.richmarkdown.BenchmarkHostTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/RichMarkdownBenchmarkHost.app/RichMarkdownBenchmarkHost"
+        OTHER_SWIFT_FLAGS: "$(inherited) -package-name richmarkdown"
+        SWIFT_VERSION: "6.0"
+schemes:
+  RichMarkdownDeviceBenchmarks:
+    build:
+      targets:
+        RichMarkdownBenchmarkHost: all
+        RichMarkdownDeviceBenchmarks: [test]
+    test:
+      config: Release
+      debugEnabled: false
+      targets: [RichMarkdownDeviceBenchmarks]

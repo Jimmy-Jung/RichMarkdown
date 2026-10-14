@@ -88,5 +88,13 @@ let package = Package(
             name: "RichMarkdownMermaidTests",
             dependencies: ["RichMarkdownMermaid"]
         ),
+        // 성능 측정 전용(XCTest `measure(metrics:)`). 표준 CI는 `-skip-testing:RichMarkdownBenchmarks`로 건너뛴다.
+        // `@testable` 없이 package 심볼만 써서 Release 빌드로도 돈다. 실기기에는 호스트 경로가 없으므로
+        // `Samples`(→ ../Fixtures/samples 심볼릭 링크)를 번들 리소스로 복사한다.
+        .testTarget(
+            name: "RichMarkdownBenchmarks",
+            dependencies: ["RichMarkdown", "RichMarkdownCore"],
+            resources: [.copy("Samples")]
+        ),
     ]
 )

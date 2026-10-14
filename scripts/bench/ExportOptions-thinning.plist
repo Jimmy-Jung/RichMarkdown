@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 앱 크기 측정용 export 옵션: 개발 서명 + 모든 기기 변형 App Thinning (App Thinning Size Report.txt 생성). -->
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>debugging</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+    <key>thinning</key>
+    <string>&lt;thin-for-all-variants&gt;</string>
+    <key>compileBitcode</key>
+    <false/>
+    <key>stripSwiftSymbols</key>
+    <true/>
+</dict>
+</plist>
