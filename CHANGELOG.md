@@ -5,6 +5,47 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-14
+
+검증 보강 릴리스다. 테스트·벤치마크·정적 분석을 코드와 CI에 넣고, 검증이 찾은 결함을 모두 고쳤다.
+검증 보고서는 `Docs/report/verification/`에 있다.
+
+### 추가
+
+- 공용 fixture 코퍼스 `Tests/Fixtures`(CommonMark 0.31.2 예제 652건, 수식·유니코드·보안·병리 입력 생성 규칙·LLM 답변 샘플·회귀 입력)와
+  `manifest.json` 해시, Android 저장소와의 정규화 결과 비교(`scripts/fixtures-parity.py`, `scripts/fuzz-residual.py`).
+- Core fixture·병리 입력·퍼즈 러너. 퍼즈는 SplitMix64 고정 시드로 Android와 같은 입력열을 만든다(CI 1만 회, 수동 10만 회).
+- 렌더 스냅샷 40장, 스트리밍 동등성, Mermaid 공격 입력 18종, 하이라이트 언어 전수, 데모 전 화면 접근성 감사, 블록 편집기 호스팅·장식 테스트.
+- 성능 하네스: `RichMarkdownBenchmarks` 테스트 타깃, `scripts/bench/`(XCTest metrics·xctrace 시나리오·앱 크기), 실기기 측정 스크립트.
+- GitHub Actions 워크플로(빌드·테스트·커버리지 기준 Core 90%·전체 80%·semgrep·osv-scanner·npm audit, 액션은 커밋 SHA 고정).
+- 보고서 수치 파이프라인 `scripts/report/collect.py`·`charts.py`.
+- `RichMarkdownDiagramRendering.updateUIView(_:source:theme:)`(기본 구현 false). Mermaid 렌더러가 구현해 UIKit 스트리밍 중 WKWebView를 재사용한다.
+
+### 수정
+
+- 중첩 목록 65단계 이상에서의 크래시(목록 들여쓰기 48열 상한), 기호 수만 개 반복 입력의 O(n²) 처리.
+- swift-cmark 인라인 위치 보고 오류로 생기던 글자 손실·깨짐·수식 가림 문자 노출: 들여쓴·게으른 연속 줄, 역슬래시 강제 줄바꿈
+  (`\`만 있는 줄 포함), 표 머리글 들여쓰기, 표 셀의 이스케이프 세로선, 짝 없는 `~`, 표 머리 행 앞 문단, 일부만 쓰인 강조 구분자.
+- NUL·선두 BOM 처리, 자동 따옴표 변환 끔, 할 일 상자 판정·공백, 링크 라벨 백틱, 줄바꿈 앞뒤 공백.
+- iOS 16에서 규격 밖 글자가 있는 링크가 글자로 보이던 문제(iOS 17과 같은 대체 인코딩, 포트 숫자 검사).
+- 링크 주소에 보이지 않는 서식 문자가 있으면 링크로 만들지 않는다. http·https는 호스트가 있어야 한다.
+- UIKit 다크 모드 블록 수식이 원문으로 보이던 문제, 단독 수식 뷰 접근성 특성.
+- 블록 편집기: 연속 인용 바 끊김, iOS 26에서 마지막 인용 바가 한 줄 길게 그려지던 문제.
+- 공용 Mermaid 번들이 Android System WebView 93 미만에서 로드되지 않던 문제(`Web/polyfills.js`, esbuild 대상 chrome91). iOS에는 영향 없다.
+- Debug·AddressSanitizer 빌드에서 인용 64단계 입력이 협력 스레드 스택(512 KB)을 넘던 문제. 블록 변환 재귀의 프레임을 줄였다(릴리스 빌드는 영향 없었다).
+
+### 성능
+
+- 위치 보정(`InlineColumnShift`)의 swift-markdown 트리 순회를 파싱마다 네 번에서 한 번으로 줄이고, 1차 파싱 보정은 인라인 코드·HTML·링크·이미지가
+  있을 때만 만든다. 위치 보정을 넣으며 0.9.1 대비 약 2배가 됐던 파싱 시간이 약 1.45배로 줄었다(호스트 릴리스 50 KiB 10.2 → 19.6 → 14.8 ms,
+  iPad Pro M5 50 KiB 16.9 → 11.5 ms).
+  출력은 퍼즈 10만 회·fixture 전체에서 최적화 전과 같다.
+
+### 호환성
+
+- 공개 API는 `RichMarkdownDiagramRendering.updateUIView` 추가뿐이며 기본 구현이 있어 기존 구현체는 그대로 컴파일된다.
+- 상위 파서 차이(표 열 수·강조 구분자 해석 등, 검증 보고서 대장 D-03~D-09)는 Android와 표시가 다를 수 있다. 본문 글자 손실은 없다.
+
 ## [0.9.1] - 2026-10-08
 
 ### 추가

@@ -3,9 +3,10 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.9.1%20beta-yellow.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.10.0%20beta-yellow.svg)](CHANGELOG.md)
 
-> **0.9.1 beta** — README 스크린샷을 다시 촬영하고 블록 편집기 GIF를 추가한 문서 패치다(라이브러리 코드는 0.9.0과 같다).
+> **0.10.0 beta** — 검증 보강 릴리스. 공용 fixture·퍼즈·실기기 벤치마크·정적 분석을 코드와 CI에 넣고, 검증이 찾은 결함을 모두 고쳤다
+> ([검증 보고서](Docs/report/verification/README.md)).
 > 0.9.0부터 수식 엔진을 iOS·Android 공통 native [RaTeX](https://github.com/erweixin/RaTeX)
 > `0.1.14`와 KaTeX 서체로 통일했다. `\underbrace`·`array` 복합 수식을 지원한다. SwiftMath 의존성과
 > `LatexMathFont`·`mathFont:` 인자를 제거했으므로 [설치](#설치)의 마이그레이션 안내를 본다.
@@ -28,6 +29,13 @@ generation 관리를 공유한다.
 - 스트리밍 입력(최신 전체 `String`)을 전제로 설계했다. coalescing + latest-wins.
 - 시스템 텍스트 선택, Dynamic Type, VoiceOver, light/dark를 그대로 따른다
   (선택 예외 한 건은 [알려진 제약](#알려진-제약) 참고).
+
+## 0.10.0 베타 핵심
+
+- Android와 같은 공용 fixture(829건)·퍼즈(10만 회)로 두 구현의 정규화 결과를 비교하는 검증을 넣었다. 미해결 차이 0건이다.
+- 크래시 1건(중첩 목록), 처리 시간 폭증 2건, 상위 파서 위치 보고 오류로 생기던 글자 손실·깨짐, iOS 16 링크 표시 등을 고쳤다.
+- UIKit 스트리밍 중 Mermaid WKWebView를 재사용한다(`RichMarkdownDiagramRendering.updateUIView`, 기본 구현 있음).
+- 공개 API는 위 메서드 추가뿐이다. 0.9.x를 쓰는 앱은 코드 변경 없이 올릴 수 있다.
 
 ## 0.9.1 베타 핵심
 
@@ -150,7 +158,7 @@ SSE 스트리밍 GIF는 `scripts/capture-sse-gifs.sh`로, 블록 편집 GIF는 `
 ```swift
 dependencies: [
     // 0.x 베타는 minor 버전에서도 공개 API가 바뀔 수 있으므로 minor로 고정한다.
-    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.9.1")),
+    .package(url: "https://github.com/Jimmy-Jung/RichMarkdown.git", .upToNextMinor(from: "0.10.0")),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["RichMarkdown"]),
