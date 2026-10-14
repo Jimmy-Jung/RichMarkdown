@@ -3,6 +3,8 @@
 #
 # 커밋마다 도는 게이트 (Docs/report/verification 그림 5). 순서: 빌드 → 테스트(fixture·퍼즈 1만 회 포함)
 # → 커버리지 기준 → 정적 분석 → 의존성 감사. 실기기 성능·퍼즈 10만 회는 workflow_dispatch로 따로 실행한다.
+# 데모 UI·접근성 테스트는 공유 macOS 가상 머신에서 시간·입력 지연에 따라 매번 다른 테스트가 흔들려(2026-10-14 실행 3회,
+# 같은 테스트는 로컬 iOS 18.6·26.5에서 모두 통과) Android의 에뮬레이터 계측 테스트처럼 workflow_dispatch로 실행한다.
 name: CI
 
 on:
@@ -15,6 +17,10 @@ on:
         description: "Core 퍼즈 반복 횟수 (기본 10000, 릴리스 전 100000)"
         required: false
         default: "10000"
+      ui_tests:
+        description: "데모 UI·접근성 테스트 실행"
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -85,7 +91,7 @@ jobs:
           retention-days: 14
 
   demo-tests:
-    name: 데모 앱 단위 · UI · 접근성 테스트
+    name: 데모 앱 단위 테스트
     needs: core-and-js
     runs-on: macos-26
     timeout-minutes: 60
@@ -102,13 +108,12 @@ jobs:
           c = [(rt, x["udid"]) for rt, xs in d.items() if "iOS" in rt for x in xs if x["name"].startswith("iPhone")]
           print(sorted(c)[-1][1])')
           echo "destination=platform=iOS Simulator,id=$udid" >> "$GITHUB_OUTPUT"
-      - name: 데모 테스트 (성능 측정 테스트 제외)
+      - name: 데모 단위 테스트
         run: |
           set -o pipefail
           xcodebuild test -project Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj -scheme RichMarkdownDemo \
             -testPlan RichMarkdownDemo -destination "${{ steps.sim.outputs.destination }}" \
-            -skip-testing:RichMarkdownDemoUITests/LaunchPerformanceTests \
-            -skip-testing:RichMarkdownDemoUITests/PerfScenarioUITests \
+            -only-testing:RichMarkdownDemoTests \
             -resultBundlePath "$RUNNER_TEMP/demo.xcresult" \
             > "$RUNNER_TEMP/demo-tests.log" 2>&1 || { tail -200 "$RUNNER_TEMP/demo-tests.log"; exit 1; }
           grep -E "Executed [0-9]+ tests|\*\* TEST" "$RUNNER_TEMP/demo-tests.log" | tail -5
@@ -118,6 +123,44 @@ jobs:
         with:
           name: demo-xcresult
           path: ${{ runner.temp }}/demo.xcresult
+          retention-days: 14
+
+  demo-ui-tests:
+    name: 데모 앱 UI · 접근성 테스트 (수동)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.ui_tests == 'true'
+    needs: core-and-js
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Xcode 26.6 선택
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - name: 시뮬레이터 선택
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          c = [(rt, x["udid"]) for rt, xs in d.items() if "iOS" in rt for x in xs if x["name"].startswith("iPhone")]
+          print(sorted(c)[-1][1])')
+          echo "destination=platform=iOS Simulator,id=$udid" >> "$GITHUB_OUTPUT"
+      - name: 데모 UI·접근성 테스트 (성능 측정 테스트 제외)
+        run: |
+          set -o pipefail
+          xcodebuild test -project Examples/RichMarkdownDemo/RichMarkdownDemo.xcodeproj -scheme RichMarkdownDemo \
+            -testPlan RichMarkdownDemo -destination "${{ steps.sim.outputs.destination }}" \
+            -only-testing:RichMarkdownDemoUITests \
+            -skip-testing:RichMarkdownDemoUITests/LaunchPerformanceTests \
+            -skip-testing:RichMarkdownDemoUITests/PerfScenarioUITests \
+            -resultBundlePath "$RUNNER_TEMP/demo-ui.xcresult" \
+            > "$RUNNER_TEMP/demo-ui-tests.log" 2>&1 || { tail -200 "$RUNNER_TEMP/demo-ui-tests.log"; exit 1; }
+          grep -E "Executed [0-9]+ tests|\*\* TEST" "$RUNNER_TEMP/demo-ui-tests.log" | tail -5
+      - name: 결과 보존
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: demo-ui-xcresult
+          path: ${{ runner.temp }}/demo-ui.xcresult
           retention-days: 14
 
   static-analysis:
