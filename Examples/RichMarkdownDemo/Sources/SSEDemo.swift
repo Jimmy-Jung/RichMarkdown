@@ -817,11 +817,55 @@ private struct SSETranscriptView: View {
                 .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
                 .padding(DemoLayout.horizontalMargin)
                 .frame(maxWidth: .infinity)
+                .modifier(SSEContentHeightReporter())
             }
-            .onReceive(buffer.$text.dropFirst()) { _ in
-                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            .modifier(SSEBottomFollowing(proxy: proxy, anchorID: Self.bottomAnchor))
+        }
+    }
+}
+
+/// 내용이 자라면 하단을 따라간다. 예전처럼 `onReceive(buffer.$text)`에서 `proxy.scrollTo`를 부르면
+/// @Published setter 안에서 그래프 트랜잭션이 동기로 flush된다(p7 실측: 메인 스레드의 14%).
+/// - iOS 18+: 크기 변화에만 하단 고정(`.sizeChanges`). 초기 위치와 짧은 내용의 정렬은 위 그대로다.
+/// - iOS 17: `defaultScrollAnchor(.bottom)`(역할 구분 API가 없다).
+/// - iOS 16: 내용 높이가 바뀔 때만, 게시 밖(다음 런루프)에서 `scrollTo`한다.
+private struct SSEBottomFollowing: ViewModifier {
+    let proxy: ScrollViewProxy
+    let anchorID: String
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.defaultScrollAnchor(.bottom, for: .sizeChanges)
+        } else if #available(iOS 17.0, *) {
+            content.defaultScrollAnchor(.bottom)
+        } else {
+            content.onPreferenceChange(SSEContentHeightKey.self) { _ in
+                DispatchQueue.main.async { proxy.scrollTo(anchorID, anchor: .bottom) }
             }
         }
+    }
+}
+
+/// iOS 16 하단 추적용 내용 높이. iOS 17+는 스크롤 앵커가 맡아 측정하지 않는다.
+private struct SSEContentHeightReporter: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content
+        } else {
+            content.background(
+                GeometryReader { geometry in
+                    Color.clear.preference(key: SSEContentHeightKey.self, value: geometry.size.height)
+                }
+            )
+        }
+    }
+}
+
+private struct SSEContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
