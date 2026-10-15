@@ -174,6 +174,26 @@ import UIKit
         #expect(counter.count > 0, "값이 바뀌면 콜백이 와야 한다")
     }
 
+    /// 보이는 것이 그대로인 재게시(스트리밍 append의 원문 게시, 끝 공백만 붙은 parse)는 높이 무효화와
+    /// `onContentSizeChange`를 건너뛴다. 소비자가 tick마다 강제 레이아웃하지 않게 한다.
+    @Test func skipsContentSizeCallbackWhenRepublishedDocumentIsUnchanged() async throws {
+        let view = RichMarkdownUIView(markdown: "첫 문단\n\n둘째 문단")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+
+        let counter = CallbackCounter()
+        view.onContentSizeChange = { counter.increment() }
+
+        view.markdown = "첫 문단\n\n둘째 문단 "
+        try await waitForRender(view)
+        #expect(counter.count == 0, "보이는 것이 그대로면 크기 콜백이 없어야 한다")
+
+        view.markdown = "첫 문단\n\n둘째 문단 셋"
+        try await waitForRender(view)
+        #expect(counter.count > 0, "실제로 바뀌면 콜백이 와야 한다")
+    }
+
     private func firstTextViewFont(in view: UIView) -> UIFont? {
         for textView in textViews(in: view) {
             guard let attributed = textView.attributedText, attributed.length > 0 else { continue }

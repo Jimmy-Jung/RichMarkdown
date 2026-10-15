@@ -266,7 +266,9 @@ public final class RichMarkdownUIView: UIView {
             // latex source 기준이라 문서 안 위치와 무관하다. 색·폰트·scale이 바뀌면 버린다.
             let images = model.imageRequest?.matchesRasterConfiguration(of: currentRequest) == true
                 ? model.mathImages : [:]
-            rebuildBlocks(document.blocks, images: images)
+            // 보이는 것이 그대로인 재게시(스트리밍 append의 원문 게시, 같은 문서 parse)는 높이 무효화와
+            // 크기 콜백을 건너뛴다 — 소비자가 tick마다 강제 레이아웃하지 않게 한다.
+            guard rebuildBlocks(document.blocks, images: images) else { return }
         } else {
             // 최신 원문 fallback 즉시 표시 (DEVELOPMENT.md §4).
             //
@@ -297,7 +299,9 @@ public final class RichMarkdownUIView: UIView {
     /// 스트리밍 입력은 append 중심이라 앞쪽 블록이 안정적이다. 값이 처음 달라지는
     /// index부터 뒤쪽 전부를 새로 만든다(suffix 교체). 중간 삽입 diff(LCS)는 복잡도
     /// 대비 이득이 없어 구현하지 않는다.
-    private func rebuildBlocks(_ blocks: [ParsedBlock], images: [MathSegment: RenderedMath]) {
+    ///
+    /// 새 뷰·in-place 갱신·계층 변경이 하나라도 있으면 true다.
+    private func rebuildBlocks(_ blocks: [ParsedBlock], images: [MathSegment: RenderedMath]) -> Bool {
         let appearance = currentAppearance
         // 폰트·색·scale이 바뀌면 모든 블록의 attributed string이 달라진다.
         let reusable = appearance == renderedAppearance ? renderedBlocks : []
@@ -308,6 +312,7 @@ public final class RichMarkdownUIView: UIView {
         // 앞에서부터 뷰 identity가 바뀌지 않은 연속 길이. `setBlockViews`는 이 구간의 계층을 건드리지 않는다.
         var stableCount = 0
         var stablePrefix = true
+        var updatedInPlace = false
 
         for (index, block) in blocks.enumerated() {
             let tail = index == lastIndex ? streaming : nil
@@ -330,6 +335,7 @@ public final class RichMarkdownUIView: UIView {
                 let onlyTailChanged = previous.block == block && previous.mathImageCount == mathCount
                 if streaming != nil || onlyTailChanged,
                    updateBlockInPlace(previous.view, from: previous.block, to: block, images: images, tail: tail) {
+                    updatedInPlace = true
                     rendered.append(
                         RenderedBlock(block: block, view: previous.view, mathImageCount: mathCount, tail: tail)
                     )
@@ -349,10 +355,12 @@ public final class RichMarkdownUIView: UIView {
             )
         }
 
-        setBlockViews(rendered.map(\.view), reusedCount: stableCount)
+        // 새로 만든 뷰는 계층 변경으로 잡힌다.
+        let hierarchyChanged = setBlockViews(rendered.map(\.view), reusedCount: stableCount)
         renderedBlocks = rendered
         renderedAppearance = appearance
         renderedImages = images
+        return updatedInPlace || hierarchyChanged
     }
 
     /// 꼬리 표시(마지막 글자 페이드·미닫힌 강조 숨김)를 쓰지 않는 블록. 스트림이 끝나 tail만 바뀐 경우
@@ -593,20 +601,24 @@ public final class RichMarkdownUIView: UIView {
     /// 재사용 prefix가 이미 같은 순서로 실려 있으면 뒤쪽만 교체한다. fallback 뷰가
     /// 실려 있는 등 prefix가 계층과 다르면 전량 재배치하되 뷰 인스턴스는 유지한다.
     /// `addArrangedSubview`는 계층에서 떼어낸 뷰에만 호출한다 — 이미 arranged인 뷰에
-    /// 다시 호출하면 순서가 바뀔 수 있다.
-    private func setBlockViews(_ views: [UIView], reusedCount: Int) {
+    /// 다시 호출하면 순서가 바뀔 수 있다. 계층을 바꿨으면 true.
+    @discardableResult
+    private func setBlockViews(_ views: [UIView], reusedCount: Int) -> Bool {
         let attached = blockStack.arrangedSubviews
         let prefixIsAttached = attached.count >= reusedCount
             && zip(attached, views).prefix(reusedCount).allSatisfy { $0 === $1 }
         let keptCount = prefixIsAttached ? reusedCount : 0
+        let removed = attached.dropFirst(keptCount)
+        let added = views.dropFirst(keptCount)
 
-        for view in attached.dropFirst(keptCount) {
+        for view in removed {
             blockStack.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
-        for view in views.dropFirst(keptCount) {
+        for view in added {
             blockStack.addArrangedSubview(view)
         }
+        return !removed.isEmpty || !added.isEmpty
     }
 
     private var currentAppearance: AppearanceKey {
