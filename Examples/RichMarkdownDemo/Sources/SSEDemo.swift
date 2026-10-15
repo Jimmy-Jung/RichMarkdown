@@ -626,9 +626,9 @@ enum SSEDemoError: LocalizedError {
 /// - 엔드포인트를 넣으면 `URLSession.bytes`로 실제 `text/event-stream`을 읽는다.
 ///   인증 헤더는 붙이지 않으므로 토큰이 필요한 게이트웨이는 로컬 프록시를 두고 붙인다.
 ///
-/// 루트는 청크 상태를 읽지 않는다. 도착(20Hz)은 카운터 값만 올리고, 버퍼 게시(≤10Hz)는 본문
-/// (`SSETranscriptView`)만 다시 그린다 — 툴바 메뉴·속도 Picker·입력 필드는 스트림 동안 그대로다
-/// (p7 실측: 루트의 20Hz 카운터가 화면 전체를 무효화해 hitch 구간 메인 스레드의 17–30%를 썼다).
+/// 루트는 청크 상태를 읽지 않는다. 도착(20Hz)은 카운터 값만 올리고, 버퍼 게시(≤10Hz)는 상태 헤더
+/// (`SSEStatusHeader`)와 본문(`SSETranscriptView`)만 다시 그린다 — 툴바 메뉴·속도 Picker·입력 필드는
+/// 스트림 동안 그대로다(p7 실측: 루트의 20Hz 카운터가 화면 전체를 무효화해 hitch 구간 메인 스레드의 17–30%를 썼다).
 struct SSEDemoView: View {
     /// 도착 속도와 화면 갱신을 분리하는 latest-wins 버퍼. trailing 게시로 마지막 조각도 화면에 오른다.
     /// `@StateObject`가 아니라 `@State`로 들고 있어 루트는 게시를 구독하지 않는다.
@@ -653,9 +653,10 @@ struct SSEDemoView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SSEStatusHeader(buffer: buffer, counter: counter, isStreaming: isStreaming)
+            Divider()
             SSETranscriptView(
                 buffer: buffer,
-                counter: counter,
                 isStreaming: isStreaming,
                 parsesDollarMath: parsesDollarMath,
                 theme: theme
@@ -859,8 +860,8 @@ struct SSEDemoView: View {
     }
 }
 
-/// SSE 화면의 도착 카운터. 청크마다(20Hz) 값만 올리고 화면 갱신을 일으키지 않는다. 상태 칩은 버퍼 게시
-/// (≤10Hz) 때 본문과 함께 다시 그려지며 이 값을 읽는다 — UIKit 화면이 `render(_:)`에서 라벨을 고치는 것과
+/// SSE 화면의 도착 카운터. 청크마다(20Hz) 값만 올리고 화면 갱신을 일으키지 않는다. 상태 헤더는 버퍼 게시
+/// (≤10Hz) 때 다시 그려지며 이 값을 읽는다 — UIKit 화면이 `render(_:)`에서 라벨을 고치는 것과
 /// 같은 박자다. 모든 청크는 게시나 종료 flush로 끝나므로 스트림이 끝난 뒤의 표시는 항상 최종 값이다.
 @MainActor
 final class SSEStreamCounter {
@@ -884,12 +885,13 @@ final class SSEStreamCounter {
     }
 }
 
-/// SSE 화면 본문. 버퍼를 구독하는 유일한 뷰라 게시마다 이 뷰만 다시 그린다.
+/// SSE 화면 본문. 스트림 동안 다시 그리는 계기는 버퍼 게시(텍스트가 바뀔 때)뿐이다 — 나머지 입력은
+/// 시작·종료나 메뉴 조작에서만 바뀐다. 상태 칩은 밖(`SSEStatusHeader`)에 있어 칩 갱신이 스크롤 내용을
+/// 다시 재지 않는다.
 private struct SSETranscriptView: View {
     private static let bottomAnchor = "sseDemo.bottom"
 
     @ObservedObject var buffer: RichMarkdownStreamingTextBuffer
-    let counter: SSEStreamCounter
     let isStreaming: Bool
     let parsesDollarMath: Bool
     let theme: RichMarkdownTheme
@@ -898,7 +900,6 @@ private struct SSETranscriptView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    SSEStatusChip(label: counter.label, isStreaming: isStreaming)
                     if buffer.text.isEmpty {
                         Text(verbatim: "시작을 누르면 SSE 프레임이 도착하는 대로 렌더링합니다.")
                             .font(.callout)
@@ -974,10 +975,14 @@ private struct SSEContentHeightKey: PreferenceKey {
     }
 }
 
-/// 받은 청크·글자 수 칩. 입력이 바뀔 때만 다시 그린다. `.fixedSize()`로 이상적 크기를 써서 숫자가 자라도
-/// 줄 바꿈·말줄임으로 흔들리지 않는다.
-private struct SSEStatusChip: View {
-    let label: String
+/// 받은 청크·글자 수 칩과 ProgressView. 본문 ScrollView 밖 고정 헤더라 버퍼 게시마다 이 줄만 다시 그리고
+/// 스크롤 내용은 재지 않는다(p9 iPad 8 실측: 칩이 스크롤 내용 안이면 게시마다 내용 sizeThatFits가 돌았다).
+/// 본문이 하단을 따라가도 화면에 남는다. `.fixedSize()`로 이상적 크기를 써서 숫자가 자라도 줄 바꿈·말줄임으로
+/// 흔들리지 않는다.
+private struct SSEStatusHeader: View {
+    /// 게시 신호만 구독한다. 표시 값은 카운터에서 읽는다.
+    @ObservedObject var buffer: RichMarkdownStreamingTextBuffer
+    let counter: SSEStreamCounter
     let isStreaming: Bool
 
     var body: some View {
@@ -986,7 +991,7 @@ private struct SSEStatusChip: View {
                 ProgressView()
                     .controlSize(.small)
             }
-            Text(verbatim: label)
+            Text(verbatim: counter.label)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color(.label))
                 .fixedSize()
@@ -996,5 +1001,9 @@ private struct SSEStatusChip: View {
                 .clipShape(Capsule())
                 .accessibilityIdentifier("sseDemo.status")
         }
+        .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
+        .padding(.horizontal, DemoLayout.horizontalMargin)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
     }
 }
