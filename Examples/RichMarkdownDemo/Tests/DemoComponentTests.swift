@@ -339,6 +339,29 @@ struct SSEDecoderTests {
         #expect(SSEDemoRate.normal.deadline(ofFrame: 199, from: start) == start + .seconds(10))
         #expect(SSEDemoRate.slow.deadline(ofFrame: 4, from: start) == start + .seconds(1))
     }
+
+    /// 50ms 청크 간격은 vsync의 정수배라 시작 위상이 스트림 내내 고정된다. 측정마다 위상을 새로 뽑아야 한다.
+    @Test("첫 청크 위상은 seed로 정해지고 한 프레임 안에 고르게 퍼진다")
+    func phaseOffsetIsSeededWithinOneFrame() {
+        let phase = SSEDemoPhase(seed: 42, framesPerSecond: 120)
+        #expect(phase.offset == SSEDemoPhase(seed: 42, framesPerSecond: 120).offset, "같은 seed는 같은 위상")
+        #expect(phase.offset >= .zero && phase.offset < .seconds(1.0 / 120))
+
+        let fractions = (0..<400).map { seed in
+            SSEDemoPhase(seed: UInt64(seed), framesPerSecond: 60).offset / .seconds(1.0 / 60)
+        }
+        #expect(fractions.allSatisfy { $0 >= 0 && $0 < 1 })
+        // 네 칸으로 나눠도 칸마다 고르게 들어간다(기대 100개).
+        let buckets = Dictionary(grouping: fractions) { Int($0 * 4) }.mapValues(\.count)
+        #expect((0..<4).allSatisfy { (60...140).contains(buckets[$0] ?? 0) }, "\(buckets)")
+    }
+
+    @Test("위상 메타데이터는 seed·offset·최대 fps를 key=value로 남긴다")
+    func phaseMetadataIsKeyValue() {
+        let phase = SSEDemoPhase(seed: 7, framesPerSecond: 60)
+        let offset = String(format: "%.3f", phase.offset / .milliseconds(1))
+        #expect(phase.metadata == "phase_seed=7 phase_offset_ms=\(offset) max_fps=60")
+    }
 }
 
 /// 바이트 → 줄 분리 계약. `Foundation.AsyncLineSequence`가 빈 줄을 버려

@@ -385,6 +385,8 @@ extension SSEDemoFixtures {
     /// 첫 프레임을 넘기기 직전부터 루프가 끝난 직후까지를 `sse-stream` 구간으로 남긴다. 구간 끝은 마지막
     /// 프레임(`[DONE]`)의 flush 직후다 — 최종 parse 게시·렌더와 스트리밍 종료 재구성(streaming → nil)은 그 뒤
     /// 비동기로 돈다. 분석 쪽(`trace_summary.py`의 `WINDOW_SLACK_MS`)이 창 끝 여유로 이 꼬리를 덮는다.
+    ///
+    /// 일정 전체를 위상 offset(`SSEDemoPhase`)만큼 늦춘다. 구간 시작 메시지에 seed·offset·최대 fps를 남긴다.
     @MainActor
     static func play(
         _ frames: [[String]],
@@ -393,7 +395,8 @@ extension SSEDemoFixtures {
         deliver: (String) -> Bool
     ) async throws {
         let clock = ContinuousClock()
-        let start = clock.now
+        let phase = SSEDemoLaunchOptions.phase()
+        let start = clock.now + phase.offset
         var interval: OSSignpostIntervalState?
         defer {
             if let interval { signposter.endInterval("sse-stream", interval) }
@@ -401,7 +404,9 @@ extension SSEDemoFixtures {
         for (index, frame) in frames.enumerated() {
             try await Task.sleep(until: rate.deadline(ofFrame: index, from: start), clock: clock)
             if interval == nil {
-                interval = signposter.beginInterval("sse-stream", id: signposter.makeSignpostID(), "\(label, privacy: .public)")
+                interval = signposter.beginInterval(
+                    "sse-stream", id: signposter.makeSignpostID(), "\(label, privacy: .public) \(phase.metadata, privacy: .public)"
+                )
             }
             for line in frame {
                 if deliver(line) { return }
@@ -416,6 +421,7 @@ extension SSEDemoFixtures {
 /// `*-auto` 시나리오가 `xctrace record --launch -- <번들> -sseAutoplay swiftui -sseFixture long`처럼 넘긴다.
 /// - `-sseAutoplay swiftui|uikit`: 해당 SSE 화면을 루트로 바로 열고, 녹화 시작 알림 1초 뒤 20Hz로 시작한다.
 /// - `-sseFixture short|long`: 시뮬레이션 답변(기본 short). 자동 재생이 아니어도 적용된다.
+/// - `-ssePhaseSeed <n>`: 첫 청크 위상 seed(`SSEDemoPhase`). 없으면 스트림마다 새로 뽑는다. 자동 재생이 아니어도 적용된다.
 enum SSEDemoLaunchOptions {
     enum Screen: String {
         case swiftui
@@ -425,6 +431,13 @@ enum SSEDemoLaunchOptions {
     // `-key value` launch argument는 UserDefaults 인자 도메인으로 들어온다.
     static let autoplay = UserDefaults.standard.string(forKey: "sseAutoplay").flatMap(Screen.init(rawValue:))
     static let fixture = UserDefaults.standard.string(forKey: "sseFixture").flatMap(SSEDemoFixture.init(rawValue:)) ?? .short
+    static let phaseSeed = UserDefaults.standard.string(forKey: "ssePhaseSeed").flatMap { UInt64($0) }
+
+    /// 이번 스트림의 위상. seed가 없으면 새로 뽑는다 — 뽑은 seed도 메타데이터에 남아 재현할 수 있다.
+    @MainActor
+    static func phase() -> SSEDemoPhase {
+        SSEDemoPhase(seed: phaseSeed ?? .random(in: .min ... .max), framesPerSecond: UIScreen.main.maximumFramesPerSecond)
+    }
 
     /// 스크립트가 녹화 시작 직후 보내는 Darwin 알림. `PerfHarness.tracingStartedNotification`과 같은 이름이다.
     static let tracingStartedNotification = "dev.richmarkdown.perf.tracing-started"
@@ -475,6 +488,40 @@ enum SSEDemoRate: String, CaseIterable, Identifiable {
     /// 걸리는 부하 자체가 줄었다(측정 불공정). 시작 시각에서 곱해 구하므로 오차가 쌓이지 않는다.
     func deadline(ofFrame index: Int, from start: ContinuousClock.Instant) -> ContinuousClock.Instant {
         start + interval * (index + 1)
+    }
+}
+
+/// 첫 청크의 vsync 위상. 50ms 청크 간격은 60·120Hz vsync의 정수배라 스트림 시작에 걸린 위상이 끝까지 고정되고,
+/// 렌더가 vsync 직후 몇 ms 구간에서 시작하면 거의 매번 다음 렌더 패스를 놓친다(위상 의존, 실측). 일정을
+/// U(0, 1프레임)만큼 늦춰 측정마다 위상을 고르게 뽑는다. seed가 같으면 offset도 같아 하네스가 seed로 층화한다.
+struct SSEDemoPhase {
+    let seed: UInt64
+    let framesPerSecond: Int
+    let offset: Duration
+
+    init(seed: UInt64, framesPerSecond: Int) {
+        var generator = SplitMix64(state: seed)
+        self.seed = seed
+        self.framesPerSecond = framesPerSecond
+        offset = .seconds(Double.random(in: 0..<1, using: &generator) / Double(max(framesPerSecond, 1)))
+    }
+
+    /// `sse-stream` 구간 시작 메시지에 붙는다. `scripts/bench/stream_metrics.py`가 key=value로 읽는다.
+    var metadata: String {
+        "phase_seed=\(seed) phase_offset_ms=\(String(format: "%.3f", offset / .milliseconds(1))) max_fps=\(framesPerSecond)"
+    }
+}
+
+/// seed 하나로 재현되는 난수(SplitMix64). 표준 라이브러리 생성기는 seed를 받지 않는다.
+private struct SplitMix64: RandomNumberGenerator {
+    var state: UInt64
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
     }
 }
 
