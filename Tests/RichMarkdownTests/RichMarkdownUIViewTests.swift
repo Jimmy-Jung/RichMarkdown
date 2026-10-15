@@ -702,7 +702,7 @@ import UIKit
         #expect(view.blockStack.arrangedSubviews[1] !== codeBefore, "언어가 바뀌면 새로 만든다")
     }
 
-    /// 열·행 수가 같은 표는 바뀐 셀만 다시 채운다. 행이 늘어나는 tick에만 표를 새로 만든다.
+    /// 열 수가 같은 표는 바뀐 셀만 다시 채운다. 행이 늘어나는 tick도 새 행만 붙인다.
     @Test func streamingUpdatesTailTableCellsInPlace() async throws {
         let view = RichMarkdownUIView(markdown: "| 항목 | 값 |\n| --- | --- |\n| 하나 | 1")
         view.streaming = .default
@@ -724,7 +724,7 @@ import UIKit
 
         view.markdown = "| 항목 | 값 |\n| --- | --- |\n| 하나 | 12 |\n| 둘 | 3"
         try await waitForRender(view)
-        #expect(textViews(in: view.blockStack.arrangedSubviews[0]).count == 6, "행이 늘면 표를 새로 만든다")
+        #expect(textViews(in: view.blockStack.arrangedSubviews[0]).count == 6, "행이 늘면 새 행이 붙는다")
         #expect(renderedText(in: view).contains("둘"))
     }
 
@@ -774,6 +774,56 @@ import UIKit
         #expect(table.cells.last?.last === cell, "같은 구조의 표는 셀을 제자리 갱신한다")
         #expect(cell.text == "가나")
         #expect(table.cells.allSatisfy { $0.map(\.textAlignment) == [.left, .right, .center] })
+    }
+
+    private func fittedHeight(of table: UIView, width: CGFloat = 320) -> CGFloat {
+        table.systemLayoutSizeFitting(
+            CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        ).height
+    }
+
+    /// 행이 늘어나는 tick도 표를 다시 만들지 않는다. 기존 셀은 그대로 두고 새 행만 붙인다
+    /// (2026-10-15 시뮬레이터 실측: 행 추가 tick마다 셀 전부를 재생성해 hitch가 행 수에 비례했다, 10→28 ms).
+    @Test func streamingAppendsTableRowInPlace() async throws {
+        let prefix = "| 항목 | 값 |\n| :--- | ---: |\n| 하나 | 1 |"
+        let view = RichMarkdownUIView(markdown: prefix)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        let table = try #require(view.blockStack.arrangedSubviews.first as? TableScrollBlock)
+        let cellsBefore = table.cells.flatMap { $0 }
+        #expect(cellsBefore.count == 4)
+        let heightBefore = fittedHeight(of: table)
+
+        let appended = prefix + "\n| 둘 | 2"
+        view.markdown = appended
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.first === table, "행이 늘어도 표 뷰를 유지한다")
+        #expect(
+            zip(table.cells.flatMap { $0 }, cellsBefore).allSatisfy { $0 === $1 },
+            "기존 셀 UITextView 인스턴스를 유지한다"
+        )
+        #expect(table.cells.count == 3)
+        let newRow = try #require(table.cells.last)
+        #expect(newRow.map(\.text) == ["둘", "2"])
+        #expect(newRow.map(\.textAlignment) == [.left, .right])
+        #expect(newRow.map(\.accessibilityHint) == ["행 2, 열 1, 헤더 항목", "행 2, 열 2, 헤더 값"])
+        #expect(newRow.allSatisfy { $0.layer.borderWidth > 0 && !$0.accessibilityTraits.contains(.header) })
+        #expect(textViews(in: table).count == 6, "새 행이 계층에 붙어야 한다")
+
+        let reference = RichMarkdownUIView(markdown: appended)
+        reference.frame = view.frame
+        try await waitForRender(reference)
+        let referenceTable = try #require(reference.blockStack.arrangedSubviews.first as? TableScrollBlock)
+        #expect(fittedHeight(of: table) > heightBefore, "행이 늘면 표 높이도 는다")
+        #expect(fittedHeight(of: table) == fittedHeight(of: referenceTable), "한 번에 그린 표와 높이가 같다")
+        #expect(
+            table.widthConstraints.map { $0.map(\.constant) }
+                == referenceTable.widthConstraints.map { $0.map(\.constant) },
+            "한 번에 그린 표와 열 폭이 같다"
+        )
     }
 
     /// 항목 수가 같은 목록은 마지막 항목의 문단만 갱신한다.

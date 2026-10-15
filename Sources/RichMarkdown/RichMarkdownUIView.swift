@@ -356,9 +356,9 @@ public final class RichMarkdownUIView: UIView {
         return false
     }
 
-    /// 같은 종류의 블록이면 기존 뷰의 내용만 바꾸고 true. 구조(언어·열 수·행 수·항목 수)가
-    /// 달라지면 false — 호출자가 그 블록 하나만 새로 만든다. 스트리밍에서 구조 변화는 행·항목이
-    /// 하나 늘어날 때뿐이라 재생성은 그 tick 한 번이고, 글자가 이어지는 나머지 tick은 전부 이 경로다.
+    /// 같은 종류의 블록이면 기존 뷰의 내용만 바꾸고 true. 구조(언어·열 수·항목 수)가 달라지면
+    /// false — 호출자가 그 블록 하나만 새로 만든다. 표는 행이 늘어도 새 행만 붙인다. 스트리밍에서
+    /// 구조 변화는 항목이 하나 늘어날 때뿐이라 재생성은 그 tick 한 번이고, 나머지 tick은 전부 이 경로다.
     private func updateBlockInPlace(
         _ view: UIView,
         from previous: ParsedBlock,
@@ -488,8 +488,8 @@ public final class RichMarkdownUIView: UIView {
         return true
     }
 
-    /// 열 수·행 수·정렬이 같은 표면 내용이 바뀐 셀만 다시 채우고 열 폭을 다시 잰다. 행이 늘어나는
-    /// tick은 false로 표 하나를 새로 만든다.
+    /// 열 수·정렬이 같은 표면 내용이 바뀐 셀만 다시 채우고 열 폭을 다시 잰다. 행이 늘어나면 기존 셀은
+    /// 그대로 두고 새 행만 붙인다. 행이 줄거나 기존 행의 칸 수가 바뀌면 false로 표 하나를 새로 만든다.
     private func updateTable(
         _ view: UIView,
         from previous: ParsedTable,
@@ -499,13 +499,14 @@ public final class RichMarkdownUIView: UIView {
         let rows = [table.header] + table.rows
         let previousRows = [previous.header] + previous.rows
         guard let block = view as? TableScrollBlock,
+              let content = block.content as? UIStackView,
               previous.columnAlignments == table.columnAlignments,
-              rows.count == previousRows.count, block.cells.count == rows.count,
+              rows.count >= previousRows.count, block.cells.count == previousRows.count,
               zip(rows, previousRows).allSatisfy({ $0.count == $1.count }),
-              zip(rows, block.cells).allSatisfy({ $0.count == $1.count })
+              zip(previousRows, block.cells).allSatisfy({ $0.count == $1.count })
         else { return false }
 
-        for (rowIndex, cells) in rows.enumerated() {
+        for (rowIndex, cells) in rows.prefix(previousRows.count).enumerated() {
             for (column, runs) in cells.enumerated()
             where runs != previousRows[rowIndex][column] || containsMath(runs) {
                 let cell = block.cells[rowIndex][column]
@@ -520,9 +521,19 @@ public final class RichMarkdownUIView: UIView {
                 cell.textAlignment = textAlignment(for: table.columnAlignments, at: column)
             }
         }
-        if table.header != previous.header {
-            applyTableAccessibilityHints(block, header: table.header)
+        // 스트리밍은 행을 끝에만 더한다. 새 행의 셀만 만들어 붙인다.
+        for rowIndex in previousRows.count..<rows.count {
+            let row = tableRow(rows[rowIndex], at: rowIndex, alignments: table.columnAlignments, images: images)
+            content.addArrangedSubview(row.view)
+            block.cells.append(row.cells)
+            block.widthConstraints.append(row.widthConstraints)
         }
+        // 헤더가 바뀌면 본문 셀 힌트도 따라 바뀐다. 아니면 새 행에만 단다.
+        applyTableAccessibilityHints(
+            block,
+            header: table.header,
+            fromRow: table.header == previous.header ? previousRows.count : 0
+        )
         layoutTableColumns(block)
         return true
     }
@@ -727,61 +738,71 @@ public final class RichMarkdownUIView: UIView {
     }
 
     private func tableView(_ table: ParsedTable, images: [MathSegment: RenderedMath]) -> UIView {
-        let rows = [table.header] + table.rows
-        let borderColor = UIColor(theme.textColor)
-            .resolvedColor(with: traitCollection)
-            .withAlphaComponent(0.2)
-            .cgColor
-        let cellRows = rows.enumerated().map { rowIndex, cells in
-            cells.enumerated().map { column, runs in
-                let cell = runsTextView(
-                    rowIndex == 0 ? runs.map(\.boldened) : runs,
-                    images: images,
-                    font: bodyUIFont
-                )
-                cell.textAlignment = textAlignment(for: table.columnAlignments, at: column)
-                cell.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
-                cell.backgroundColor = rowIndex == 0 ? UIColor(theme.codeHeaderBackground) : .clear
-                cell.layer.borderColor = borderColor
-                cell.layer.borderWidth = 0.5
-                if rowIndex == 0 { cell.accessibilityTraits.insert(.header) }
-                return cell
-            }
+        let rows = ([table.header] + table.rows).enumerated().map { rowIndex, cells in
+            tableRow(cells, at: rowIndex, alignments: table.columnAlignments, images: images)
         }
-        // 폭 상수는 `layoutTableColumns`가 정한다. 자리만 잡아 두고 스트리밍 갱신에서 상수를 바꾼다.
-        let widthConstraints = cellRows.map { cells in
-            cells.map { cell in
-                let constraint = cell.widthAnchor.constraint(equalToConstant: 96)
-                constraint.isActive = true
-                return constraint
-            }
-        }
-        let rowViews = cellRows.map { cells -> UIStackView in
-            let row = UIStackView(arrangedSubviews: cells)
-            row.axis = .horizontal
-            row.spacing = 0
-            row.alignment = .fill
-            return row
-        }
-
         let block = TableScrollBlock(
-            content: verticalStack(spacing: 0, rowViews),
+            content: verticalStack(spacing: 0, rows.map(\.view)),
             contentSize: CGSize(width: 96, height: 1)
         )
-        block.cells = cellRows
-        block.widthConstraints = widthConstraints
+        block.cells = rows.map(\.cells)
+        block.widthConstraints = rows.map(\.widthConstraints)
         block.accessibilityContainerType = .semanticGroup
         applyTableAccessibilityHints(block, header: table.header)
         layoutTableColumns(block)
         return block
     }
 
-    /// 헤더 텍스트를 담은 행·열 힌트. 스트리밍으로 헤더가 바뀌면 본문 셀 힌트도 따라 바꾼다.
-    private func applyTableAccessibilityHints(_ block: TableScrollBlock, header: [[InlineRun]]) {
+    /// 표 한 행의 셀·폭 제약·행 스택. 생성과 스트리밍 행 추가가 함께 써서 헤더 굵게·배경·테두리·정렬이 같다.
+    private func tableRow(
+        _ cells: [[InlineRun]],
+        at rowIndex: Int,
+        alignments: [ParsedTable.ColumnAlignment?],
+        images: [MathSegment: RenderedMath]
+    ) -> (view: UIStackView, cells: [RichMarkdownTextView], widthConstraints: [NSLayoutConstraint]) {
+        let borderColor = UIColor(theme.textColor)
+            .resolvedColor(with: traitCollection)
+            .withAlphaComponent(0.2)
+            .cgColor
+        let cellViews = cells.enumerated().map { column, runs in
+            let cell = runsTextView(
+                rowIndex == 0 ? runs.map(\.boldened) : runs,
+                images: images,
+                font: bodyUIFont
+            )
+            cell.textAlignment = textAlignment(for: alignments, at: column)
+            cell.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+            cell.backgroundColor = rowIndex == 0 ? UIColor(theme.codeHeaderBackground) : .clear
+            cell.layer.borderColor = borderColor
+            cell.layer.borderWidth = 0.5
+            if rowIndex == 0 { cell.accessibilityTraits.insert(.header) }
+            return cell
+        }
+        // 폭 상수는 `layoutTableColumns`가 정한다. 자리만 잡아 두고 스트리밍 갱신에서 상수를 바꾼다.
+        let widthConstraints = cellViews.map { cell in
+            let constraint = cell.widthAnchor.constraint(equalToConstant: 96)
+            constraint.isActive = true
+            return constraint
+        }
+        let row = UIStackView(arrangedSubviews: cellViews)
+        row.axis = .horizontal
+        row.spacing = 0
+        row.alignment = .fill
+        return (row, cellViews, widthConstraints)
+    }
+
+    /// 헤더 텍스트를 담은 행·열 힌트를 `firstRow` 행부터 단다. 스트리밍 행 추가는 새 행만, 헤더가 바뀌면
+    /// 본문 셀 힌트도 따라 바뀌므로 전부 다시 단다.
+    private func applyTableAccessibilityHints(
+        _ block: TableScrollBlock,
+        header: [[InlineRun]],
+        fromRow firstRow: Int = 0
+    ) {
+        guard firstRow < block.cells.count else { return }
         let headers = header.map {
             spokenText($0).trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        for (rowIndex, cells) in block.cells.enumerated() {
+        for (rowIndex, cells) in block.cells.enumerated().dropFirst(firstRow) {
             for (column, cell) in cells.enumerated() {
                 if rowIndex == 0 {
                     cell.accessibilityHint = "열 \(column + 1), 헤더"
