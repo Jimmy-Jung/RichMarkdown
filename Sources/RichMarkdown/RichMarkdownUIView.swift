@@ -360,9 +360,9 @@ public final class RichMarkdownUIView: UIView {
         return false
     }
 
-    /// 같은 종류의 블록이면 기존 뷰의 내용만 바꾸고 true. 구조(언어·열 수·항목 수)가 달라지면
-    /// false — 호출자가 그 블록 하나만 새로 만든다. 표는 행이 늘어도 새 행만 붙인다. 스트리밍에서
-    /// 구조 변화는 항목이 하나 늘어날 때뿐이라 재생성은 그 tick 한 번이고, 나머지 tick은 전부 이 경로다.
+    /// 같은 종류의 블록이면 기존 뷰의 내용만 바꾸고 true. 표의 행, 목록의 항목, 인용의 자식이 끝에
+    /// 늘어나면 늘어난 것만 만들어 붙인다. 구조(언어·열 수·정렬)가 달라지거나 줄어들면 false — 호출자가
+    /// 그 블록 하나만 새로 만든다. 스트리밍 append에서는 거의 모든 tick이 이 경로다.
     private func updateBlockInPlace(
         _ view: UIView,
         from previous: ParsedBlock,
@@ -401,19 +401,19 @@ public final class RichMarkdownUIView: UIView {
             return updateChildren(stack, from: previousChildren, to: children, images: images, tail: tail)
 
         case (.unorderedList(let previousItems), .unorderedList(let items)):
-            return updateListItems(view, from: previousItems, to: items, images: images, tail: tail)
+            return updateListItems(view, start: nil, from: previousItems, to: items, images: images, tail: tail)
 
         case (.orderedList(let previousStart, let previousItems), .orderedList(let start, let items))
             where previousStart == start:
-            return updateListItems(view, from: previousItems, to: items, images: images, tail: tail)
+            return updateListItems(view, start: start, from: previousItems, to: items, images: images, tail: tail)
 
         default:
             return false
         }
     }
 
-    /// 자식 수가 같은 컨테이너(인용·목록 항목)의 자식을 자리에서 갱신한다. 하나라도 실패하면
-    /// false — 호출자가 컨테이너 전체를 새로 만들므로 앞선 부분 갱신은 그대로 버려진다.
+    /// 컨테이너(인용·목록 항목)의 자식을 자리에서 갱신하고, 끝에 늘어난 자식만 새로 만들어 붙인다.
+    /// 하나라도 실패하면 false — 호출자가 컨테이너 전체를 새로 만들므로 앞선 부분 갱신은 그대로 버려진다.
     private func updateChildren(
         _ stack: UIStackView,
         from previous: [ParsedBlock],
@@ -421,14 +421,15 @@ public final class RichMarkdownUIView: UIView {
         images: [MathSegment: RenderedMath],
         tail: RichMarkdownStreamingOptions?
     ) -> Bool {
-        guard previous.count == children.count, stack.arrangedSubviews.count == children.count else {
+        guard children.count >= previous.count, stack.arrangedSubviews.count == previous.count else {
             return false
         }
         for (index, (old, new)) in zip(previous, children).enumerated() {
             let isLast = index == children.count - 1
             // 값이 같고 수식 hydration도 그대로인 자식은 바뀔 수 있는 것이 없다. 마지막 자식은 tail
-            // 표시가 바뀔 수 있어 항상 갱신한다.
-            if old == new, !isLast, !mathHydrationChanged(new, images: images) { continue }
+            // 표시가, 직전 마지막 자식은 tail에서 벗어나 페이드가 바뀔 수 있어 갱신한다.
+            let tailMayChange = (isLast || index == previous.count - 1) && !Self.ignoresStreamingTail(new)
+            if old == new, !tailMayChange, !mathHydrationChanged(new, images: images) { continue }
             guard updateBlockInPlace(
                 stack.arrangedSubviews[index],
                 from: old,
@@ -437,26 +438,39 @@ public final class RichMarkdownUIView: UIView {
                 tail: isLast ? tail : nil
             ) else { return false }
         }
+        for index in previous.count..<children.count {
+            let isLast = index == children.count - 1
+            stack.addArrangedSubview(blockView(children[index], images: images, tail: isLast ? tail : nil))
+        }
         return true
     }
 
+    /// 목록 항목을 자리에서 갱신하고 끝에 늘어난 항목만 붙인다. 순서 목록의 번호는 `start + index`라
+    /// 항목이 늘어도 기존 항목의 번호는 그대로다.
     private func updateListItems(
         _ view: UIView,
+        start: Int?,
         from previous: [[ParsedBlock]],
         to items: [[ParsedBlock]],
         images: [MathSegment: RenderedMath],
         tail: RichMarkdownStreamingOptions?
     ) -> Bool {
-        guard let list = view as? UIStackView, previous.count == items.count,
-              list.arrangedSubviews.count == items.count
+        guard let list = view as? UIStackView, items.count >= previous.count,
+              list.arrangedSubviews.count == previous.count
         else { return false }
         for (index, (old, new)) in zip(previous, items).enumerated() {
             let isLast = index == items.count - 1
-            if old == new, !isLast, !new.contains(where: { mathHydrationChanged($0, images: images) }) { continue }
+            let tailMayChange = isLast || index == previous.count - 1
+            if old == new, !tailMayChange,
+               !new.contains(where: { mathHydrationChanged($0, images: images) }) { continue }
             guard let row = list.arrangedSubviews[index] as? UIStackView, row.arrangedSubviews.count == 2,
                   let children = row.arrangedSubviews[1] as? UIStackView,
                   updateChildren(children, from: old, to: new, images: images, tail: isLast ? tail : nil)
             else { return false }
+        }
+        for index in previous.count..<items.count {
+            let tail = index == items.count - 1 ? tail : nil
+            list.addArrangedSubview(listRow(start: start, index: index, item: items[index], images: images, tail: tail))
         }
         return true
     }
@@ -686,24 +700,12 @@ public final class RichMarkdownUIView: UIView {
 
         case .unorderedList(let items):
             return verticalStack(spacing: 4, items.enumerated().map { index, item in
-                listRow(
-                    marker: "•",
-                    monospacedDigit: false,
-                    item: item,
-                    images: images,
-                    tail: index == items.count - 1 ? tail : nil
-                )
+                listRow(start: nil, index: index, item: item, images: images, tail: index == items.count - 1 ? tail : nil)
             })
 
         case .orderedList(let start, let items):
             return verticalStack(spacing: 4, items.enumerated().map { index, item in
-                listRow(
-                    marker: "\(start + index).",
-                    monospacedDigit: true,
-                    item: item,
-                    images: images,
-                    tail: index == items.count - 1 ? tail : nil
-                )
+                listRow(start: start, index: index, item: item, images: images, tail: index == items.count - 1 ? tail : nil)
             })
 
         case .table(let table):
@@ -718,17 +720,19 @@ public final class RichMarkdownUIView: UIView {
         }
     }
 
+    /// 목록 한 항목. 순서 목록(`start`가 있음)은 `start + index`번, 아니면 글머리표다. 생성과 스트리밍
+    /// 항목 추가가 함께 쓴다.
     private func listRow(
-        marker: String,
-        monospacedDigit: Bool,
+        start: Int?,
+        index: Int,
         item: [ParsedBlock],
         images: [MathSegment: RenderedMath],
         tail: RichMarkdownStreamingOptions? = nil
     ) -> UIView {
         let label = UILabel()
-        label.text = marker
+        label.text = start.map { "\($0 + index)." } ?? "•"
         label.textColor = UIColor(theme.textColor)
-        label.font = monospacedDigit ? bodyUIFont.monospacedDigitVariant : bodyUIFont
+        label.font = start == nil ? bodyUIFont : bodyUIFont.monospacedDigitVariant
         label.setContentHuggingPriority(.required, for: .horizontal)
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
 

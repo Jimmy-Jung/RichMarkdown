@@ -958,7 +958,56 @@ import UIKit
 
         view.markdown = "- 하나\n- 둘째\n- 셋"
         try await waitForRender(view)
-        #expect(textViews(in: view.blockStack.arrangedSubviews[0]).count == 3, "항목이 늘면 목록을 새로 만든다")
+        #expect(textViews(in: view.blockStack.arrangedSubviews[0]).count == 3, "항목이 늘면 새 항목이 붙는다")
+    }
+
+    private func listMarkers(in list: UIView) -> [String?] {
+        (list as? UIStackView)?.arrangedSubviews.map {
+            (($0 as? UIStackView)?.arrangedSubviews.first as? UILabel)?.text
+        } ?? []
+    }
+
+    /// 항목이 늘어나는 tick도 목록을 다시 만들지 않는다. 기존 항목은 그대로 두고 새 항목만 붙인다.
+    @Test func streamingAppendsListItemInPlace() async throws {
+        let view = RichMarkdownUIView(markdown: "3. 하나\n4. 둘")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        let list = try #require(view.blockStack.arrangedSubviews.first)
+        let itemsBefore = textViews(in: list)
+        #expect(itemsBefore.count == 2)
+
+        view.markdown = "3. 하나\n4. 둘\n5. 셋"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.first === list, "항목이 늘어도 목록 뷰를 유지한다")
+        let itemsAfter = textViews(in: list)
+        #expect(itemsAfter.count == 3)
+        #expect(zip(itemsAfter, itemsBefore).allSatisfy { $0 === $1 }, "기존 항목 뷰를 유지한다")
+        #expect(listMarkers(in: list) == ["3.", "4.", "5."])
+        let formerTail = itemsAfter[1]
+        #expect(
+            foregroundAlpha(in: formerTail, at: formerTail.attributedText.length - 1) == 1,
+            "tail에서 벗어난 항목은 페이드를 걷어낸다"
+        )
+    }
+
+    /// 인용도 자식 블록이 늘면 새 자식만 붙인다.
+    @Test func streamingAppendsQuoteChildInPlace() async throws {
+        let view = RichMarkdownUIView(markdown: "> 하나\n>\n> 둘")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        let quote = try #require(view.blockStack.arrangedSubviews.first)
+        let childrenBefore = textViews(in: quote)
+        #expect(childrenBefore.count == 2)
+
+        view.markdown = "> 하나\n>\n> 둘\n>\n> 셋"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.first === quote, "자식이 늘어도 인용 뷰를 유지한다")
+        let childrenAfter = textViews(in: quote)
+        #expect(childrenAfter.count == 3)
+        #expect(zip(childrenAfter, childrenBefore).allSatisfy { $0 === $1 }, "기존 자식 뷰를 유지한다")
+        #expect(renderedText(in: quote).contains("셋"))
     }
 
     @Test func streamingInstallsChipDecorationWhenInlineCodeCloses() async throws {
