@@ -591,15 +591,25 @@ import UIKit
     /// 기다리는 게시가 없으면 살아 있는 링크도 없다.
     @Test func displayLinkPublishesAppendAndIsReleasedWhenIdle() async throws {
         var fired = 0
-        weak var link = DisplayFrame.next { fired += 1 }
+        weak var link: CADisplayLink?
+        link = DisplayFrame.next { fired += 1 }
         #expect(link != nil, "기다리는 동안은 run loop가 링크를 잡는다")
         try await waitUntil { fired == 1 && link == nil }
 
         let model = RichMarkdownRenderModel()
         model.submit(request("첫 문단"))
         try await waitForIdle(model)
-        model.submit(request("첫 문단 그리고 이어지는 답변"))
+        let appended = request("첫 문단 그리고 이어지는 답변")
+        model.submit(appended)
+        // 기본 init도 append 게시를 동기로 반영하지 않는다. worker 게시보다 먼저 같은 MainActor turn에서
+        // 만들므로, 실제 링크는 아래 확인이 끝나기 전에 울릴 수 없다.
+        let parsed = RichMarkdownParser.parse(markdown: appended.markdown, parsesDollarMath: false)
+        model.publishComplete(parsed, images: [:], request: appended, generation: 2, atNextFrame: true)
+        #expect(model.pendingFrameRequest == appended, "기본 frame scheduler도 다음 프레임을 기다린다")
+        #expect(model.parseIdentity != appended.parseIdentity)
+
         try await waitForIdle(model)
+        #expect(model.parseIdentity == appended.parseIdentity)
         #expect(flatText(try #require(model.document)).contains("이어지는 답변"))
         #expect(fired == 1, "한 번 울린 링크는 다시 울리지 않는다")
     }
