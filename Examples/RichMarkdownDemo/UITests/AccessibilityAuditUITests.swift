@@ -46,6 +46,18 @@ final class AccessibilityAuditUITests: XCTestCase {
         ])
     }
 
+    /// 가장자리 효과 띠 예외는 실측한 SSE(SwiftUI) 화면에만 건다. 스크롤하지 않는 '라이브 편집'의 보기 모드
+    /// Picker(바 하단 + 8pt) 같은 바 바로 아래 요소의 실제 대비 결함은 어느 OS에서도 실패로 남아야 한다.
+    func testEdgeEffectBandExemptsOnlyMeasuredScreen() {
+        let barBottom: CGFloat = 100
+        XCTAssertFalse(Self.isUnderNavigationBar(minY: 108, barBottom: barBottom, screen: "라이브 편집 (분할 미리보기)"))
+        XCTAssertFalse(Self.isUnderNavigationBar(minY: 115, barBottom: barBottom, screen: "SSE 실시간 렌더링 (UIKit)"))
+        XCTAssertTrue(Self.isUnderNavigationBar(minY: 90, barBottom: barBottom, screen: "라이브 편집 (분할 미리보기)"))
+        if #available(iOS 26.0, *) {
+            XCTAssertTrue(Self.isUnderNavigationBar(minY: 115, barBottom: barBottom, screen: "SSE 실시간 렌더링 (SwiftUI)"))
+        }
+    }
+
     // MARK: - 화면 목록
 
     @MainActor private static let screens: [Screen] = [
@@ -211,13 +223,8 @@ final class AccessibilityAuditUITests: XCTestCase {
         // "Contrast failed" / "Contrast nearly passed": 스크롤로 내비게이션 바 아래에 걸친 요소는
         // 반투명 바 재질을 배경으로 측정된다(SSE 자동 스크롤 직후 표 헤더 '구간·확률·비고', 최대
         // 글자에서 화면 위로 반쯤 밀린 목록 번호 '3.'). 바 밖의 같은 요소는 통과한다.
-        // iOS 26은 바 아래로 스크롤 가장자리 효과(흐림·페이드)가 더 내려온다. SSE(SwiftUI) 화면이 스트림 끝에
-        // 정확히 하단에 붙으면 표 첫 행 셀('68.27%'·'1 시그마', minY = 바 하단 + 15pt)이 그 띠에 걸려
-        // 측정된다(iPhone 17 시뮬레이터 iOS 26.5 실측, 스크린샷에서 셀 글자·배경은 그대로다).
         let barBottom = app.navigationBars.firstMatch.frame.maxY
-        var edgeEffectBand: CGFloat = 0
-        if #available(iOS 26.0, *) { edgeEffectBand = 24 }
-        if issue.auditType == .contrast, frame.minY < barBottom + edgeEffectBand {
+        if issue.auditType == .contrast, isUnderNavigationBar(minY: frame.minY, barBottom: barBottom, screen: screen) {
             return "내비게이션 바 아래에 걸친 요소의 대비 측정(\(issue.compactDescription)): '\(label)'"
         }
 
@@ -247,5 +254,16 @@ final class AccessibilityAuditUITests: XCTestCase {
             return "데모 시스템 버튼 대비(Contrast nearly passed): sseDemo.startStop"
         }
         return nil
+    }
+
+    /// 바 재질을 배경으로 대비가 측정되는 위치인가.
+    /// iOS 26은 바 아래로 스크롤 가장자리 효과(흐림·페이드)가 더 내려온다. SSE(SwiftUI) 화면이 스트림 끝에
+    /// 정확히 하단에 붙으면 표 첫 행 셀('68.27%'·'1 시그마', minY = 바 하단 + 15pt)이 그 띠에 걸려
+    /// 측정된다(iPhone 17 시뮬레이터 iOS 26.5 실측, 스크린샷에서 셀 글자·배경은 그대로다).
+    /// 띠는 그 화면에만 넓힌다 — 세 구성 감사에서 띠 예외가 걸린 곳은 이 화면의 표 셀뿐이었다.
+    static func isUnderNavigationBar(minY: CGFloat, barBottom: CGFloat, screen: String) -> Bool {
+        var edgeEffectBand: CGFloat = 0
+        if #available(iOS 26.0, *), screen == "SSE 실시간 렌더링 (SwiftUI)" { edgeEffectBand = 24 }
+        return minY < barBottom + edgeEffectBand
     }
 }
