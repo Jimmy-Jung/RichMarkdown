@@ -50,7 +50,9 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
-from trace_summary import WINDOW_SLACK_MS, label, number
+# `python3 -I`는 스크립트 폴더를 sys.path에 넣지 않는다. 같은 폴더의 trace_summary를 찾게 뒤에 붙인다(표준 라이브러리를 가리지 않는다).
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from trace_summary import WINDOW_SLACK_MS, label, number  # noqa: E402
 
 WINDOW_SIGNPOST = "sse-stream"
 DEMO_SUBSYSTEM = "dev.richmarkdown.demo"
