@@ -16,7 +16,8 @@
 # (`hitches` = PERF_WINDOW 창, `hitches_stream` = signpost 창).
 # 시나리오마다 녹화를 나눈다 — CPU Profiler는 Hitches·Activity Monitor와 한 문서에 둘 수 없다
 # ("Remove Instruments recording CPU Counters", 실측).
-#   hitches: Time Profiler + Hitches   → hitch 통계, 메인 스레드 앱 프레임 (trace_summary.py)
+#   hitches: Time Profiler + Hitches   → hitch 통계, 메인 스레드 앱 프레임 (trace_summary.py),
+#                                        SSE는 견고한 지표 `<시나리오>.hitches.<창>.metrics.json`도 (stream_metrics.py)
 #   cpu:     CPU Profiler              → xcprof analyze JSON
 #   memory:  Activity Monitor (SSE만)  → 최대 physical footprint
 #   alloc:   Allocations (SSE만)       → Instruments에서 여는 원본 (xctrace export로 읽을 수 없다)
@@ -256,6 +257,11 @@ analyze() {  # <시나리오> <종류> <트레이스> <UI 로그(자동 재생�
             hitches|memory)
                 python3 scripts/bench/trace_summary.py "$3" --app "$APP" \
                     ${log_args[@]+"${log_args[@]}"} ${signpost_args[@]+"${signpost_args[@]}"} > "$base.$window.summary.json"
+                # hitch 판정(witness 규칙)과 무관한 지표·위상·기기 상태. 창은 같은 `sse-stream` signpost다.
+                if [ "$2" = hitches ] && [ ${#signpost_args[@]} -gt 0 ]; then
+                    python3 scripts/bench/stream_metrics.py "$3" --app "$APP" > "$base.$window.metrics.json" \
+                        || rm -f "$base.$window.metrics.json"  # 반쯤 쓴 JSON이 --table을 깨지 않게 한다
+                fi
                 ;;
             cpu)
                 [ ${#log_args[@]} -gt 0 ] && xcprof_window "$3" "$base.$window" "${log_args[@]}"
