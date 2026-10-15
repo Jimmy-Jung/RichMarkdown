@@ -382,8 +382,9 @@ extension SSEDemoFixtures {
     /// 두 SSE 화면이 공유하는 로컬 전송 루프. 프레임을 `rate`의 절대 일정으로 한 줄씩 `deliver`에
     /// 넘기고, `deliver`가 `true`를 돌려주면(종료·오류·세대 교체) 멈춘다.
     ///
-    /// 첫 프레임을 넘기기 직전부터 루프가 끝난 직후까지를 `sse-stream` 구간으로 남긴다. 마지막
-    /// 프레임(`[DONE]`)의 flush가 `deliver` 안에서 동기로 게시되므로 구간 끝은 최종 게시 직후다.
+    /// 첫 프레임을 넘기기 직전부터 루프가 끝난 직후까지를 `sse-stream` 구간으로 남긴다. 구간 끝은 마지막
+    /// 프레임(`[DONE]`)의 flush 직후다 — 최종 parse 게시·렌더와 스트리밍 종료 재구성(streaming → nil)은 그 뒤
+    /// 비동기로 돈다. 분석 쪽(`trace_summary.py`의 `WINDOW_SLACK_MS`)이 창 끝 여유로 이 꼬리를 덮는다.
     @MainActor
     static func play(
         _ frames: [[String]],

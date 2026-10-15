@@ -13,6 +13,7 @@
 
 `--window-signpost <이름>`을 주면 앱이 남긴 os_signpost 구간(SSE 데모의 `sse-stream`: 첫 청크 직전 → 마지막
 flush 직후)을 두 번째 창으로 쓴다. 트레이스 시계 그대로라 epoch 대응 오차가 없고 끝의 유휴 꼬리가 빠진다.
+flush 뒤의 최종 렌더는 창 양끝 여유(`WINDOW_SLACK_MS`)로 hitch·Time Profiler·CPU Profiler에 똑같이 든다.
 결과는 `window_stream`·`hitches_stream`·`profile_stream`에 따로 담고, 기존 키(`hitches`·`profile`)는 UI 로그 창
 그대로 둬 이전 수치와 나란히 비교한다. 구간이 트레이스에 없으면 UI 로그 창으로 대신한다(`window_stream.source`).
 
@@ -94,6 +95,9 @@ def label(element):
 # 기기 시계 epoch ↔ 트레이스 시각 대응 오차. 교차 확인 트레이스에서 측정 구간의 첫 parse 표본이
 # epoch 창보다 0.14–0.21 s 늦었다(iPad Pro M5 실측). 경계에서 이벤트를 놓치지 않게 양쪽을 넓혀 세고,
 # 비율(ms/s)의 분모는 기기 시계로 잰 시나리오 길이를 그대로 쓴다.
+# signpost 창(`sse-stream`)에는 epoch 오차가 없지만 같은 여유가 스트림 끝 꼬리 몫을 한다. 구간은 마지막 flush
+# 직후에 끝나고, 최종 parse 게시·렌더와 스트리밍 종료 재구성(streaming → nil)은 그 뒤 비동기로 돈다.
+# hitch·Time Profiler(`in_window`)와 CPU Profiler(`xcprof_range`)가 이 여유를 똑같이 쓴다.
 WINDOW_SLACK_MS = 300
 
 
@@ -302,7 +306,10 @@ def summarize(trace, app, ui_log, window_name, frame_queries, signpost, window_s
 
 
 def xcprof_range(window):
-    return f"--start-ms {max(0, round(window[0]))} --end-ms {round(window[1])}" if window else ""
+    """xcprof analyze 범위. `in_window`와 같은 여유를 붙여 CPU Profiler·hitch·Time Profiler가 같은 창을 본다."""
+    if not window:
+        return ""
+    return f"--start-ms {max(0, round(window[0] - WINDOW_SLACK_MS))} --end-ms {round(window[1] + WINDOW_SLACK_MS)}"
 
 
 def report(directory, top=3):
@@ -382,7 +389,9 @@ def self_test():
     assert streamed["count"] == 1 and streamed["total_ms"] == 16.7 and streamed["ratio_ms_per_s"] == 8.33, streamed
     assert stream_window([], "sse-stream", "App", (500, 5000)) == ((500, 5000), "ui-log")
     assert stream_window([], "sse-stream", "App", None) == (None, None)
-    assert xcprof_range(stream) == "--start-ms 1500 --end-ms 3500" and xcprof_range(None) == ""
+    # CPU Profiler 창도 hitch·Time Profiler와 같은 여유를 붙인다 — signpost 끝 뒤의 최종 렌더가 세 지표 모두에 든다.
+    assert xcprof_range(stream) == "--start-ms 1200 --end-ms 3800" and xcprof_range(None) == ""
+    assert xcprof_range((100, 900)) == "--start-ms 0 --end-ms 1200"
 
     # --report: 자동 재생 요약은 window가 null이다. 행 이름·CPU·메모리 파일은 analyze가 쓴 파일 이름의 창으로 찾는다.
     import os
