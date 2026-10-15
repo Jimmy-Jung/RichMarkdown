@@ -65,9 +65,15 @@ public final class RichMarkdownUIView: UIView {
     public var streaming: RichMarkdownStreamingOptions? {
         didSet {
             guard streaming != oldValue else { return }
+            streamEndPending = oldValue != nil && streaming == nil
             scheduleRebuild()
         }
     }
+
+    /// 스트림이 끝났지만 최신 markdown의 문서를 아직 그리지 않았다. 마지막 flush와 `streaming = nil`이
+    /// 같은 turn에 오면 끝 글자를 담은 문서는 스트림이 끝난 뒤 게시된다 — 그 문서까지는 스트리밍처럼
+    /// 블록을 자리에서 갱신한다.
+    private var streamEndPending = false
 
     /// 블록 재구성으로 높이가 바뀔 때 호출된다.
     /// 수식 이미지 hydration은 최초 레이아웃 뒤에 오므로, 셀 재사용 환경에서는
@@ -268,7 +274,9 @@ public final class RichMarkdownUIView: UIView {
                 ? model.mathImages : [:]
             // 보이는 것이 그대로인 재게시(스트리밍 append의 원문 게시, 같은 문서 parse)는 높이 무효화와
             // 크기 콜백을 건너뛴다 — 소비자가 tick마다 강제 레이아웃하지 않게 한다.
-            guard rebuildBlocks(document.blocks, images: images) else { return }
+            let changed = rebuildBlocks(document.blocks, images: images)
+            if model.parseIdentity == currentRequest.parseIdentity { streamEndPending = false }
+            guard changed else { return }
         } else {
             // 최신 원문 fallback 즉시 표시 (DEVELOPMENT.md §4).
             //
@@ -279,6 +287,9 @@ public final class RichMarkdownUIView: UIView {
             //
             // 폰트·색은 매번 현재 값으로 다시 만든다 — fallback 표시 중의 테마·trait
             // 변경도 이 대입이 흡수한다.
+            //
+            // 문서를 버린 교체 제출은 끝난 스트림의 연속이 아니다.
+            streamEndPending = false
             fallbackTextView.attributedText = NSAttributedString(
                 string: model.fallbackMarkdown,
                 attributes: [
@@ -331,9 +342,8 @@ public final class RichMarkdownUIView: UIView {
                 // 갱신한다 (2026-09-15 iPad Pro 실측: 표를 스트리밍하는 구간에서 tick마다 셀
                 // UITextView 12개를 재생성해 hitch가 집중됐다). 앞 블록이 모두 그대로인 일반적인
                 // tick에서는 계층 조작이 없어 읽던 문단의 VoiceOver 포커스도 유지된다.
-                // 스트림이 끝나 tail만 바뀐 블록(값·수식 hydration 그대로)도 이 경로로 페이드와 숨긴 마크만 걷는다.
-                let onlyTailChanged = previous.block == block && previous.mathImageCount == mathCount
-                if streaming != nil || onlyTailChanged,
+                // 스트림이 끝난 뒤에도 최신 문서를 그릴 때까지는 이 경로로 페이드·숨긴 마크를 걷고 끝 글자를 반영한다.
+                if streaming != nil || streamEndPending,
                    updateBlockInPlace(previous.view, from: previous.block, to: block, images: images, tail: tail) {
                     updatedInPlace = true
                     rendered.append(

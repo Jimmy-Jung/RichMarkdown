@@ -699,6 +699,40 @@ import UIKit
         )
     }
 
+    /// 마지막 flush와 스트림 종료가 같은 turn에 오면 끝 글자를 담은 문서는 `streaming = nil` 뒤에 도착한다.
+    /// 그 문서도 마지막 블록을 자리에서 갱신한다 — 표가 길수록 종료 tick hitch가 커진다(행 수 비례).
+    @Test(arguments: zip(
+        [
+            "앞 문단\n\n| 항목 | 값 |\n| --- | --- |\n| 하나 | 1 |\n| 둘 | 2",
+            "앞 문단\n\n꼬리",
+            "앞 문단\n\n- 하나\n- 둘",
+            "앞 문단\n\n> 하나\n>\n> 둘",
+        ],
+        ["0", " 끝", " 끝", " 끝"]
+    ))
+    func keepsTailBlockViewWhenFinalChunkArrivesWithStreamEnd(_ prefix: String, _ finalChunk: String) async throws {
+        let view = RichMarkdownUIView(markdown: prefix)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 2)
+        let tail = view.blockStack.arrangedSubviews[1]
+
+        view.markdown = prefix + finalChunk
+        view.streaming = nil
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews[1] === tail, "스트림 종료와 함께 온 마지막 청크도 tail 블록 뷰를 다시 만들지 않는다")
+
+        let reference = RichMarkdownUIView(markdown: prefix + finalChunk)
+        reference.frame = view.frame
+        try await waitForRender(reference)
+        #expect(
+            StreamingRenderEquivalenceTests.describe(view.blockStack)
+                == StreamingRenderEquivalenceTests.describe(reference.blockStack),
+            "스트림이 끝난 뒤의 표시는 한 번에 그린 결과와 같다"
+        )
+    }
+
     @Test func streamingUpdatesTailTextViewInPlace() async throws {
         let view = RichMarkdownUIView(markdown: "첫 문단\n\n꼬리")
         view.streaming = .default
