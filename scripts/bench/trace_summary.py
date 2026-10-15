@@ -315,7 +315,9 @@ def report(directory, top=3):
             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---:|"]
     for path in sorted(glob.glob(os.path.join(directory, "*.hitches.*.summary.json"))):
         summary = json.load(open(path))
-        scenario, window = os.path.basename(path).split(".hitches.")[0], summary["window"]
+        # 창 이름은 analyze가 쓴 파일 이름(`<시나리오>.hitches.<창>.summary.json`)에서 얻는다. 자동 재생은
+        # `--window` 없이 요약해 summary["window"]가 null이지만 CPU·메모리 파일은 같은 창 이름으로 쓰인다.
+        scenario, window = os.path.basename(path)[:-len(".summary.json")].split(".hitches.", 1)
         hitches, stream = summary.get("hitches", {}), summary.get("hitches_stream", {})
         # UI 로그 창이 없는 자동 재생 시나리오는 메인 스레드 열도 signpost 창으로 읽는다(전체 트레이스엔 런치가 섞인다).
         profile = summary.get("profile_stream" if summary.get("window_ms") is None and "profile_stream" in summary
@@ -381,6 +383,27 @@ def self_test():
     assert stream_window([], "sse-stream", "App", (500, 5000)) == ((500, 5000), "ui-log")
     assert stream_window([], "sse-stream", "App", None) == (None, None)
     assert xcprof_range(stream) == "--start-ms 1500 --end-ms 3500" and xcprof_range(None) == ""
+
+    # --report: 자동 재생 요약은 window가 null이다. 행 이름·CPU·메모리 파일은 analyze가 쓴 파일 이름의 창으로 찾는다.
+    import os
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        def write(name, payload):
+            with open(os.path.join(directory, name), "w") as handle:
+                json.dump(payload, handle)
+        write("sse-long-uikit-auto.hitches.sse-long-uikit-auto.summary.json",
+              {"window": None, "window_ms": None, "hitches": {"count": 9}, "hitches_stream": {"count": 4},
+               "profile_stream": {"main_thread_ms": 120}})
+        write("sse-long-uikit-auto.cpu.sse-long-uikit-auto.xcprof.json",
+              {"user_frames": [{"name": "RichMarkdownUIView.rebuild()", "inclusive_pct": 12.5}]})
+        write("sse-long-uikit-auto.memory.sse-long-uikit-auto.summary.json", {"memory": {"peak_footprint_mib": 88.1}})
+        write("cold-launch-chat.hitches.cold-launch-chat.launch.summary.json",
+              {"window": "cold-launch-chat.launch", "window_ms": [0, 900], "hitches": {"count": 1}})
+        table = report(directory).splitlines()
+    assert table[2].startswith("| cold-launch-chat.launch | "), table[2]
+    auto = table[3]
+    assert auto.startswith("| sse-long-uikit-auto | ") and "| 120 (-) |" in auto, auto
+    assert "RichMarkdownUIView.rebuild() 12.5%" in auto and auto.endswith("| 88.1 |"), auto
 
     # 하네스 부하 분류: XCTest 조회 스택은 ax_mode에서 빼고, 일반 UIKit accessibility 속성 조회는 세지 않는다.
     main = [
