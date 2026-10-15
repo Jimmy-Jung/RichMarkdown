@@ -285,6 +285,11 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
 - 게시 경로에 **새 비동기 hop을 넣지 않는다.** 테스트의 idle 판정은
   `hasPendingRebuild`/`hasOutstandingWork` 두 값에만 의존하므로 중간 단계를 늘리면
   기존 테스트가 flaky해진다.
+- 예외: **스트리밍 append 게시는 다음 디스플레이 프레임 첫머리에 반영한다** (2026-10-15).
+  임의 시각의 게시는 이어지는 SwiftUI·UIKit 갱신을 프레임 중간에 시작시켜 렌더 패스를 놓친다
+  (vsync 위상 실측). 결과는 pending 하나로 두고(latest-wins, 같은 generation의 hydration은 합침)
+  `CADisplayLink` 첫 콜백에서 generation을 다시 확인해 게시한다. 그동안 `hasOutstandingWork`는
+  true라 idle 판정은 그대로다. 첫 렌더·교체·셀 재사용·설정 변경은 즉시 게시한다.
 
 `RenderService`와 `MathRenderService`의 isolation은 P0 spike로 컴파일·실행 검증한다.
 특히 수식 raster 이미지 타입을 actor 밖으로 보낼 때 비검증

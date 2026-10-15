@@ -5,6 +5,7 @@ import RichMarkdownCore
 ///
 /// MainActor에서는 generation 관리와 게시만 한다. CPU parse/raster는 worker에서 실행한다.
 /// 게시는 2단계: (1) 수식을 원문으로 둔 ParsedDocument, (2) 수식 이미지 hydration.
+/// 스트리밍 append의 게시는 결과가 준비된 다음 디스플레이 프레임 첫머리에 반영한다.
 @MainActor
 package final class RichMarkdownRenderModel: ObservableObject {
     /// Markdown parsing 결과를 결정하는 canonical 입력 식별자다.
@@ -144,7 +145,25 @@ package final class RichMarkdownRenderModel: ObservableObject {
         let isStreamingAppend: Bool
     }
 
-    package init() {}
+    /// 한 번의 게시. 1단계는 문서와 그 시점에 준비된 이미지를, hydration은 이미지만(`document == nil`) 싣는다.
+    private struct Publish {
+        let generation: Int
+        let request: Request
+        var document: ParsedDocument?
+        let images: [MathSegment: RenderedMath]
+    }
+
+    /// 스트리밍 append 게시를 반영할 프레임을 예약한다. 기본값은 `CADisplayLink`, 테스트는 수동 프레임이다.
+    private let frameScheduler: DisplayFrame.Scheduler
+    /// 다음 프레임을 기다리는 스트리밍 append 게시. 더 새 결과가 오면 바꾼다(latest-wins).
+    private var pendingPublish: Publish?
+
+    package init(frameScheduler: @escaping DisplayFrame.Scheduler = { DisplayFrame.next($0) }) {
+        self.frameScheduler = frameScheduler
+    }
+
+    /// 프레임을 기다리는 게시의 요청. 테스트의 조건 기반 대기용 상태다.
+    var pendingFrameRequest: Request? { pendingPublish?.request }
 
     package func submit(_ request: Request) {
         // 같은 요청 재제출은 무시한다. SwiftUI `.task(id:)`는 뷰가 다시 나타날 때마다
@@ -195,9 +214,9 @@ package final class RichMarkdownRenderModel: ObservableObject {
     }
 
     /// 입력 종료 후 idle 검증용 (테스트).
-    /// 마지막으로 제출된 generation의 처리가 끝나면 false가 된다.
+    /// 마지막으로 제출된 generation의 처리가 끝나고 프레임을 기다리는 게시도 없으면 false가 된다.
     package var hasOutstandingWork: Bool {
-        completedGeneration < generation
+        completedGeneration < generation || pendingPublish != nil
     }
 
     private func ensureWorker() -> CoalescingWorker<Job> {
@@ -229,14 +248,17 @@ package final class RichMarkdownRenderModel: ObservableObject {
         ParseCache.shared.store(entry)
     }
 
-    private func publishImages(
+    /// internal visibility는 `@testable` 프레임 정렬 계약의 deterministic regression test에도 사용한다.
+    func publishImages(
         _ images: [MathSegment: RenderedMath],
         request: Request,
-        generation: Int
+        generation: Int,
+        atNextFrame: Bool
     ) {
-        guard isCurrent(generation) else { return }
-        mathImages = images
-        imageRequest = request
+        publish(
+            Publish(generation: generation, request: request, document: nil, images: images),
+            atNextFrame: atNextFrame
+        )
     }
 
     /// 문서와 그 시점에 준비된 이미지의 짝 게시.
@@ -244,18 +266,55 @@ package final class RichMarkdownRenderModel: ObservableObject {
     /// 전부 캐시돼 있으면 단일 게시로 끝난다(중간 단계 없음, 뷰 재구성 1회).
     /// 일부만 캐시돼 있으면 **부분 hydration**으로 먼저 게시한다 — 이미 raster된 수식이
     /// 원문으로 되돌아가는 프레임을 만들지 않고, 캐시에 없는 수식만 원문에서 시작한다.
-    private func publishComplete(
+    /// internal visibility는 `publishImages`와 같은 이유다.
+    func publishComplete(
         _ parsed: ParsedDocument,
         images: [MathSegment: RenderedMath],
-        parseIdentity: ParseIdentity,
         request: Request,
-        generation: Int
+        generation: Int,
+        atNextFrame: Bool
     ) {
-        guard isCurrent(generation) else { return }
-        document = parsed
-        self.parseIdentity = parseIdentity
-        mathImages = images
-        imageRequest = request
+        publish(
+            Publish(generation: generation, request: request, document: parsed, images: images),
+            atNextFrame: atNextFrame
+        )
+    }
+
+    /// append가 아닌 게시(첫 렌더·교체·셀 재사용·설정 변경)는 즉시 반영한다 — fallback이나 빈 화면을
+    /// 한 프레임도 더 보이지 않는다. 스트리밍 append 게시는 다음 프레임 첫머리로 미룬다: 임의 시각에
+    /// 반영하면 이어지는 SwiftUI·UIKit 갱신이 프레임 중간에 시작해 렌더 패스를 놓친다(`DisplayFrame`).
+    private func publish(_ publish: Publish, atNextFrame: Bool) {
+        guard isCurrent(publish.generation) else { return }
+        guard atNextFrame else {
+            apply(publish)
+            return
+        }
+        var publish = publish
+        // 같은 generation의 1단계 게시가 아직 프레임을 기다리면 hydration이 그 문서를 버리지 않게 합친다.
+        if publish.document == nil, let pending = pendingPublish, pending.generation == publish.generation {
+            publish.document = pending.document
+        }
+        let needsFrame = pendingPublish == nil
+        pendingPublish = publish
+        guard needsFrame else { return }
+        frameScheduler { [weak self] in self?.applyPendingPublish() }
+    }
+
+    /// 프레임 콜백. 기다리는 사이 새 제출이 있었으면 stale이라 버린다 — 그 제출의 결과가 곧 온다.
+    private func applyPendingPublish() {
+        guard let publish = pendingPublish else { return }
+        pendingPublish = nil
+        guard isCurrent(publish.generation) else { return }
+        apply(publish)
+    }
+
+    private func apply(_ publish: Publish) {
+        if let document = publish.document {
+            self.document = document
+            parseIdentity = publish.request.parseIdentity
+        }
+        mathImages = publish.images
+        imageRequest = publish.request
     }
 
     /// 이 요청이 raster해야 하는 수식 segment (문서 순서, 중복 제거).
@@ -346,9 +405,9 @@ package final class RichMarkdownRenderModel: ObservableObject {
         await model.publishComplete(
             parsed,
             images: images,
-            parseIdentity: job.request.parseIdentity,
             request: job.request,
-            generation: job.generation
+            generation: job.generation,
+            atNextFrame: job.isStreamingAppend
         )
         guard !missing.isEmpty else { return }
 
@@ -364,6 +423,11 @@ package final class RichMarkdownRenderModel: ObservableObject {
 
         // 최종 게시 직전 확인.
         guard await model.isCurrent(job.generation) else { return }
-        await model.publishImages(images, request: job.request, generation: job.generation)
+        await model.publishImages(
+            images,
+            request: job.request,
+            generation: job.generation,
+            atNextFrame: job.isStreamingAppend
+        )
     }
 }

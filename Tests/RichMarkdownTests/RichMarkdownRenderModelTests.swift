@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Testing
+import UIKit
 @testable import RichMarkdown
 @testable import RichMarkdownCore
 
@@ -442,6 +443,167 @@ import Testing
         )
     }
 
+    // MARK: - 프레임 정렬 게시
+
+    /// 수동 프레임 model의 idle 대기. 프레임을 기다리는 게시가 있으면 프레임을 한 번 흘린다.
+    private func drain(
+        _ model: RichMarkdownRenderModel,
+        frames: ManualFrames,
+        timeout: TimeInterval = 10
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while model.hasOutstandingWork {
+            try #require(Date() < deadline, "idle 시간 안에 outstanding task가 0이 되어야 한다")
+            frames.tick()
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
+
+    private func waitUntil(timeout: TimeInterval = 10, _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            try #require(Date() < deadline, "조건이 제한 시간 안에 충족되어야 한다")
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
+
+    /// 스트리밍 append 결과는 준비된 즉시가 아니라 다음 디스플레이 프레임 첫머리에 게시한다.
+    /// 그때까지 `hasOutstandingWork`는 true다.
+    @Test func streamingAppendResultWaitsForNextDisplayFrame() async throws {
+        let frames = ManualFrames()
+        let model = RichMarkdownRenderModel(frameScheduler: frames.schedule)
+        model.submit(request("첫 문단"))
+        try await drain(model, frames: frames)
+        let original = try #require(model.document)
+        #expect(frames.requestCount == 0, "첫 렌더는 프레임을 기다리지 않는다")
+
+        let appended = request("첫 문단 그리고 이어지는 답변")
+        model.submit(appended)
+        try await waitUntil { model.pendingFrameRequest == appended }
+
+        #expect(model.document == original, "프레임 전에는 이전 문서가 보인다")
+        #expect(model.hasOutstandingWork, "프레임을 기다리는 게시가 남아 있으면 idle이 아니다")
+        #expect(frames.requestCount == 1)
+
+        frames.tick()
+        let updated = try #require(model.document)
+        #expect(flatText(updated).contains("이어지는 답변"), "프레임 콜백에서 새 문서가 게시된다")
+        #expect(model.parseIdentity == appended.parseIdentity)
+        #expect(!model.hasOutstandingWork)
+        #expect(frames.waitingCount == 0, "게시 뒤에는 기다리는 프레임이 없다")
+    }
+
+    /// 프레임을 기다리는 동안 더 새 append 결과가 오면 그것으로 바꾼다. 프레임 요청은 하나다.
+    @Test func newerAppendResultReplacesPendingOne() async throws {
+        let frames = ManualFrames()
+        let model = RichMarkdownRenderModel(frameScheduler: frames.schedule)
+        model.submit(request("첫 문단"))
+        try await drain(model, frames: frames)
+
+        var identities: [String] = []
+        let sink = model.$parseIdentity.compactMap { $0?.markdown }.sink { identities.append($0) }
+        defer { sink.cancel() }
+
+        model.submit(request("첫 문단 둘"))
+        try await waitUntil { model.pendingFrameRequest != nil }
+        let latest = request("첫 문단 둘 셋")
+        model.submit(latest)
+        try await waitUntil { model.pendingFrameRequest == latest }
+        #expect(frames.requestCount == 1, "기다리는 게시를 바꿔도 프레임은 한 번만 요청한다")
+
+        frames.tick()
+        #expect(model.parseIdentity == latest.parseIdentity)
+        #expect(identities == ["첫 문단", "첫 문단 둘 셋"], "이전 append 결과는 게시되지 않는다")
+        #expect(!model.hasOutstandingWork)
+    }
+
+    /// 프레임을 기다리는 사이 새 제출이 오면 그 결과는 프레임에서 다시 확인해 버린다.
+    @Test func pendingAppendResultIsDroppedWhenSupersededBeforeFrame() async throws {
+        let frames = ManualFrames()
+        let model = RichMarkdownRenderModel(frameScheduler: frames.schedule)
+        model.submit(request("첫 문단"))
+        try await drain(model, frames: frames)
+        let original = try #require(model.document)
+
+        model.submit(request("첫 문단 둘"))
+        try await waitUntil { model.pendingFrameRequest != nil }
+        let latest = request("첫 문단 둘 셋")
+        model.submit(latest)
+        frames.tick()
+        #expect(model.document == original, "stale generation은 프레임에서도 게시하지 않는다")
+
+        try await drain(model, frames: frames)
+        #expect(model.parseIdentity == latest.parseIdentity)
+    }
+
+    /// 1단계 게시가 프레임을 기다리는 사이 같은 generation의 hydration이 오면 문서를 잃지 않고 합친다.
+    @Test func appendHydrationMergesIntoPendingDocument() async throws {
+        let frames = ManualFrames()
+        let model = RichMarkdownRenderModel(frameScheduler: frames.schedule)
+        model.submit(request("첫 문단"))
+        try await drain(model, frames: frames)
+
+        let appended = request(#"첫 문단 \(y^2\)"#)
+        model.submit(appended)
+        // worker 게시보다 먼저, 같은 MainActor turn에서 두 단계 게시를 직접 만든다.
+        let parsed = RichMarkdownParser.parse(markdown: appended.markdown, parsesDollarMath: false)
+        let segment = try #require(parsed.allMathSegments.first)
+        let image = RenderedMath(image: UIImage(), descent: 0, ascent: 0)
+        model.publishComplete(parsed, images: [:], request: appended, generation: 2, atNextFrame: true)
+        model.publishImages([segment: image], request: appended, generation: 2, atNextFrame: true)
+        #expect(frames.requestCount == 1)
+
+        frames.tick()
+        #expect(model.document == parsed, "hydration이 기다리던 문서를 덮어 지우면 안 된다")
+        #expect(model.mathImages[segment] != nil)
+        #expect(model.imageRequest == appended)
+        try await drain(model, frames: frames)
+    }
+
+    /// append가 아닌 게시(첫 렌더·교체·설정 변경)는 지금처럼 즉시 게시한다 — 프레임을 기다리지 않는다.
+    @Test func nonAppendPublishesStayImmediate() async throws {
+        let frames = ManualFrames()
+        let model = RichMarkdownRenderModel(frameScheduler: frames.schedule)
+        // 프레임을 흘리지 않는다. 즉시 게시라면 그래도 idle이 된다.
+        model.submit(request(#"첫 렌더 \(a+b\)"#))
+        try await waitForIdle(model)
+        #expect(model.document != nil)
+        #expect(!model.mathImages.isEmpty, "첫 렌더의 hydration도 즉시다")
+
+        model.submit(request("전혀 다른 문서"))
+        try await waitForIdle(model)
+        #expect(model.parseIdentity?.markdown == "전혀 다른 문서")
+
+        let reconfigured = RichMarkdownRenderModel.Request(
+            markdown: "전혀 다른 문서",
+            parsesDollarMath: false,
+            pointSize: 24,
+            colorRGBA: 0xFF0000FF,
+            displayScale: 2
+        )
+        model.submit(reconfigured)
+        try await waitForIdle(model)
+        #expect(model.imageRequest == reconfigured)
+        #expect(frames.requestCount == 0, "append가 아닌 게시는 프레임을 요청하지 않는다")
+    }
+
+    /// 실제 `CADisplayLink` 경로: append 결과는 프레임 콜백에서 게시되고, 울린 링크는 무효화돼 놓인다.
+    /// 기다리는 게시가 없으면 살아 있는 링크도 없다.
+    @Test func displayLinkPublishesAppendAndIsReleasedWhenIdle() async throws {
+        var fired = 0
+        weak var link = DisplayFrame.next { fired += 1 }
+        #expect(link != nil, "기다리는 동안은 run loop가 링크를 잡는다")
+        try await waitUntil { fired == 1 && link == nil }
+
+        let model = RichMarkdownRenderModel()
+        model.submit(request("첫 문단"))
+        try await waitForIdle(model)
+        model.submit(request("첫 문단 그리고 이어지는 답변"))
+        try await waitForIdle(model)
+        #expect(flatText(try #require(model.document)).contains("이어지는 답변"))
+        #expect(fired == 1, "한 번 울린 링크는 다시 울리지 않는다")
+    }
+
     private func flatText(_ document: ParsedDocument) -> String {
         document.blocks.map { block -> String in
             if case .paragraph(let runs) = block {
@@ -455,5 +617,27 @@ import Testing
             }
             return ""
         }.joined(separator: "\n")
+    }
+}
+
+/// 테스트용 수동 디스플레이 프레임. `tick()`이 기다리는 콜백을 한 번에 흘린다.
+@MainActor
+final class ManualFrames {
+    private var waiting: [@MainActor () -> Void] = []
+    /// 지금까지 받은 프레임 요청 수.
+    private(set) var requestCount = 0
+    var waitingCount: Int { waiting.count }
+
+    var schedule: DisplayFrame.Scheduler {
+        { [weak self] action in
+            self?.requestCount += 1
+            self?.waiting.append(action)
+        }
+    }
+
+    func tick() {
+        let actions = waiting
+        waiting = []
+        actions.forEach { $0() }
     }
 }
