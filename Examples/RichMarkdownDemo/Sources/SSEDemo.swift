@@ -520,15 +520,15 @@ enum SSEDemoError: LocalizedError {
 /// - 엔드포인트가 비면 fixture를 SSE 프레임으로 만들어 로컬에서 흘린다(네트워크 불필요).
 /// - 엔드포인트를 넣으면 `URLSession.bytes`로 실제 `text/event-stream`을 읽는다.
 ///   인증 헤더는 붙이지 않으므로 토큰이 필요한 게이트웨이는 로컬 프록시를 두고 붙인다.
+///
+/// 루트는 청크 상태를 읽지 않는다. 도착(20Hz)은 카운터 값만 올리고, 버퍼 게시(≤10Hz)는 본문
+/// (`SSETranscriptView`)만 다시 그린다 — 툴바 메뉴·속도 Picker·입력 필드는 스트림 동안 그대로다
+/// (p7 실측: 루트의 20Hz 카운터가 화면 전체를 무효화해 hitch 구간 메인 스레드의 17–30%를 썼다).
 struct SSEDemoView: View {
-    private static let bottomAnchor = "sseDemo.bottom"
-
     /// 도착 속도와 화면 갱신을 분리하는 latest-wins 버퍼. trailing 게시로 마지막 조각도 화면에 오른다.
-    @StateObject private var buffer = RichMarkdownStreamingTextBuffer(interval: SSEDemoLimits.publishInterval)
-    /// 라벨용 카운터. `answer.count`는 매 프레임 전체 grapheme 순회(O(n))라 쓰지 않는다.
-    @State private var answerCharacters = 0
-    @State private var answerBytes = 0
-    @State private var chunkCount = 0
+    /// `@StateObject`가 아니라 `@State`로 들고 있어 루트는 게시를 구독하지 않는다.
+    @State private var buffer = RichMarkdownStreamingTextBuffer(interval: SSEDemoLimits.publishInterval)
+    @State private var counter = SSEStreamCounter()
     @State private var isStreaming = false
     /// `.task(id:)` 재시작 신호. 시작·중지 모두 값을 올려 이전 스트림 Task를 취소한다.
     @State private var runID = 0
@@ -538,7 +538,6 @@ struct SSEDemoView: View {
     @State private var parsesDollarMath = false
     @State private var equationAlignment: EquationAlignmentOption = .leading
     @State private var preset = RichMarkdownThemePreset.fromLaunchArguments()
-    @State private var scrollProxy: ScrollViewProxy?
     @FocusState private var endpointFocused: Bool
 
     private var theme: RichMarkdownTheme {
@@ -549,7 +548,13 @@ struct SSEDemoView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            transcriptView
+            SSETranscriptView(
+                buffer: buffer,
+                counter: counter,
+                isStreaming: isStreaming,
+                parsesDollarMath: parsesDollarMath,
+                theme: theme
+            )
             Divider()
             controls
         }
@@ -582,59 +587,6 @@ struct SSEDemoView: View {
             await SSEDemoLaunchOptions.waitForTracingStarted()
             guard !Task.isCancelled, !isStreaming else { return }
             start()
-        }
-    }
-
-    private var transcriptView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    statusRow
-                    if buffer.text.isEmpty {
-                        Text(verbatim: "시작을 누르면 SSE 프레임이 도착하는 대로 렌더링합니다.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        // README «스트리밍» 패턴 그대로: 버퍼가 게시한 누적 전체 문자열을 넘긴다.
-                        // 라이브러리가 스트리밍 append에서 이전 렌더를 유지하므로(모델의
-                        // append 계약) 갱신마다 원문으로 되돌아가는 플래시가 없다.
-                        RichMarkdownView(markdown: buffer.text, parsesDollarMath: parsesDollarMath)
-                            .richMarkdownStreaming(isStreaming ? .default : nil)
-                            .richMarkdownTheme(theme)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                            .background(Color(.secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                    }
-                    Color.clear
-                        .frame(height: 1)
-                        .id(Self.bottomAnchor)
-                }
-                .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
-                .padding(DemoLayout.horizontalMargin)
-                .frame(maxWidth: .infinity)
-            }
-            .onAppear { scrollProxy = proxy }
-            .onReceive(buffer.$text.dropFirst()) { _ in
-                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
-            }
-        }
-    }
-
-    private var statusRow: some View {
-        HStack(spacing: 8) {
-            if isStreaming {
-                ProgressView()
-                    .controlSize(.small)
-            }
-            Text(verbatim: "\(chunkCount) 청크 · \(answerCharacters)자")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color(.label))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(.tertiarySystemFill))
-                .clipShape(Capsule())
-                .accessibilityIdentifier("sseDemo.status")
         }
     }
 
@@ -686,9 +638,7 @@ struct SSEDemoView: View {
 
     private func start() {
         buffer.reset()
-        answerCharacters = 0
-        answerBytes = 0
-        chunkCount = 0
+        counter.reset()
         errorMessage = nil
         endpointFocused = false
         isStreaming = true
@@ -783,11 +733,9 @@ struct SSEDemoView: View {
             return false
 
         case let .text(delta):
-            chunkCount += 1
-            answerCharacters += delta.count
-            answerBytes += delta.utf8.count
+            counter.record(delta)
             buffer.append(delta)
-            if answerBytes >= SSEDemoLimits.answerByteCap {
+            if counter.bytes >= SSEDemoLimits.answerByteCap {
                 buffer.flush()
                 errorMessage = "표시 상한(256 KiB)에 도달해 스트림을 끊었습니다."
                 return true
@@ -802,6 +750,102 @@ struct SSEDemoView: View {
         case .done:
             buffer.flush()
             return true
+        }
+    }
+}
+
+/// SSE 화면의 도착 카운터. 청크마다(20Hz) 값만 올리고 화면 갱신을 일으키지 않는다. 상태 칩은 버퍼 게시
+/// (≤10Hz) 때 본문과 함께 다시 그려지며 이 값을 읽는다 — UIKit 화면이 `render(_:)`에서 라벨을 고치는 것과
+/// 같은 박자다. 모든 청크는 게시나 종료 flush로 끝나므로 스트림이 끝난 뒤의 표시는 항상 최종 값이다.
+@MainActor
+final class SSEStreamCounter {
+    private(set) var chunks = 0
+    /// `answer.count`는 매 프레임 전체 grapheme 순회(O(n))라 델타 길이를 더한다.
+    private(set) var characters = 0
+    private(set) var bytes = 0
+
+    var label: String { "\(chunks) 청크 · \(characters)자" }
+
+    func record(_ delta: String) {
+        chunks += 1
+        characters += delta.count
+        bytes += delta.utf8.count
+    }
+
+    func reset() {
+        chunks = 0
+        characters = 0
+        bytes = 0
+    }
+}
+
+/// SSE 화면 본문. 버퍼를 구독하는 유일한 뷰라 게시마다 이 뷰만 다시 그린다.
+private struct SSETranscriptView: View {
+    private static let bottomAnchor = "sseDemo.bottom"
+
+    @ObservedObject var buffer: RichMarkdownStreamingTextBuffer
+    let counter: SSEStreamCounter
+    let isStreaming: Bool
+    let parsesDollarMath: Bool
+    let theme: RichMarkdownTheme
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    SSEStatusChip(label: counter.label, isStreaming: isStreaming)
+                    if buffer.text.isEmpty {
+                        Text(verbatim: "시작을 누르면 SSE 프레임이 도착하는 대로 렌더링합니다.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        // README «스트리밍» 패턴 그대로: 버퍼가 게시한 누적 전체 문자열을 넘긴다.
+                        // 라이브러리가 스트리밍 append에서 이전 렌더를 유지하므로(모델의
+                        // append 계약) 갱신마다 원문으로 되돌아가는 플래시가 없다.
+                        RichMarkdownView(markdown: buffer.text, parsesDollarMath: parsesDollarMath)
+                            .richMarkdownStreaming(isStreaming ? .default : nil)
+                            .richMarkdownTheme(theme)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                    }
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.bottomAnchor)
+                }
+                .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
+                .padding(DemoLayout.horizontalMargin)
+                .frame(maxWidth: .infinity)
+            }
+            .onReceive(buffer.$text.dropFirst()) { _ in
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            }
+        }
+    }
+}
+
+/// 받은 청크·글자 수 칩. 입력이 바뀔 때만 다시 그린다. `.fixedSize()`로 이상적 크기를 써서 숫자가 자라도
+/// 줄 바꿈·말줄임으로 흔들리지 않는다.
+private struct SSEStatusChip: View {
+    let label: String
+    let isStreaming: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if isStreaming {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Text(verbatim: label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(.label))
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(.tertiarySystemFill))
+                .clipShape(Capsule())
+                .accessibilityIdentifier("sseDemo.status")
         }
     }
 }

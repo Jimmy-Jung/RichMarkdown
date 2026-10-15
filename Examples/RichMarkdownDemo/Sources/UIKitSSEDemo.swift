@@ -12,7 +12,7 @@ import UIKit
 /// SwiftUI 화면(`SSEDemoView`)과 같은 디코더(`SSEDecoder`)·줄 분리기(`SSELineSplitter`)·
 /// fixture·게시 게이트를 쓰고 렌더러 배선만 다르다. 확인 대상:
 /// 1. 스트리밍 append에서 블록 뷰 증분 재사용(0.3.0 성능 작업)이 그대로 동작하는지.
-/// 2. `onContentSizeChange` 기반 자동 스크롤.
+/// 2. `onContentSizeChange` 기반 자동 스크롤(오프셋은 레이아웃 패스 안에서 맞춘다).
 /// 3. 테마·정렬 교체가 살아 있는 뷰에 반영되는지.
 struct UIKitSSEDemoView: View {
     @State private var parsesDollarMath = false
@@ -64,6 +64,25 @@ struct UIKitSSEDemoContainer: UIViewControllerRepresentable {
 
 // MARK: - 컨트롤러
 
+/// 하단 고정 스크롤 뷰. `followsBottom`이 켜져 있으면 contentSize가 바뀌는 순간(레이아웃 패스 안,
+/// Auto Layout이 콘텐츠 높이를 반영할 때) 바닥으로 붙는다 — 따로 `layoutIfNeeded`를 부르지 않는다.
+final class BottomFollowingScrollView: UIScrollView {
+    var followsBottom = false
+
+    override var contentSize: CGSize {
+        didSet {
+            guard followsBottom, contentSize != oldValue else { return }
+            scrollToBottom()
+        }
+    }
+
+    /// 현재 contentSize 기준으로 바닥에 붙인다. 콘텐츠가 화면보다 짧으면 맨 위다.
+    func scrollToBottom() {
+        let overflow = contentSize.height + adjustedContentInset.bottom - bounds.height
+        setContentOffset(CGPoint(x: 0, y: max(-adjustedContentInset.top, overflow)), animated: false)
+    }
+}
+
 final class UIKitSSEDemoViewController: UIViewController {
     var theme: RichMarkdownTheme {
         didSet { messageView.theme = theme }
@@ -90,10 +109,11 @@ final class UIKitSSEDemoViewController: UIViewController {
             updateControls()
             // 스트리밍 표시(꼬리 페이드·미닫힌 마크 억제·in-place 갱신)는 스트림 동안만 켠다.
             messageView.streaming = isStreaming ? .default : nil
+            if !isStreaming { scrollView.followsBottom = false }
         }
     }
 
-    private let scrollView = UIScrollView()
+    private let scrollView = BottomFollowingScrollView()
     private let messageView = RichMarkdownUIView()
     private let bubble = UIView()
     private let placeholderLabel = UILabel()
@@ -146,8 +166,11 @@ final class UIKitSSEDemoViewController: UIViewController {
         // 스트리밍 중 하단 추적은 `onContentSizeChange`(블록 재구성 뒤)가 맡는다. 여기서도 스크롤하면
         // 아직 갱신되지 않은 옛 콘텐츠를 강제 레이아웃해 tick마다 `layoutIfNeeded`가 두 번 돈다
         // (2026-09-15 iPad Pro 실측: 스트리밍 중 메인 스레드의 14%). 스트림이 끝난 뒤의 마지막
-        // 게시(`stop()`의 flush)만 여기서 맞춘다.
-        if !isStreaming { scrollToBottom() }
+        // 게시(`stop()`의 flush)만 여기서 한 번 강제 레이아웃해 맞춘다.
+        if !isStreaming {
+            scrollView.layoutIfNeeded()
+            scrollView.scrollToBottom()
+        }
     }
 
     /// 성능 측정 자동 재생(`SSEDemoLaunchOptions`). 녹화가 시작된 뒤에 한 번만 스트림을 연다.
@@ -174,10 +197,12 @@ final class UIKitSSEDemoViewController: UIViewController {
         messageView.theme = theme
         messageView.parsesDollarMath = parsesDollarMath
         messageView.translatesAutoresizingMaskIntoConstraints = false
-        // 수식 hydration·블록 재구성으로 높이가 바뀌는 시점이 곧 스크롤 하단 추적 시점이다.
+        // 수식 hydration·블록 재구성으로 높이가 바뀌는 시점이 곧 스크롤 하단 추적 시점이다. 여기서
+        // `layoutIfNeeded`로 바로 맞추면 재구성 직후 동기 레이아웃이 tick마다 한 번 더 돈다. 하단 고정만
+        // 걸어 두면 CA commit의 레이아웃이 contentSize를 바꾸는 순간 오프셋을 맞춘다(레이아웃 1회).
         messageView.onContentSizeChange = { [weak self] in
             guard let self, self.isStreaming else { return }
-            self.scrollToBottom()
+            self.scrollView.followsBottom = true
         }
 
         bubble.backgroundColor = .secondarySystemGroupedBackground
@@ -335,15 +360,6 @@ final class UIKitSSEDemoViewController: UIViewController {
     private func showError(_ message: String) {
         errorLabel.text = message
         errorLabel.isHidden = false
-    }
-
-    private func scrollToBottom() {
-        scrollView.layoutIfNeeded()
-        let overflow = scrollView.contentSize.height
-            + scrollView.adjustedContentInset.bottom
-            - scrollView.bounds.height
-        let top = -scrollView.adjustedContentInset.top
-        scrollView.setContentOffset(CGPoint(x: 0, y: max(top, overflow)), animated: false)
     }
 
     // MARK: 스트리밍 (SSEDemoView와 같은 전송 로직)
