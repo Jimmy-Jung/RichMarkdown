@@ -24,7 +24,9 @@
 #
 # 선택 환경 변수: SKIP_BUILD=1, KINDS="hitches cpu", XCPROF=<xcprof 경로>, RICHMARKDOWN_CC=<xcodebuild CC 덮어쓰기>,
 #   SIGNPOST_INSTRUMENT=<SSE 녹화에 더할 signpost 계측기, 기본 os_signpost — 가벼운 `Points of Interest`로 바꿀 수 있다>,
-#   CPU_SIGNPOST=0 (CPU Profiler 녹화에 signpost 계측기를 더하지 않는다 — 그러면 자동 재생 cpu 창은 트레이스 전체)
+#   CPU_SIGNPOST=0 (CPU Profiler 녹화에 signpost 계측기를 더하지 않는다 — 그러면 자동 재생 cpu 창은 트레이스 전체),
+#   SSE_PHASE_SEED=<정수> (자동 재생 앱에 `-ssePhaseSeed`로 넘겨 첫 청크 vsync 위상을 고정한다 — 라운드마다 seed를
+#   바꿔 위상을 층화한다. 없으면 앱이 스트림마다 새로 뽑는다. 쓴 seed·offset은 metrics.json의 `phase`에 남는다)
 # 빌드 뒤 `$OUT_DIR/build/`에 dSYM 사본과 provenance.txt(git SHA·dirty, 앱·dSYM UUID)를 남기고 분석은 그 dSYM을 쓴다.
 # UI 조작은 PerfScenarioUITests가 한다. 녹화가 시작되면 이 스크립트가 Darwin 알림을 보내고, 테스트는 그때부터
 # 시나리오를 실행한 뒤 xctrace가 --time-limit으로 스스로 끝날 때까지 앱을 살려 둔다.
@@ -47,6 +49,8 @@ readonly DSYM="$OUT_DIR/build/$APP.app.dSYM"
 readonly SIGNPOST=sse-stream
 SIGNPOST_INSTRUMENT="${SIGNPOST_INSTRUMENT:-os_signpost}"
 XCPROF="${XCPROF:-xcprof}"
+# 앱은 정수가 아닌 seed를 조용히 무작위로 대신하므로 여기서 막는다.
+case "${SSE_PHASE_SEED:-0}" in *[!0-9]*) echo "SSE_PHASE_SEED는 0 이상의 정수여야 한다: $SSE_PHASE_SEED"; exit 1 ;; esac
 mkdir -p "$OUT_DIR/failed" "$OUT_DIR/build" "$SLOT_DIR/tmp"
 
 # bash 3.2(/bin/bash)는 `set -u`에서 빈 배열 "${a[@]}"를 unbound로 끝낸다. 비어 있을 수 있는 배열은 ${a[@]+…}로 펼친다.
@@ -203,6 +207,7 @@ record_trace() {  # <시나리오> <종류> <트레이스> <로그>
     if autoplay=$(scenario_autoplay "$1"); then
         # shellcheck disable=SC2206 # launch argument는 공백으로 나뉜 고정 토큰이다.
         target=(--launch -- "$BUNDLE_ID" $autoplay)
+        [ -n "${SSE_PHASE_SEED:-}" ] && target+=(-ssePhaseSeed "$SSE_PHASE_SEED")
         # "Ctrl-C to stop" 시점에 앱이 아직 알림 관찰을 걸지 못했을 수 있다. 런치를 기다렸다가 보낸다.
         notify_delay=2
     fi
