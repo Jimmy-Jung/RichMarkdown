@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  데모 성능 측정 전용 scheme (Release, 디버거 없음, UI 테스트 타깃만).
+  데모 성능 측정 전용 scheme (Release, 디버거 없음, Main Thread Checker 끔, UI 테스트 타깃만).
+  Main Thread Checker는 xcodebuild test가 앱에 주입해 UIKit 호출마다 검사 비용을 더한다(p7 분석) — 측정에서 뺀다.
   공유 scheme은 `@testable import`를 쓰는 RichMarkdownDemoTests까지 빌드해 Release에서 실패한다.
   scripts/bench/ios-trace-scenarios.sh가 RichMarkdownDemo.xcodeproj/xcuserdata/<user>.xcuserdatad/xcschemes/
   (gitignore 대상)에 복사해 쓴다.
@@ -32,6 +33,7 @@
       buildConfiguration = "Release"
       selectedDebuggerIdentifier = ""
       selectedLauncherIdentifier = "Xcode.IDEFoundation.Launcher.PosixSpawn"
+      disableMainThreadChecker = "YES"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
       <Testables>
@@ -53,6 +55,7 @@
       selectedLauncherIdentifier = "Xcode.IDEFoundation.Launcher.PosixSpawn"
       launchStyle = "0"
       useCustomWorkingDirectory = "NO"
+      disableMainThreadChecker = "YES"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"

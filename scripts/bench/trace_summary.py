@@ -11,7 +11,13 @@
 창은 UI 테스트의 `PERF_WINDOW <이름> ... start_epoch=<s> end_epoch=<s>` 줄과 TOC의 녹화 시작 시각으로 계산한다
 (기기·Mac 시계가 NTP로 맞춰져 있다고 가정). 창이 없으면 트레이스 전체다.
 
-  trace_summary.py <trace> [--app RichMarkdownDemo] [--ui-log ui.log --window <이름>] [--frame RichMarkdownParser.parse]
+`--window-signpost <이름>`을 주면 앱이 남긴 os_signpost 구간(SSE 데모의 `sse-stream`: 첫 청크 직전 → 마지막
+flush 직후)을 두 번째 창으로 쓴다. 트레이스 시계 그대로라 epoch 대응 오차가 없고 끝의 유휴 꼬리가 빠진다.
+결과는 `window_stream`·`hitches_stream`·`profile_stream`에 따로 담고, 기존 키(`hitches`·`profile`)는 UI 로그 창
+그대로 둬 이전 수치와 나란히 비교한다. 구간이 트레이스에 없으면 UI 로그 창으로 대신한다(`window_stream.source`).
+
+  trace_summary.py <trace> [--app RichMarkdownDemo] [--ui-log ui.log --window <이름>] [--window-signpost sse-stream]
+                   [--frame RichMarkdownParser.parse]
   trace_summary.py --self-test
 """
 import argparse
@@ -45,20 +51,21 @@ def toc_info(trace):
 
 
 def parse_table(xml_text):
-    """xctrace export XML → 열 이름을 키로 한 행 목록. id/ref 압축을 풀어 요소를 그대로 돌려준다."""
+    """xctrace export XML → 열 이름을 키로 한 행 목록. id/ref 압축을 풀어 요소를 그대로 돌려준다.
+    같은 schema 표가 여럿이면(os_signpost·Points of Interest를 함께 기록) 모두 이어 붙인다."""
     if "<trace-query-result" not in xml_text:
         return []
-    node = ET.fromstring(xml_text).find("node")
-    if node is None or node.find("schema") is None:
-        return []
-    columns = [col.findtext("mnemonic") for col in node.find("schema").findall("col")]
     registry, rows = {}, []
-    for row in node.findall("row"):
-        for element in row.iter():
-            if "id" in element.attrib:
-                registry[element.get("id")] = element
-        cells = [resolve(cell, registry) for cell in row]
-        rows.append(dict(zip(columns, cells)))
+    for node in ET.fromstring(xml_text).findall("node"):
+        if node.find("schema") is None:
+            continue
+        columns = [col.findtext("mnemonic") for col in node.find("schema").findall("col")]
+        for row in node.findall("row"):
+            for element in row.iter():
+                if "id" in element.attrib:
+                    registry[element.get("id")] = element
+            cells = [resolve(cell, registry) for cell in row]
+            rows.append(dict(zip(columns, cells)))
     return rows
 
 
@@ -79,7 +86,9 @@ def number(element):
 
 
 def label(element):
-    return element.get("fmt", "") if element is not None else ""
+    if element is None:
+        return ""
+    return element.get("fmt") or (element.text or "")
 
 
 # 기기 시계 epoch ↔ 트레이스 시각 대응 오차. 교차 확인 트레이스에서 측정 구간의 첫 parse 표본이
@@ -139,6 +148,24 @@ def resolve_stacks(xml_text):
     return samples
 
 
+# 접근성 부하를 좁게 나눈다(p7 분석). 넓은 `main_accessibility_ms`는 UIKit의 일반 `accessibility*` 속성 조회까지
+# 세어 실제 부하보다 크게 나왔다 — 이전 수치와 잇기 위해 그대로 두고 아래 세 값을 따로 낸다.
+#   ax_mode_ms   : 접근성 모드가 켜져 있어 도는 일(AXRuntime·UIAccessibility·SwiftUI 접근성 그래프), XCTest 조회 제외
+#   xct_query_ms : XCUITest 러너의 조회(XCTAutomationSupport)
+#   mtc_ms       : Main Thread Checker(libMainThreadChecker.dylib)
+SWIFTUI_AX = re.compile(r"Accessibility(ViewGraph|Attachment|Properties|Node|Core|ButtonModifier|ToggleModifier)"
+                        r"|applyAccessibility|automationElements|_UIAXBroadcast")
+
+
+def harness_load(frames):
+    """메인 스레드 표본 한 개의 하네스 부하 분류 → (ax_mode, xct_query, mtc)."""
+    xct = any(binary == "XCTAutomationSupport" for _, binary in frames)
+    ax = any(binary in ("AXRuntime", "UIAccessibility") or SWIFTUI_AX.search(name) or "_accessibility" in name
+             for name, binary in frames)
+    mtc = any(binary == "libMainThreadChecker.dylib" for _, binary in frames)
+    return ax and not xct, xct, mtc
+
+
 def profile_summary(samples, app, window, frame_queries, top=8):
     scoped = [s for s in samples if s[2].startswith(app) and in_window(s[0], window)]
     main = [s for s in scoped if "Main Thread" in s[1]]
@@ -161,6 +188,7 @@ def profile_summary(samples, app, window, frame_queries, top=8):
         "main_accessibility_ms": round(sum(s[3] for s in main if any(
             "ccessibility" in name or binary.startswith(("AXRuntime", "UIAccessibility")) for name, binary in s[4]
         )) / 1e6, 1),
+        **harness_summary(main),
         "main_top_app_frames": rank(inclusive),
         "main_top_library_leaf_frames": rank(leaf),
         # 메인 스레드 표본의 leaf 바이너리. XCUITest 접근성 조회 부하(AXRuntime·UIAccessibility 등)가 여기서 보인다.
@@ -176,6 +204,14 @@ def profile_summary(samples, app, window, frame_queries, top=8):
     return result
 
 
+def harness_summary(main):
+    totals = [0, 0, 0]
+    for _, _, _, weight, frames in main:
+        for index, hit in enumerate(harness_load(frames)):
+            totals[index] += weight if hit else 0
+    return {key: round(total / 1e6, 1) for key, total in zip(("ax_mode_ms", "xct_query_ms", "mtc_ms"), totals)}
+
+
 def footprint_summary(rows, app):
     values = [number(r.get("memory-physical-footprint")) for r in rows if label(r.get("process")).startswith(app)]
     values = [v for v in values if v is not None]
@@ -187,6 +223,28 @@ def signpost_summary(rows, name):
     durations = [number(r.get("duration")) for r in rows if label(r.get("name")) == name]
     durations = [d for d in durations if d is not None]
     return {"name": name, "count": len(durations), "total_ms": round(sum(durations) / 1e6, 2)}
+
+
+def signpost_window(rows, name, app):
+    """`name` os_signpost 구간 → (시작 ms, 끝 ms, 개수). 트레이스 시각(ns, 녹화 시작 기준) 그대로다.
+    여러 번이면 첫 구간을 쓴다(데모는 스트림당 하나)."""
+    spans = sorted(
+        (number(r.get("start")), number(r.get("duration"))) for r in rows
+        if label(r.get("name")) == name and label(r.get("process")).startswith(app)
+        and number(r.get("start")) is not None and number(r.get("duration")) is not None
+    )
+    if not spans:
+        return None
+    start, duration = spans[0]
+    return start / 1e6, (start + duration) / 1e6, len(spans)
+
+
+def stream_window(signpost_rows, name, app, fallback):
+    """signpost 창 → (창, 출처). 구간이 없으면 UI 로그 창(`fallback`)으로 대신한다."""
+    found = signpost_window(signpost_rows, name, app) if name else None
+    if found:
+        return found[:2], "signpost"
+    return fallback, ("ui-log" if fallback else None)
 
 
 def window_from_log(ui_log, name, trace_start):
@@ -205,36 +263,63 @@ def window_from_log(ui_log, name, trace_start):
     return None
 
 
-def summarize(trace, app, ui_log, window_name, frame_queries, signpost):
+def trace_windows(trace, app, ui_log, window_name, window_signpost):
+    """(TOC 스키마, 녹화 시작 epoch, UI 로그 창, (signpost 창, 출처), os-signpost-interval 행)."""
     trace_start, schemas = toc_info(trace)
     window = window_from_log(ui_log, window_name, trace_start) if ui_log and window_name else None
+    rows = export(trace, "os-signpost-interval") if "os-signpost-interval" in schemas else []
+    stream = stream_window(rows, window_signpost, app, window) if window_signpost else (None, None)
+    return schemas, window, stream, rows
+
+
+def summarize(trace, app, ui_log, window_name, frame_queries, signpost, window_signpost):
+    schemas, window, (stream, stream_source), signpost_rows = trace_windows(trace, app, ui_log, window_name,
+                                                                            window_signpost)
     duration = re.search(r"<duration>([\d.]+)</duration>", xctrace("export", "--input", trace, "--toc"))
     duration_s = float(duration.group(1)) if duration else None
     result = {"trace": trace, "window": window_name, "window_ms": [round(v) for v in window] if window else None,
               "duration_s": duration_s}
+    if window_signpost:
+        result["window_stream"] = {"signpost": window_signpost, "source": stream_source,
+                                   "ms": [round(v) for v in stream] if stream else None}
     if "hitches" in schemas:
-        result["hitches"] = hitch_summary(export(trace, "hitches"), app, window, duration_s)
+        rows = export(trace, "hitches")
+        result["hitches"] = hitch_summary(rows, app, window, duration_s)
+        if stream:
+            result["hitches_stream"] = hitch_summary(rows, app, stream, duration_s)
     if "time-profile" in schemas:
         xml_text = xctrace("export", "--input", trace, "--xpath",
                            '/trace-toc/run[@number="1"]/data/table[@schema="time-profile"]')
-        result["profile"] = profile_summary(resolve_stacks(xml_text), app, window, frame_queries)
+        samples = resolve_stacks(xml_text)
+        result["profile"] = profile_summary(samples, app, window, frame_queries)
+        if stream:
+            result["profile_stream"] = profile_summary(samples, app, stream, frame_queries)
     if "activity-monitor-process-live" in schemas:
         result["memory"] = footprint_summary(export(trace, "activity-monitor-process-live"), app)
-    if signpost and "os-signpost-interval" in schemas:
-        result["signpost"] = signpost_summary(export(trace, "os-signpost-interval"), signpost)
+    if signpost and signpost_rows:
+        result["signpost"] = signpost_summary(signpost_rows, signpost)
     return result
 
 
+def xcprof_range(window):
+    return f"--start-ms {max(0, round(window[0]))} --end-ms {round(window[1])}" if window else ""
+
+
 def report(directory, top=3):
-    """한 기기 폴더의 *.summary.json·*.xcprof.json을 시나리오 표(Markdown)로 묶는다."""
+    """한 기기 폴더의 *.summary.json·*.xcprof.json을 시나리오 표(Markdown)로 묶는다.
+    `stream` 열은 signpost 창(`hitches_stream`)이다 — 자동 재생 시나리오는 이 열이 본 수치다
+    (UI 로그 창이 없어 기존 열은 트레이스 전체). CPU 열은 `<시나리오>.cpu.<창>.xcprof.json`이다."""
     import glob
     import os
-    rows = ["| 시나리오 | 창 s | hitch 수 | 합계 ms | 최대 ms | ms/s | 메인 스레드 ms (접근성) | 메인 스레드 앱 프레임 (TP incl. ms) | CPU Profiler 라이브러리 프레임 (xcprof, 앱 CPU 표본 중 incl. %) | 최대 footprint MiB |",
-            "|---|---:|---:|---:|---:|---:|---:|---|---|---:|"]
+    rows = ["| 시나리오 | 창 s | hitch 수 | 합계 ms | 최대 ms | ms/s | stream 창 s | stream hitch 수 | stream ms/s | 메인 스레드 ms (접근성) | 메인 스레드 앱 프레임 (TP incl. ms) | CPU Profiler 라이브러리 프레임 (xcprof, 앱 CPU 표본 중 incl. %) | 최대 footprint MiB |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---:|"]
     for path in sorted(glob.glob(os.path.join(directory, "*.hitches.*.summary.json"))):
         summary = json.load(open(path))
         scenario, window = os.path.basename(path).split(".hitches.")[0], summary["window"]
-        hitches, profile = summary.get("hitches", {}), summary.get("profile", {})
+        hitches, stream = summary.get("hitches", {}), summary.get("hitches_stream", {})
+        # UI 로그 창이 없는 자동 재생 시나리오는 메인 스레드 열도 signpost 창으로 읽는다(전체 트레이스엔 런치가 섞인다).
+        profile = summary.get("profile_stream" if summary.get("window_ms") is None and "profile_stream" in summary
+                              else "profile", {})
         frames = ", ".join(f"{f['frame'][:48]} {f['ms']:g}" for f in profile.get("main_top_app_frames", [])[:top])
         cpu_path = os.path.join(directory, f"{scenario}.cpu.{window}.xcprof.json")
         cpu = ""
@@ -249,6 +334,7 @@ def report(directory, top=3):
         peak = json.load(open(memory_path)).get("memory", {}).get("peak_footprint_mib") if os.path.exists(memory_path) else None
         rows.append(f"| {window} | {hitches.get('window_s', '-')} | {hitches.get('count', '-')} | {hitches.get('total_ms', '-')} | "
                     f"{hitches.get('max_ms', '-')} | {hitches.get('ratio_ms_per_s', '-')} | "
+                    f"{stream.get('window_s', '-')} | {stream.get('count', '-')} | {stream.get('ratio_ms_per_s', '-')} | "
                     f"{profile.get('main_thread_ms', '-')} ({profile.get('main_accessibility_ms', '-')}) | {frames} | {cpu} | "
                     f"{peak if peak is not None else '-'} |")
     return "\n".join(rows)
@@ -262,9 +348,49 @@ def self_test():
     <row><start-time id="5">2000000000</start-time><duration id="6">16666666</duration><process ref="3"/><boolean ref="4"/></row>
     <row><start-time id="7">9000000000</start-time><duration ref="6"/><process ref="3"/><boolean ref="4"/></row>
     </node></trace-query-result>"""
-    summary = hitch_summary(parse_table(xml_text), "App", (500, 5000), 10)
+    hitch_rows = parse_table(xml_text)
+    summary = hitch_summary(hitch_rows, "App", (500, 5000), 10)
     assert summary["count"] == 2 and summary["total_ms"] == 25.0 and summary["max_ms"] == 16.7, summary
     assert summary["ratio_ms_per_s"] == round(25.0 / 4.5, 2)
+
+    # os-signpost-interval 열 구성은 Instruments 문서(Narrative.instrdst fulldoc)의 schema 그대로다.
+    # 표 두 개(os_signpost·Points of Interest)에 나뉘어도 찾고, 다른 이름·다른 프로세스 구간은 고르지 않는다.
+    signpost_xml = """<?xml version="1.0"?><trace-query-result><node><schema name="os-signpost-interval">
+    <col><mnemonic>start</mnemonic></col><col><mnemonic>duration</mnemonic></col><col><mnemonic>layout-qualifier</mnemonic></col>
+    <col><mnemonic>name</mnemonic></col><col><mnemonic>category</mnemonic></col><col><mnemonic>subsystem</mnemonic></col>
+    <col><mnemonic>identifier</mnemonic></col><col><mnemonic>process</mnemonic></col></schema>
+    <row><start-time id="1" fmt="00:00.200">200000000</start-time><duration id="2" fmt="9 s">9000000000</duration><layout-id id="3" fmt="0">0</layout-id>
+    <string id="4" fmt="parse">parse</string><category id="5" fmt="parse">parse</category><subsystem id="6" fmt="dev.richmarkdown">dev.richmarkdown</subsystem>
+    <os-signpost-identifier id="7" fmt="1">1</os-signpost-identifier><process id="8" fmt="App (1)"/></row>
+    <row><start-time id="9" fmt="00:01.000">1000000000</start-time><duration ref="2"/><layout-id ref="3"/>
+    <string id="10" fmt="sse-stream">sse-stream</string><category id="11" fmt="PointsOfInterest">PointsOfInterest</category>
+    <subsystem id="12" fmt="dev.richmarkdown.demo">dev.richmarkdown.demo</subsystem><os-signpost-identifier ref="7"/><process id="13" fmt="Other (2)"/></row>
+    </node><node><schema name="os-signpost-interval">
+    <col><mnemonic>start</mnemonic></col><col><mnemonic>duration</mnemonic></col><col><mnemonic>name</mnemonic></col><col><mnemonic>process</mnemonic></col></schema>
+    <row><start-time id="20" fmt="00:01.500">1500000000</start-time><duration id="21" fmt="2 s">2000000000</duration>
+    <string id="22">sse-stream</string><process id="23" fmt="App (1)"/></row>
+    </node></trace-query-result>"""
+    signpost_rows = parse_table(signpost_xml)
+    assert len(signpost_rows) == 3, signpost_rows
+    assert signpost_window(signpost_rows, "sse-stream", "App") == (1500.0, 3500.0, 1)
+    stream, source = stream_window(signpost_rows, "sse-stream", "App", (500, 5000))
+    assert (stream, source) == ((1500.0, 3500.0), "signpost")
+    # 1.0 s hitch는 창 시작 300 ms 여유 밖, 2.0 s만 들어온다. 분모는 signpost 길이(2 s)다.
+    streamed = hitch_summary(hitch_rows, "App", stream, 10)
+    assert streamed["count"] == 1 and streamed["total_ms"] == 16.7 and streamed["ratio_ms_per_s"] == 8.33, streamed
+    assert stream_window([], "sse-stream", "App", (500, 5000)) == ((500, 5000), "ui-log")
+    assert stream_window([], "sse-stream", "App", None) == (None, None)
+    assert xcprof_range(stream) == "--start-ms 1500 --end-ms 3500" and xcprof_range(None) == ""
+
+    # 하네스 부하 분류: XCTest 조회 스택은 ax_mode에서 빼고, 일반 UIKit accessibility 속성 조회는 세지 않는다.
+    main = [
+        (0, "Main Thread", "App", 1_000_000, [("-[UIView _accessibilityUserTestingChildren]", "UIAccessibility"),
+                                              ("XCTRunnerDaemon query", "XCTAutomationSupport")]),
+        (0, "Main Thread", "App", 2_000_000, [("AccessibilityNode.update", "SwiftUI")]),
+        (0, "Main Thread", "App", 4_000_000, [("-[UIView accessibilityIdentifier]", "UIKitCore")]),
+        (0, "Main Thread", "App", 8_000_000, [("__main_thread_checker_on_report", "libMainThreadChecker.dylib")]),
+    ]
+    assert harness_summary(main) == {"ax_mode_ms": 2.0, "xct_query_ms": 1.0, "mtc_ms": 8.0}, harness_summary(main)
     print("self-test ok")
 
 
@@ -276,6 +402,8 @@ def main():
     parser.add_argument("--window")
     parser.add_argument("--frame", action="append", default=[])
     parser.add_argument("--signpost")
+    parser.add_argument("--window-signpost", metavar="NAME",
+                        help="os_signpost 구간(예: sse-stream)을 두 번째 창으로 쓴다. 없으면 UI 로그 창으로 대신한다")
     parser.add_argument("--window-only", action="store_true", help="xcprof analyze용 `--start-ms A --end-ms B`만 출력")
     parser.add_argument("--report", metavar="DIR", help="기기 폴더의 요약을 시나리오 표로 출력")
     parser.add_argument("--self-test", action="store_true")
@@ -287,10 +415,12 @@ def main():
     if not args.trace:
         parser.error("트레이스 경로가 필요하다")
     if args.window_only:
-        window = window_from_log(args.ui_log, args.window, toc_info(args.trace)[0]) if args.ui_log and args.window else None
-        print(f"--start-ms {max(0, round(window[0]))} --end-ms {round(window[1])}" if window else "")
+        # signpost 창이 있으면 그쪽, 없으면 UI 로그 창이다.
+        _, window, (stream, _), _ = trace_windows(args.trace, args.app, args.ui_log, args.window, args.window_signpost)
+        print(xcprof_range(stream or window))
         return
-    json.dump(summarize(args.trace, args.app, args.ui_log, args.window, args.frame, args.signpost),
+    json.dump(summarize(args.trace, args.app, args.ui_log, args.window, args.frame, args.signpost,
+                        args.window_signpost),
               sys.stdout, ensure_ascii=False, indent=2)
     print()
 
