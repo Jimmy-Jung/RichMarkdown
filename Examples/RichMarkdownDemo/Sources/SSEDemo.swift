@@ -386,7 +386,8 @@ extension SSEDemoFixtures {
     /// 프레임(`[DONE]`)의 flush 직후다 — 최종 parse 게시·렌더와 스트리밍 종료 재구성(streaming → nil)은 그 뒤
     /// 비동기로 돈다. 분석 쪽(`trace_summary.py`의 `WINDOW_SLACK_MS`)이 창 끝 여유로 이 꼬리를 덮는다.
     ///
-    /// 일정 전체를 위상 offset(`SSEDemoPhase`)만큼 늦춘다. 구간 시작 메시지에 seed·offset·최대 fps를 남긴다.
+    /// 일정 전체를 위상 offset(`SSEDemoPhase`)만큼 늦춘다. 구간 시작 메시지에 seed·offset·최대 fps를 남기고,
+    /// 구간 시작·끝에 기기 상태(`device-state` 이벤트)를 남긴다.
     @MainActor
     static func play(
         _ frames: [[String]],
@@ -399,7 +400,10 @@ extension SSEDemoFixtures {
         let start = clock.now + phase.offset
         var interval: OSSignpostIntervalState?
         defer {
-            if let interval { signposter.endInterval("sse-stream", interval) }
+            if let interval {
+                emitDeviceState("end")
+                signposter.endInterval("sse-stream", interval)
+            }
         }
         for (index, frame) in frames.enumerated() {
             try await Task.sleep(until: rate.deadline(ofFrame: index, from: start), clock: clock)
@@ -407,11 +411,24 @@ extension SSEDemoFixtures {
                 interval = signposter.beginInterval(
                     "sse-stream", id: signposter.makeSignpostID(), "\(label, privacy: .public) \(phase.metadata, privacy: .public)"
                 )
+                emitDeviceState("start")
             }
             for line in frame {
                 if deliver(line) { return }
             }
         }
+    }
+
+    /// 열 상태·저전력 모드. 둘 다 CPU 클럭을 바꿔 같은 빌드의 측정값을 흔든다 — 분석이 이 값으로 거른다.
+    static func deviceState(thermal: ProcessInfo.ThermalState, lowPower: Bool) -> String {
+        let name = ["nominal", "fair", "serious", "critical"][min(thermal.rawValue, 3)]
+        return "thermal=\(name) low_power=\(lowPower ? 1 : 0)"
+    }
+
+    private static func emitDeviceState(_ moment: String) {
+        let info = ProcessInfo.processInfo
+        let state = deviceState(thermal: info.thermalState, lowPower: info.isLowPowerModeEnabled)
+        signposter.emitEvent("device-state", "at=\(moment, privacy: .public) \(state, privacy: .public)")
     }
 }
 

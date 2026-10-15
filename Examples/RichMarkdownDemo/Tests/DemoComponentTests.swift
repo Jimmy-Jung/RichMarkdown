@@ -362,6 +362,12 @@ struct SSEDecoderTests {
         let offset = String(format: "%.3f", phase.offset / .milliseconds(1))
         #expect(phase.metadata == "phase_seed=7 phase_offset_ms=\(offset) max_fps=60")
     }
+
+    @Test("기기 상태는 열 상태·저전력 모드를 key=value로 남긴다")
+    func deviceStateIsKeyValue() {
+        #expect(SSEDemoFixtures.deviceState(thermal: .nominal, lowPower: false) == "thermal=nominal low_power=0")
+        #expect(SSEDemoFixtures.deviceState(thermal: .serious, lowPower: true) == "thermal=serious low_power=1")
+    }
 }
 
 /// 바이트 → 줄 분리 계약. `Foundation.AsyncLineSequence`가 빈 줄을 버려
