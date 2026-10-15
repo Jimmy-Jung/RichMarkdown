@@ -33,11 +33,21 @@ extension UIView {
 struct RichMarkdownDemoApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            root
                 // UI 테스트 dark mode 매트릭스용 launch argument.
                 .preferredColorScheme(
                     ProcessInfo.processInfo.arguments.contains("-richmarkdownDark") ? .dark : nil
                 )
+        }
+    }
+
+    /// `-sseAutoplay`(성능 측정)면 목록을 거치지 않고 SSE 화면을 루트로 연다.
+    @ViewBuilder
+    private var root: some View {
+        switch SSEDemoLaunchOptions.autoplay {
+        case .swiftui: NavigationStack { SSEDemoView() }
+        case .uikit: NavigationStack { UIKitSSEDemoView() }
+        case nil: ContentView()
         }
     }
 }

@@ -1,6 +1,8 @@
 // Created by JunyoungJung on 2026-08-28.
 
 import Foundation
+import notify
+import os
 import RichMarkdown
 import SwiftUI
 
@@ -209,6 +211,109 @@ enum SSEDemoFixtures {
     > 오차함수로 쓰면 \( \Phi(z) = \frac{1}{2}\left[1 + \mathrm{erf}\left(\frac{z}{\sqrt{2}}\right)\right] \) 입니다.
     """#
 
+    /// 성능 측정용 긴 답변(UTF-8 약 5.8 KB, 3,543자). 실제 LLM 답변처럼 헤딩·문단·글머리표/번호 목록(각 6개)·
+    /// 표 2개(각 6행, 인라인 수식 셀)·코드 블록 2개·인용·인라인/디스플레이 수식을 섞었다.
+    /// `SSEDemoFixture.long`이 12자 청크로 자르면 20Hz에서 약 15초다. 짧은 `answer`는 이전 측정과
+    /// 이어 비교하려고 그대로 둔다.
+    static let longAnswer = #"""
+    ## 선형 회귀를 경사 하강법으로 학습하기
+
+    선형 회귀(linear regression)는 입력 \(x\)와 출력 \(y\)의 관계를 직선 \(\hat{y} = wx + b\)로 근사하는 가장 기본적인 지도 학습 모델입니다. 계산이 빠르고 계수를 그대로 해석할 수 있어서, 복잡한 모델을 시도하기 전에 기준선으로 먼저 학습해 보는 경우가 많습니다. It is surprisingly hard to beat on small tabular datasets.
+
+    ### 1. 손실 함수
+
+    모델이 얼마나 틀렸는지는 평균제곱오차(MSE)로 잽니다. 데이터가 \(n\)개일 때 손실은 다음과 같습니다.
+
+    \[ L(w, b) = \frac{1}{n} \sum_{i=1}^{n} \left( y_i - (w x_i + b) \right)^2 \]
+
+    이 함수는 \(w\)와 \(b\)에 대해 볼록(convex)하므로 지역 최솟값이 곧 전역 최솟값입니다. 그래서 학습률만 적절히 고르면 어디에서 출발하든 같은 해에 도달합니다. 오차를 제곱하기 때문에 큰 오차에 훨씬 큰 벌점이 붙는다는 점도 기억해 두세요.
+
+    ### 2. 기울기 계산
+
+    각 파라미터로 편미분하면 업데이트 방향이 나옵니다.
+
+    \[ \frac{\partial L}{\partial w} = -\frac{2}{n} \sum_{i=1}^{n} x_i \left( y_i - \hat{y}_i \right) \]
+
+    절편 \(b\)에 대한 기울기도 같은 방식으로 구합니다. 두 기울기에 학습률 \(\eta\)를 곱해 반대 방향으로 한 걸음씩 이동합니다: \(w \leftarrow w - \eta \, \partial L / \partial w\). 한 번의 이동을 한 에폭(epoch)이라고 부르며, 손실이 더 이상 줄지 않을 때까지 반복합니다.
+
+    ### 3. 학습률에 따른 수렴
+
+    | 학습률 \(\eta\) | 반복 수 | 최종 손실 | 관찰 |
+    | :--- | ---: | ---: | :--- |
+    | \(10^{-4}\) | 5000 | 0.4120 | 너무 느리게 내려감 |
+    | \(10^{-3}\) | 2000 | 0.0851 | 안정적으로 수렴 |
+    | \(5 \times 10^{-3}\) | 800 | 0.0849 | 빠르고 안정적 |
+    | \(10^{-2}\) | 400 | 0.0849 | 권장 시작값 |
+    | \(5 \times 10^{-2}\) | 120 | 0.0923 | 진동이 시작됨 |
+    | \(10^{-1}\) | — | \(\infty\) | 손실이 발산함 |
+
+    학습률이 너무 작으면 수천 번을 반복해도 손실이 거의 줄지 않고, 너무 크면 최솟값을 계속 건너뛰다가 결국 발산합니다. 특징을 표준화한 뒤라면 \(10^{-2}\) 근처에서 시작해, 손실 곡선이 출렁이기 시작할 때마다 절반으로 줄이는 방법이 무난합니다.
+
+    ### 4. 구현
+
+    NumPy로 쓰면 반복문 하나로 충분합니다.
+
+    ```python
+    def fit(x, y, lr=0.01, epochs=400):
+        w, b, n = 0.0, 0.0, len(x)
+        for _ in range(epochs):
+            error = y - (w * x + b)
+            w += lr * (2 / n) * (x * error).sum()
+            b += lr * (2 / n) * error.sum()
+        return w, b
+    ```
+
+    같은 로직을 Swift로 옮기면 다음과 같습니다. 배열 연산은 `zip`과 `reduce`로 표현합니다.
+
+    ```swift
+    func fit(_ x: [Double], _ y: [Double], lr: Double = 0.01) -> (Double, Double) {
+        var w = 0.0, b = 0.0
+        let n = Double(x.count)
+        for _ in 0..<400 {
+            let e = zip(x, y).map { $1 - (w * $0 + b) }
+            w += lr * 2 / n * zip(x, e).reduce(0) { $0 + $1.0 * $1.1 }
+            b += lr * 2 / n * e.reduce(0, +)
+        }
+        return (w, b)
+    }
+    ```
+
+    두 구현 모두 전체 데이터를 한 번에 보는 배치 경사 하강법입니다. 데이터가 커지면 아래 참고처럼 미니배치로 바꿉니다.
+
+    ### 5. 평가 지표
+
+    | 지표 | 정의 | 범위 | 해석 |
+    | :--- | :--- | :---: | :--- |
+    | MSE | \(\frac{1}{n}\sum (y_i - \hat{y}_i)^2\) | \([0, \infty)\) | 작을수록 좋음 |
+    | RMSE | \(\sqrt{\mathrm{MSE}}\) | \([0, \infty)\) | 원래 단위로 읽음 |
+    | MAE | \(\frac{1}{n}\sum \lvert y_i - \hat{y}_i \rvert\) | \([0, \infty)\) | 이상치에 덜 민감함 |
+    | \(R^2\) | \(1 - \mathrm{SS}_{res} / \mathrm{SS}_{tot}\) | \((-\infty, 1]\) | 설명된 분산의 비율 |
+    | MAPE | 상대 오차의 평균 | \([0, \infty)\) | 퍼센트로 읽음 |
+    | 수정 \(R^2\) | 변수 수 \(p\)로 보정한 \(R^2\) | \((-\infty, 1]\) | 변수를 늘린 효과를 걸러냄 |
+
+    결정계수가 1에 가까울수록 모델이 분산을 잘 설명하지만, 학습 세트에서만 높고 검증 세트에서 낮다면 과적합을 먼저 의심해야 합니다. 지표 하나만 보지 말고 잔차 그림도 함께 살펴보세요.
+
+    ### 6. 실무 체크리스트
+
+    - 특징(feature)을 표준화해 스케일을 맞춥니다. 값이 큰 열 하나가 기울기를 지배하는 일을 막습니다.
+    - 학습·검증·테스트 세트를 먼저 나누고, 표준화 통계는 학습 세트에서만 계산합니다.
+    - 에폭마다 손실 곡선을 그려 진동이나 정체가 없는지 확인합니다.
+    - 이상치가 많으면 MSE 대신 Huber 손실을 고려합니다.
+    - 다중공선성이 의심되면 릿지 정규화를 더합니다: \(L + \lambda \lVert w \rVert^2\).
+    - 작은 데이터에서는 닫힌 해를 함께 계산해 결과를 교차 확인합니다.
+
+    ### 7. 정리
+
+    1. 선형 회귀는 MSE를 최소화하는 \(w\)와 \(b\)를 찾는 문제입니다.
+    2. 손실이 볼록하므로 경사 하강법은 적절한 학습률에서 전역 최솟값으로 수렴합니다.
+    3. 학습률은 \(10^{-2}\) 근처에서 시작해 손실 곡선을 보며 조정합니다.
+    4. 평가는 RMSE와 \(R^2\)를 함께 보고, 이상치가 많으면 MAE도 확인합니다.
+    5. 정규방정식 \(w = (X^\top X)^{-1} X^\top y\)로 결과를 검산할 수 있습니다.
+    6. 마지막으로, 평균값만 예측하는 단순 기준선과 반드시 비교합니다.
+
+    > 참고: 데이터가 수백만 행을 넘으면 전체 배치 대신 미니배치 확률적 경사 하강법(SGD)을 씁니다. 업데이트 한 번의 비용이 배치 크기 \(B\)에 비례하는 \(O(B)\)로 줄어 데이터를 메모리에 다 올리지 않아도 되고, 매 걸음의 잡음이 평탄한 구간을 빠져나가는 데 도움이 되기도 합니다.
+    """#
+
     /// fixture를 `chunkSize` 문자씩 잘라 OpenAI 호환 SSE 프레임으로 만든다.
     /// 프레임 하나는 `["data: {…}", ""]`, 마지막 프레임은 `["data: [DONE]", ""]`이다.
     static func frames(of text: String = answer, chunkSize: Int = 6) -> [[String]] {
@@ -245,12 +350,111 @@ enum SSEDemoFixtures {
     }
 }
 
+/// 시뮬레이션 답변 선택. 화면에는 노출하지 않고 `-sseFixture short|long`(성능 측정)으로 고른다.
+enum SSEDemoFixture: String {
+    /// 기존 답변(약 1.1 KB, 6자 청크).
+    case short
+    /// 측정용 긴 답변(약 5.8 KB, 12자 청크 — 20Hz에서 약 15초).
+    case long
+
+    var text: String {
+        switch self {
+        case .short: SSEDemoFixtures.answer
+        case .long: SSEDemoFixtures.longAnswer
+        }
+    }
+
+    var chunkSize: Int {
+        switch self {
+        case .short: 6
+        case .long: 12
+        }
+    }
+
+    var frames: [[String]] { SSEDemoFixtures.frames(of: text, chunkSize: chunkSize) }
+}
+
+extension SSEDemoFixtures {
+    /// 측정 창 signpost. PointsOfInterest 카테고리라 xctrace `os_signpost`·`Points of Interest` 계측기
+    /// 모두에 잡힌다(`scripts/bench/trace_summary.py --window-signpost sse-stream`).
+    static let signposter = OSSignposter(subsystem: "dev.richmarkdown.demo", category: .pointsOfInterest)
+
+    /// 두 SSE 화면이 공유하는 로컬 전송 루프. 프레임을 `rate`의 절대 일정으로 한 줄씩 `deliver`에
+    /// 넘기고, `deliver`가 `true`를 돌려주면(종료·오류·세대 교체) 멈춘다.
+    ///
+    /// 첫 프레임을 넘기기 직전부터 루프가 끝난 직후까지를 `sse-stream` 구간으로 남긴다. 마지막
+    /// 프레임(`[DONE]`)의 flush가 `deliver` 안에서 동기로 게시되므로 구간 끝은 최종 게시 직후다.
+    @MainActor
+    static func play(
+        _ frames: [[String]],
+        rate: SSEDemoRate,
+        label: String,
+        deliver: (String) -> Bool
+    ) async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
+        var interval: OSSignpostIntervalState?
+        defer {
+            if let interval { signposter.endInterval("sse-stream", interval) }
+        }
+        for (index, frame) in frames.enumerated() {
+            try await Task.sleep(until: rate.deadline(ofFrame: index, from: start), clock: clock)
+            if interval == nil {
+                interval = signposter.beginInterval("sse-stream", id: signposter.makeSignpostID(), "\(label, privacy: .public)")
+            }
+            for line in frame {
+                if deliver(line) { return }
+            }
+        }
+    }
+}
+
+// MARK: - 성능 측정 자동 재생
+
+/// XCUITest 없이(앱 접근성 꺼짐) 측정하는 launch argument. `scripts/bench/ios-trace-scenarios.sh`의
+/// `*-auto` 시나리오가 `xctrace record --launch -- <번들> -sseAutoplay swiftui -sseFixture long`처럼 넘긴다.
+/// - `-sseAutoplay swiftui|uikit`: 해당 SSE 화면을 루트로 바로 열고, 녹화 시작 알림 1초 뒤 20Hz로 시작한다.
+/// - `-sseFixture short|long`: 시뮬레이션 답변(기본 short). 자동 재생이 아니어도 적용된다.
+enum SSEDemoLaunchOptions {
+    enum Screen: String {
+        case swiftui
+        case uikit
+    }
+
+    // `-key value` launch argument는 UserDefaults 인자 도메인으로 들어온다.
+    static let autoplay = UserDefaults.standard.string(forKey: "sseAutoplay").flatMap(Screen.init(rawValue:))
+    static let fixture = UserDefaults.standard.string(forKey: "sseFixture").flatMap(SSEDemoFixture.init(rawValue:)) ?? .short
+
+    /// 스크립트가 녹화 시작 직후 보내는 Darwin 알림. `PerfHarness.tracingStartedNotification`과 같은 이름이다.
+    static let tracingStartedNotification = "dev.richmarkdown.perf.tracing-started"
+
+    /// 녹화 시작 알림을 받으면 `settle`만큼 더 기다린다. 알림을 놓쳐도(앱이 뜨기 전에 보낸 경우)
+    /// `fallback` 뒤에는 돌아온다.
+    @MainActor
+    static func waitForTracingStarted(settle: Duration = .seconds(1), fallback: Duration = .seconds(8)) async {
+        var posted = false
+        var token: Int32 = 0
+        let registered = notify_register_dispatch(tracingStartedNotification, &token, .main) { _ in
+            posted = true
+        } == NOTIFY_STATUS_OK
+        defer {
+            if registered { notify_cancel(token) }
+        }
+        let deadline = ContinuousClock.now + fallback
+        // ponytail: 50ms 폴링. 녹화 전 대기라 측정 창에 들어가지 않는다.
+        while !posted, !Task.isCancelled, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        if posted { try? await Task.sleep(for: settle) }
+    }
+}
+
 // MARK: - 전송 속도
 
 /// 로컬 시뮬레이션의 프레임 간격. README 권장치(~10Hz)의 위·아래를 모두 확인하려고 셋을 둔다.
 /// 60Hz에서도 내부 coalescing(실행 1 + 대기 1)이 렌더를 흡수해야 한다.
-/// **명목 간격**이라 실제 주기는 렌더 비용만큼 늘어난다 — 루프가 MainActor에서 sleep과
-/// 상태 갱신을 직렬로 돌기 때문이다.
+/// 프레임은 시작 시각 기준 **절대 일정**으로 낸다(`deadline(ofFrame:from:)`). 렌더가 메인 스레드를
+/// 오래 잡아도 주기가 늘지 않고, 밀린 프레임은 깨어나는 즉시 몰아서 도착한다 — 실제 네트워크와 같다.
 enum SSEDemoRate: String, CaseIterable, Identifiable {
     case slow = "5Hz"
     case normal = "20Hz"
@@ -264,6 +468,12 @@ enum SSEDemoRate: String, CaseIterable, Identifiable {
         case .normal: .milliseconds(50)
         case .fast: .microseconds(16_667)
         }
+    }
+
+    /// `index`번째(0부터) 프레임을 낼 시각. 상대 sleep은 렌더가 느린 빌드일수록 주기가 늘어
+    /// 걸리는 부하 자체가 줄었다(측정 불공정). 시작 시각에서 곱해 구하므로 오차가 쌓이지 않는다.
+    func deadline(ofFrame index: Int, from start: ContinuousClock.Instant) -> ContinuousClock.Instant {
+        start + interval * (index + 1)
     }
 }
 
@@ -364,6 +574,13 @@ struct SSEDemoView: View {
         .task(id: runID) {
             guard isStreaming else { return }
             await stream()
+        }
+        .task {
+            // 성능 측정 자동 재생(`SSEDemoLaunchOptions`). 녹화가 시작된 뒤에 스트림을 연다.
+            guard SSEDemoLaunchOptions.autoplay == .swiftui else { return }
+            await SSEDemoLaunchOptions.waitForTracingStarted()
+            guard !Task.isCancelled, !isStreaming else { return }
+            start()
         }
     }
 
@@ -511,12 +728,11 @@ struct SSEDemoView: View {
 
     @MainActor
     private func streamSimulated(run: Int, into decoder: inout SSEDecoder) async throws {
-        frames: for frame in SSEDemoFixtures.frames() {
-            try await Task.sleep(for: rate.interval)
-            guard run == runID else { return }
-            for line in frame {
-                if apply(decoder.consume(line)) { break frames }
-            }
+        let fixture = SSEDemoLaunchOptions.fixture
+        try await SSEDemoFixtures.play(
+            fixture.frames, rate: rate, label: "swiftui \(fixture.rawValue) \(rate.rawValue)"
+        ) { line in
+            run != runID || apply(decoder.consume(line))
         }
     }
 

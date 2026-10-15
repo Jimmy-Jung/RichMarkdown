@@ -112,7 +112,9 @@ enum PerfHarness {
     /// 스크립트가 녹화 시작 뒤 `devicectl device notification post --name`으로 보내는 이름과 같아야 한다.
     static let tracingStartedNotification = "dev.richmarkdown.perf.tracing-started"
     static let readyTimeout: TimeInterval = 180
-    /// 20 Hz 로컬 시뮬레이션 fixture 전체가 약 9초다 (DEVELOPMENT.md §7 iPad 측정 기록).
+    /// 20 Hz 로컬 시뮬레이션 fixture 전체는 절대 일정에서 약 7초다(상대 sleep이던 이전 빌드는 렌더 비용만큼 늘어
+    /// iPad에서 약 9초, DEVELOPMENT.md §7). 이전 수치와 잇기 위해 창은 10초 그대로 두고, 유휴 꼬리 없는 창은
+    /// 앱의 `sse-stream` signpost로 따로 잰다(`trace_summary.py --window-signpost`).
     static let sseSeconds: TimeInterval = 10
     static let firstAnswerPredicate = NSPredicate(
         format: "label CONTAINS %@ OR value CONTAINS %@", "원의 넓이는", "원의 넓이는"

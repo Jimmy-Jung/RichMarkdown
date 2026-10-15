@@ -84,6 +84,7 @@ final class UIKitSSEDemoViewController: UIViewController {
     /// 재시작 신호. 시작·중지 모두 값을 올려 늦게 풀린 이전 Task가 상태를 덮지 못하게 한다.
     private var runID = 0
     private var streamTask: Task<Void, Never>?
+    private var autoplayTask: Task<Void, Never>?
     private var isStreaming = false {
         didSet {
             updateControls()
@@ -149,9 +150,21 @@ final class UIKitSSEDemoViewController: UIViewController {
         if !isStreaming { scrollToBottom() }
     }
 
+    /// 성능 측정 자동 재생(`SSEDemoLaunchOptions`). 녹화가 시작된 뒤에 한 번만 스트림을 연다.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard SSEDemoLaunchOptions.autoplay == .uikit, autoplayTask == nil else { return }
+        autoplayTask = Task { [weak self] in
+            await SSEDemoLaunchOptions.waitForTracingStarted()
+            guard let self, !Task.isCancelled, !self.isStreaming else { return }
+            self.start()
+        }
+    }
+
     /// 화면을 떠나면 스트림을 멈춘다. SwiftUI 화면의 `.task(id:)` 수명과 같은 의미다.
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        autoplayTask?.cancel()
         stop()
     }
 
@@ -389,12 +402,11 @@ final class UIKitSSEDemoViewController: UIViewController {
     }
 
     private func streamSimulated(run: Int, into decoder: inout SSEDecoder) async throws {
-        frames: for frame in SSEDemoFixtures.frames() {
-            try await Task.sleep(for: rate.interval)
-            guard run == runID else { return }
-            for line in frame {
-                if apply(decoder.consume(line)) { break frames }
-            }
+        let fixture = SSEDemoLaunchOptions.fixture
+        try await SSEDemoFixtures.play(
+            fixture.frames, rate: rate, label: "uikit \(fixture.rawValue) \(rate.rawValue)"
+        ) { line in
+            run != runID || apply(decoder.consume(line))
         }
     }
 

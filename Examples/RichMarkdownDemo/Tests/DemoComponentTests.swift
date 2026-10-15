@@ -298,6 +298,47 @@ struct SSEDecoderTests {
         #expect(SSEDemoFixtures.chunks(of: "abc", size: 0) == ["abc"])
         #expect(SSEDemoFixtures.chunks(of: "", size: 0).isEmpty)
     }
+
+    /// 측정 시나리오(`sse-long-*-auto`)의 time limit 35초가 이 길이를 전제로 한다.
+    @Test("긴 fixture는 약 6KB이고 20Hz·12자 청크로 12–15초 동안 흐른 뒤 원문으로 복원된다")
+    func longFixtureSizeAndDuration() {
+        let fixture = SSEDemoFixture.long
+        let seconds = Double(fixture.frames.count) * 0.05
+
+        #expect((5_500...6_500).contains(fixture.text.utf8.count))
+        #expect((12.0...15.0).contains(seconds), "20Hz 스트림 길이 \(seconds)초")
+
+        var decoder = SSEDecoder()
+        var restored = ""
+        for line in fixture.frames.joined() {
+            if case let .text(delta) = decoder.consume(line) { restored += delta }
+        }
+        #expect(restored == fixture.text)
+    }
+
+    @Test("긴 fixture는 실제 LLM 답변처럼 표·코드·목록·인용·수식을 모두 담는다")
+    func longFixtureCoversBlockKinds() {
+        let lines = SSEDemoFixture.long.text.components(separatedBy: "\n")
+        func count(_ predicate: (String) -> Bool) -> Int { lines.filter(predicate).count }
+
+        #expect(count { $0.hasPrefix("```") } == 4, "코드 블록 2개")
+        #expect(count { $0.hasPrefix("| :---") } == 2, "표 2개")
+        #expect(count { $0.hasPrefix("| ") } >= 2 * (1 + 1 + 6), "표마다 머리글·구분·6행 이상")
+        #expect(count { $0.contains("\\(") && $0.hasPrefix("| ") } >= 6, "인라인 수식 셀")
+        #expect(count { $0.hasPrefix("- ") } >= 5)
+        #expect(count { $0.range(of: #"^\d+\. "#, options: .regularExpression) != nil } >= 5)
+        #expect(count { $0.hasPrefix("> ") } >= 1)
+        #expect(count { $0.hasPrefix("\\[") } >= 2, "디스플레이 수식")
+        #expect(count { $0.hasPrefix("#") } >= 5, "헤딩")
+    }
+
+    @Test("프레임 시각은 시작 시각 기준 절대 일정이라 늦어져도 뒤 프레임이 밀리지 않는다")
+    func frameDeadlinesAreAbsolute() {
+        let start = ContinuousClock.now
+        #expect(SSEDemoRate.normal.deadline(ofFrame: 0, from: start) == start + .milliseconds(50))
+        #expect(SSEDemoRate.normal.deadline(ofFrame: 199, from: start) == start + .seconds(10))
+        #expect(SSEDemoRate.slow.deadline(ofFrame: 4, from: start) == start + .seconds(1))
+    }
 }
 
 /// 바이트 → 줄 분리 계약. `Foundation.AsyncLineSequence`가 빈 줄을 버려
