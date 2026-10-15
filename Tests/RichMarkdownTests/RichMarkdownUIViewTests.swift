@@ -758,6 +758,24 @@ import UIKit
         #expect(fittedHeight() > initialHeight, "줄바꿈한 셀은 이전 표 높이보다 커져야 한다")
     }
 
+    /// 제자리 갱신으로 다시 채운 셀도 열 정렬을 유지한다. `attributedText` 대입은 `textAlignment`를
+    /// 기본값(natural)으로 되돌린다 (2026-10-15 시뮬레이터 실측).
+    @Test func streamingTableCellKeepsColumnAlignmentAfterUpdate() async throws {
+        let prefix = "| 항목 | 값 | 비고 |\n| :--- | ---: | :---: |\n| 하나 | 1 | 가"
+        let view = RichMarkdownUIView(markdown: prefix)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        let table = try #require(view.blockStack.arrangedSubviews.first as? TableScrollBlock)
+        let cell = try #require(table.cells.last?.last)
+
+        view.markdown = prefix + "나"
+        try await waitForRender(view)
+        #expect(table.cells.last?.last === cell, "같은 구조의 표는 셀을 제자리 갱신한다")
+        #expect(cell.text == "가나")
+        #expect(table.cells.allSatisfy { $0.map(\.textAlignment) == [.left, .right, .center] })
+    }
+
     /// 항목 수가 같은 목록은 마지막 항목의 문단만 갱신한다.
     @Test func streamingUpdatesTailListItemInPlace() async throws {
         let view = RichMarkdownUIView(markdown: "- 하나\n- 둘")

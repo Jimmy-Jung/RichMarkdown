@@ -508,13 +508,16 @@ public final class RichMarkdownUIView: UIView {
         for (rowIndex, cells) in rows.enumerated() {
             for (column, runs) in cells.enumerated()
             where runs != previousRows[rowIndex][column] || containsMath(runs) {
+                let cell = block.cells[rowIndex][column]
                 configure(
-                    block.cells[rowIndex][column],
+                    cell,
                     runs: rowIndex == 0 ? runs.map(\.boldened) : runs,
                     images: images,
                     font: bodyUIFont,
                     tail: nil
                 )
+                // `attributedText` 대입이 정렬을 natural로 되돌린다. 생성 경로처럼 구성 뒤에 다시 건다.
+                cell.textAlignment = textAlignment(for: table.columnAlignments, at: column)
             }
         }
         if table.header != previous.header {
