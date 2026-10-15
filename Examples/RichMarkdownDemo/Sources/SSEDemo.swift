@@ -3,6 +3,7 @@
 import Foundation
 import notify
 import os
+import QuartzCore
 import RichMarkdown
 import SwiftUI
 
@@ -386,18 +387,19 @@ extension SSEDemoFixtures {
     /// 프레임(`[DONE]`)의 flush 직후다 — 최종 parse 게시·렌더와 스트리밍 종료 재구성(streaming → nil)은 그 뒤
     /// 비동기로 돈다. 분석 쪽(`trace_summary.py`의 `WINDOW_SLACK_MS`)이 창 끝 여유로 이 꼬리를 덮는다.
     ///
-    /// 일정 전체를 위상 offset(`SSEDemoPhase`)만큼 늦춘다. 구간 시작 메시지에 seed·offset·최대 fps를 남기고,
-    /// 구간 시작·끝에 기기 상태(`device-state` 이벤트)를 남긴다.
+    /// 일정은 다음 vsync(`vsync`, 기본 `SSEDemoVsync.next`)에서 위상 offset(`SSEDemoPhase`)만큼 뒤에 시작한다.
+    /// 구간 시작 메시지에 seed·offset·최대 fps를 남기고, 구간 시작·끝에 기기 상태(`device-state` 이벤트)를 남긴다.
     @MainActor
     static func play(
         _ frames: [[String]],
         rate: SSEDemoRate,
         label: String,
+        vsync: @MainActor () async -> ContinuousClock.Instant = SSEDemoVsync.next,
         deliver: (String) -> Bool
     ) async throws {
         let clock = ContinuousClock()
         let phase = SSEDemoLaunchOptions.phase()
-        let start = clock.now + phase.offset
+        let start = await vsync() + phase.offset
         var interval: OSSignpostIntervalState?
         defer {
             if let interval {
@@ -510,7 +512,8 @@ enum SSEDemoRate: String, CaseIterable, Identifiable {
 
 /// 첫 청크의 vsync 위상. 50ms 청크 간격은 60·120Hz vsync의 정수배라 스트림 시작에 걸린 위상이 끝까지 고정되고,
 /// 렌더가 vsync 직후 몇 ms 구간에서 시작하면 거의 매번 다음 렌더 패스를 놓친다(위상 의존, 실측). 일정을
-/// U(0, 1프레임)만큼 늦춰 측정마다 위상을 고르게 뽑는다. seed가 같으면 offset도 같아 하네스가 seed로 층화한다.
+/// vsync(`SSEDemoVsync`)에서 U(0, 1프레임)만큼 늦춰 측정마다 위상을 고르게 뽑는다. seed가 같으면 첫 청크의 vsync 위상도
+/// 같아(깨어남 지연만 다르다) 하네스가 seed로 층화한다.
 struct SSEDemoPhase {
     let seed: UInt64
     let framesPerSecond: Int
@@ -526,6 +529,31 @@ struct SSEDemoPhase {
     /// `sse-stream` 구간 시작 메시지에 붙는다. `scripts/bench/stream_metrics.py`가 key=value로 읽는다.
     var metadata: String {
         "phase_seed=\(seed) phase_offset_ms=\(String(format: "%.3f", offset / .milliseconds(1))) max_fps=\(framesPerSecond)"
+    }
+}
+
+/// 화면 vsync 시각. 녹화 알림·sleep 뒤의 `ContinuousClock.now`는 vsync와 무관한 아무 시각이라 위상 기준이 못 된다.
+@MainActor
+enum SSEDemoVsync {
+    /// 다음 CADisplayLink 콜백이 가리키는 vsync(`targetTimestamp`)를 ContinuousClock 시각으로 옮겨 돌려준다.
+    static func next() async -> ContinuousClock.Instant {
+        await withCheckedContinuation { continuation in
+            // CADisplayLink가 target을 붙잡고 있다가 invalidate에서 놓는다.
+            CADisplayLink(target: Probe(continuation), selector: #selector(Probe.tick)).add(to: .main, forMode: .common)
+        }
+    }
+
+    private final class Probe: NSObject {
+        let continuation: CheckedContinuation<ContinuousClock.Instant, Never>
+
+        init(_ continuation: CheckedContinuation<ContinuousClock.Instant, Never>) {
+            self.continuation = continuation
+        }
+
+        @objc func tick(_ link: CADisplayLink) {
+            link.invalidate()
+            continuation.resume(returning: .now + .seconds(link.targetTimestamp - CACurrentMediaTime()))
+        }
     }
 }
 

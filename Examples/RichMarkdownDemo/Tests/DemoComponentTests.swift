@@ -356,6 +356,30 @@ struct SSEDecoderTests {
         #expect((0..<4).allSatisfy { (60...140).contains(buckets[$0] ?? 0) }, "\(buckets)")
     }
 
+    /// 녹화 알림·sleep 뒤의 아무 시각에서 offset을 재면 seed가 같아도 실제 vsync 위상이 실행마다 달라진다.
+    @Test("스트림 일정은 vsync 시각에서 위상 offset만큼 뒤에 시작한다")
+    @MainActor
+    func streamScheduleStartsFromVsync() async throws {
+        let vsync = ContinuousClock.now + .milliseconds(200)
+        var delivered: ContinuousClock.Instant?
+        try await SSEDemoFixtures.play([["data: [DONE]"]], rate: .normal, label: "test", vsync: { vsync }) { _ in
+            delivered = .now
+            return true
+        }
+        let frame = Duration.seconds(1.0 / Double(UIScreen.main.maximumFramesPerSecond))
+        let late = try #require(delivered) - (vsync + SSEDemoRate.normal.interval)
+        #expect(late >= .zero && late < frame + .milliseconds(50), "첫 청크가 vsync + 50ms + offset에서 \(late) 벗어났다")
+    }
+
+    @Test("vsync 시각은 CADisplayLink의 다음 vsync로 지금에서 한 프레임 안이다")
+    @MainActor
+    func vsyncProbeReturnsNextVsync() async {
+        let vsync = await SSEDemoVsync.next()
+        let frame = Duration.seconds(1.0 / Double(UIScreen.main.maximumFramesPerSecond))
+        let ahead = vsync - .now
+        #expect(ahead > .milliseconds(-50) && ahead <= frame, "\(ahead)")
+    }
+
     @Test("위상 메타데이터는 seed·offset·최대 fps를 key=value로 남긴다")
     func phaseMetadataIsKeyValue() {
         let phase = SSEDemoPhase(seed: 7, framesPerSecond: 60)
