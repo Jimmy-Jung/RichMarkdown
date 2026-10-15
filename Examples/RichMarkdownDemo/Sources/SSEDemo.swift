@@ -925,6 +925,8 @@ private struct SSETranscriptView: View {
                 .frame(maxWidth: .infinity)
                 .modifier(SSEContentHeightReporter())
             }
+            // 접근성 audit이 이 ScrollView로 본문 요소와 위쪽 클립 경계(상단)를 찾는다.
+            .accessibilityIdentifier("sseDemo.transcript")
             .modifier(SSEBottomFollowing(proxy: proxy, anchorID: Self.bottomAnchor))
         }
     }
@@ -1001,7 +1003,9 @@ private struct SSEStatusHeader: View {
                 .clipShape(Capsule())
                 .accessibilityIdentifier("sseDemo.status")
         }
-        .frame(maxWidth: DemoLayout.readableWidth, alignment: .leading)
+        // 가운데 둔다. iOS 26 글래스 뒤로 버튼의 그림자는 내용 위에 그려지고 바 하단 아래 약 24pt까지 내려와,
+        // 앞쪽 정렬이면 칩 왼쪽에 그라데이션이 겹쳐 접근성 audit이 대비 실패로 잡는다. 불투명 칩 배경으로는
+        // 그림자를 못 막는다(iPhone 17 iOS 26.5 라이트 실측: 흰 칩도 왼쪽이 #FBFBFB–#FFFFFF로 갈린다).
         .padding(.horizontal, DemoLayout.horizontalMargin)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)

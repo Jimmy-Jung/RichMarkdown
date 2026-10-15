@@ -46,16 +46,24 @@ final class AccessibilityAuditUITests: XCTestCase {
         ])
     }
 
-    /// 가장자리 효과 띠 예외는 실측한 SSE(SwiftUI) 화면에만 건다. 스크롤하지 않는 '라이브 편집'의 보기 모드
-    /// Picker(바 하단 + 8pt) 같은 바 바로 아래 요소의 실제 대비 결함은 어느 OS에서도 실패로 남아야 한다.
-    func testEdgeEffectBandExemptsOnlyMeasuredScreen() {
-        let barBottom: CGFloat = 100
-        XCTAssertFalse(Self.isUnderNavigationBar(minY: 108, barBottom: barBottom, screen: "라이브 편집 (분할 미리보기)"))
-        XCTAssertFalse(Self.isUnderNavigationBar(minY: 115, barBottom: barBottom, screen: "SSE 실시간 렌더링 (UIKit)"))
-        XCTAssertTrue(Self.isUnderNavigationBar(minY: 90, barBottom: barBottom, screen: "라이브 편집 (분할 미리보기)"))
-        if #available(iOS 26.0, *) {
-            XCTAssertTrue(Self.isUnderNavigationBar(minY: 115, barBottom: barBottom, screen: "SSE 실시간 렌더링 (SwiftUI)"))
-        }
+    /// 위치 예외는 클립 경계 위로 밀린 스크롤 내용에만 건다. SSE(SwiftUI) 화면의 경계는 고정 상태 헤더 아래
+    /// 본문 ScrollView 상단이고, 그 위의 고정 칩(바 하단 + 8pt)은 스크롤 내용이 아니므로 예외가 아니다 — 칩의
+    /// 실제 대비 결함은 어느 OS에서도 실패로 남는다.
+    @MainActor
+    func testFixedStatusChipIsNotPositionExempt() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["RichMarkdown Demo"].waitForExistence(timeout: 30))
+        app.buttons["SSE 실시간 렌더링 (SwiftUI)"].firstMatch.tap()
+
+        let screen = "SSE 실시간 렌더링 (SwiftUI)"
+        let chip = app.staticTexts["sseDemo.status"]
+        let placeholder = app.staticTexts["시작을 누르면 SSE 프레임이 도착하는 대로 렌더링합니다."]
+        XCTAssertTrue(chip.waitForExistence(timeout: 10))
+        XCTAssertTrue(placeholder.waitForExistence(timeout: 10))
+        XCTAssertTrue(Self.isTranscriptContent(placeholder, in: app), "본문 안 요소는 스크롤 내용으로 잡혀야 한다")
+        XCTAssertFalse(Self.isTranscriptContent(chip, in: app), "고정 헤더 칩은 스크롤 내용이 아니다")
+        XCTAssertFalse(Self.isClippedScrollContent(chip, screen: screen, app: app), "고정 헤더 칩은 위치 예외가 아니다")
     }
 
     // MARK: - 화면 목록
@@ -217,15 +225,14 @@ final class AccessibilityAuditUITests: XCTestCase {
         app: XCUIApplication
     ) -> String? {
         guard let element = issue.element else { return nil }
-        let frame = element.frame
         let label = element.label
 
-        // "Contrast failed" / "Contrast nearly passed": 스크롤로 내비게이션 바 아래에 걸친 요소는
-        // 반투명 바 재질을 배경으로 측정된다(SSE 자동 스크롤 직후 표 헤더 '구간·확률·비고', 최대
-        // 글자에서 화면 위로 반쯤 밀린 목록 번호 '3.'). 바 밖의 같은 요소는 통과한다.
-        let barBottom = app.navigationBars.firstMatch.frame.maxY
-        if issue.auditType == .contrast, isUnderNavigationBar(minY: frame.minY, barBottom: barBottom, screen: screen) {
-            return "내비게이션 바 아래에 걸친 요소의 대비 측정(\(issue.compactDescription)): '\(label)'"
+        // "Contrast failed" / "Contrast nearly passed": 스크롤로 위쪽 클립 경계에 걸리거나 그 위로 밀린 요소는
+        // 화면 글자가 아니라 그 자리를 덮은 바 재질·고정 헤더를 배경으로 측정된다(SSE(SwiftUI) 하단 추적 뒤 상태
+        // 헤더 뒤로 밀린 표 헤더 '구간·확률·비고', 최대 글자에서 바 아래로 반쯤 밀린 목록 번호 '3.').
+        // 경계 안의 같은 요소는 통과한다.
+        if issue.auditType == .contrast, isClippedScrollContent(element, screen: screen, app: app) {
+            return "스크롤 클립 경계에 걸린 요소의 대비 측정(\(issue.compactDescription)): '\(label)'"
         }
 
         // "Contrast failed": 다크 모드 SSE(SwiftUI) 화면의 표 헤더 셀 '구간·확률·비고'. 글자는 #FFFFFF,
@@ -256,14 +263,27 @@ final class AccessibilityAuditUITests: XCTestCase {
         return nil
     }
 
-    /// 바 재질을 배경으로 대비가 측정되는 위치인가.
-    /// iOS 26은 바 아래로 스크롤 가장자리 효과(흐림·페이드)가 더 내려온다. SSE(SwiftUI) 화면이 스트림 끝에
-    /// 정확히 하단에 붙으면 표 첫 행 셀('68.27%'·'1 시그마', minY = 바 하단 + 15pt)이 그 띠에 걸려
-    /// 측정된다(iPhone 17 시뮬레이터 iOS 26.5 실측, 스크린샷에서 셀 글자·배경은 그대로다).
-    /// 띠는 그 화면에만 넓힌다 — 세 구성 감사에서 띠 예외가 걸린 곳은 이 화면의 표 셀뿐이었다.
-    static func isUnderNavigationBar(minY: CGFloat, barBottom: CGFloat, screen: String) -> Bool {
-        var edgeEffectBand: CGFloat = 0
-        if #available(iOS 26.0, *), screen == "SSE 실시간 렌더링 (SwiftUI)" { edgeEffectBand = 24 }
-        return minY < barBottom + edgeEffectBand
+    /// 위쪽 클립 경계에 걸리거나 그 위로 밀린 스크롤 내용인가. 보통 화면의 경계는 내비게이션 바 하단이다.
+    /// SSE(SwiftUI) 화면은 본문 ScrollView가 고정 상태 헤더 아래에서 시작해 바 밑으로 들어가지 않으므로, 본문
+    /// 안의 요소가 ScrollView 상단 위로 밀린 경우만 센다. 바 하단과 본문 상단 사이의 고정 칩은 스크롤 내용이
+    /// 아니라서 해당하지 않는다(예전 iOS 26 전용 '바 하단 + 24pt 띠'는 이 칩까지 덮었다).
+    @MainActor
+    private static func isClippedScrollContent(_ element: XCUIElement, screen: String, app: XCUIApplication) -> Bool {
+        guard screen == "SSE 실시간 렌더링 (SwiftUI)" else {
+            return element.frame.minY < app.navigationBars.firstMatch.frame.maxY
+        }
+        let transcriptTop = app.scrollViews["sseDemo.transcript"].frame.minY
+        return element.frame.minY < transcriptTop && isTranscriptContent(element, in: app)
+    }
+
+    /// SSE(SwiftUI) 본문 ScrollView 안의 요소인가. XCUIElement는 부모를 알려 주지 않으므로 본문 아래에서
+    /// 종류·label·frame이 같은 요소를 찾는다.
+    @MainActor
+    private static func isTranscriptContent(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        app.scrollViews["sseDemo.transcript"]
+            .descendants(matching: element.elementType)
+            .matching(NSPredicate(format: "label == %@", element.label))
+            .allElementsBoundByIndex
+            .contains { $0.frame == element.frame }
     }
 }

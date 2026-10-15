@@ -222,9 +222,12 @@ final class RichMarkdownDemoUITests: XCTestCase {
     ///
     /// 회귀 방지: 칩이 스크롤 내용 맨 위에 있으면 버퍼 게시마다 칩 하나 고치려고 스크롤 내용 전체를
     /// 다시 쟀다(p9 iPad 8 실측: ScrollView 내용 sizeThatFits). 그 배치에서는 하단 추적 뒤 칩이 화면 밖이다.
+    /// 긴 fixture로 본문이 화면보다 길어지게 하고, 첫 제목이 실제로 위로 밀렸는지 확인해 기기 높이와 상관없이
+    /// 옛 배치를 잡는다(본문이 화면에 다 들어가면 칩이 스크롤 내용 안이어도 보인다).
     @MainActor
     func testSSEDemoStatusStaysVisibleWhileTranscriptFollowsBottom() {
         let app = XCUIApplication()
+        app.launchArguments += ["-sseFixture", "long"]
         app.launch()
 
         XCTAssertTrue(app.navigationBars["RichMarkdown Demo"].waitForExistence(timeout: 10))
@@ -236,11 +239,14 @@ final class RichMarkdownDemoUITests: XCTestCase {
         startStop.tap()
 
         // 마지막 인용 문단이 보이면 본문이 하단까지 따라간 것이다.
-        let lastParagraph = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "오차함수")).firstMatch
-        XCTAssertTrue(lastParagraph.waitForExistence(timeout: 30), "스트림이 마지막 문단까지 렌더되어야 한다")
+        let lastParagraph = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "수백만 행")).firstMatch
+        XCTAssertTrue(lastParagraph.waitForExistence(timeout: 60), "스트림이 마지막 문단까지 렌더되어야 한다")
         let ended = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "시작"), object: startStop)
-        XCTAssertEqual(XCTWaiter.wait(for: [ended], timeout: 30), .completed, "스트림이 끝나지 않았다")
+        XCTAssertEqual(XCTWaiter.wait(for: [ended], timeout: 60), .completed, "스트림이 끝나지 않았다")
         XCTAssertTrue(lastParagraph.isHittable, "본문이 하단을 따라가야 한다")
+        let firstHeading = app.staticTexts["선형 회귀를 경사 하강법으로 학습하기"]
+        XCTAssertTrue(firstHeading.exists, "첫 제목이 렌더되어야 한다")
+        XCTAssertFalse(firstHeading.isHittable, "본문이 화면보다 길어 첫 제목이 위로 밀려야 한다")
 
         let status = app.staticTexts["sseDemo.status"]
         XCTAssertTrue(status.isHittable, "본문이 하단을 따라가도 상태 칩은 화면에 남아야 한다")
