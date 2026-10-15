@@ -23,7 +23,8 @@ cd "$(dirname "$0")/../.."
 readonly NOTIFICATION=dev.richmarkdown.perf.tracing-started
 readonly DERIVED="$SLOT_DIR/DerivedData"
 LABEL="${LABEL:-$DEVICE}"
-mkdir -p "$OUT_DIR" "$SLOT_DIR/tmp" .swiftpm/xcode/xcshareddata/xcschemes
+# xcodegen은 --project 대상 폴더가 없으면 임시 폴더에서 옮기다 실패한다(2026-10-15 새 슬롯에서 실측).
+mkdir -p "$OUT_DIR" "$SLOT_DIR/tmp" "$SLOT_DIR/BenchHost" .swiftpm/xcode/xcshareddata/xcschemes
 cp scripts/bench/RichMarkdownBenchmarks.xcscheme .swiftpm/xcode/xcshareddata/xcschemes/
 
 extra=()
