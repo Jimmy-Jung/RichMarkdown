@@ -119,6 +119,9 @@ public final class RichMarkdownUIView: UIView {
 
     private var renderedBlocks: [RenderedBlock] = []
     private var renderedAppearance: AppearanceKey?
+    /// 마지막 rebuild가 블록에 넘긴 수식 이미지 사전. in-place 갱신은 이것과 새 사전을 비교해
+    /// raster 준비 여부가 바뀐 수식이 든 셀·자식만 다시 채운다.
+    private var renderedImages: [MathSegment: RenderedMath] = [:]
 
     /// 원문 fallback 전용 재사용 뷰.
     ///
@@ -347,6 +350,7 @@ public final class RichMarkdownUIView: UIView {
         setBlockViews(rendered.map(\.view), reusedCount: stableCount)
         renderedBlocks = rendered
         renderedAppearance = appearance
+        renderedImages = images
     }
 
     /// 꼬리 표시(마지막 글자 페이드·미닫힌 강조 숨김)를 쓰지 않는 블록. 스트림이 끝나 tail만 바뀐 경우
@@ -422,9 +426,9 @@ public final class RichMarkdownUIView: UIView {
         }
         for (index, (old, new)) in zip(previous, children).enumerated() {
             let isLast = index == children.count - 1
-            // 값이 같고 수식도 없는 자식은 바뀔 수 있는 것이 없다. 마지막 자식은 tail 표시가
-            // 바뀔 수 있어 항상 갱신한다.
-            if old == new, !isLast, !containsMath(new) { continue }
+            // 값이 같고 수식 hydration도 그대로인 자식은 바뀔 수 있는 것이 없다. 마지막 자식은 tail
+            // 표시가 바뀔 수 있어 항상 갱신한다.
+            if old == new, !isLast, !mathHydrationChanged(new, images: images) { continue }
             guard updateBlockInPlace(
                 stack.arrangedSubviews[index],
                 from: old,
@@ -448,7 +452,7 @@ public final class RichMarkdownUIView: UIView {
         else { return false }
         for (index, (old, new)) in zip(previous, items).enumerated() {
             let isLast = index == items.count - 1
-            if old == new, !isLast, !new.contains(where: { containsMath($0) }) { continue }
+            if old == new, !isLast, !new.contains(where: { mathHydrationChanged($0, images: images) }) { continue }
             guard let row = list.arrangedSubviews[index] as? UIStackView, row.arrangedSubviews.count == 2,
                   let children = row.arrangedSubviews[1] as? UIStackView,
                   updateChildren(children, from: old, to: new, images: images, tail: isLast ? tail : nil)
@@ -508,7 +512,7 @@ public final class RichMarkdownUIView: UIView {
 
         for (rowIndex, cells) in rows.prefix(previousRows.count).enumerated() {
             for (column, runs) in cells.enumerated()
-            where runs != previousRows[rowIndex][column] || containsMath(runs) {
+            where runs != previousRows[rowIndex][column] || mathHydrationChanged(runs, images: images) {
                 let cell = block.cells[rowIndex][column]
                 configure(
                     cell,
@@ -519,14 +523,14 @@ public final class RichMarkdownUIView: UIView {
                 )
                 // `attributedText` 대입이 정렬을 natural로 되돌린다. 생성 경로처럼 구성 뒤에 다시 건다.
                 cell.textAlignment = textAlignment(for: table.columnAlignments, at: column)
+                block.cellSizes[rowIndex][column] = nil
             }
         }
         // 스트리밍은 행을 끝에만 더한다. 새 행의 셀만 만들어 붙인다.
         for rowIndex in previousRows.count..<rows.count {
             let row = tableRow(rows[rowIndex], at: rowIndex, alignments: table.columnAlignments, images: images)
             content.addArrangedSubview(row.view)
-            block.cells.append(row.cells)
-            block.widthConstraints.append(row.widthConstraints)
+            block.appendRow(row.cells, widthConstraints: row.widthConstraints)
         }
         // 헤더가 바뀌면 본문 셀 힌트도 따라 바뀐다. 아니면 새 행에만 단다.
         applyTableAccessibilityHints(
@@ -538,23 +542,27 @@ public final class RichMarkdownUIView: UIView {
         return true
     }
 
-    private func containsMath(_ runs: [InlineRun]) -> Bool {
-        runs.contains { if case .math = $0.content { return true } else { return false } }
+    /// 이전 rebuild 이후 raster 준비 여부가 바뀐 인라인 수식이 있는가. 내용이 같은 셀·자식도 이때는
+    /// 원문 ↔ attachment를 바꿔 끼워야 한다.
+    private func mathHydrationChanged(_ runs: [InlineRun], images: [MathSegment: RenderedMath]) -> Bool {
+        runs.contains { run in
+            guard case .math(let segment) = run.content else { return false }
+            return (renderedImages[segment] == nil) != (images[segment] == nil)
+        }
     }
 
-    private func containsMath(_ block: ParsedBlock) -> Bool {
+    private func mathHydrationChanged(_ block: ParsedBlock, images: [MathSegment: RenderedMath]) -> Bool {
         switch block {
         case .paragraph(let runs), .heading(_, let runs):
-            return containsMath(runs)
-        case .blockMath:
-            return true
+            return mathHydrationChanged(runs, images: images)
         case .blockQuote(let children):
-            return children.contains { containsMath($0) }
+            return children.contains { mathHydrationChanged($0, images: images) }
         case .unorderedList(let items), .orderedList(_, let items):
-            return items.joined().contains { containsMath($0) }
+            return items.joined().contains { mathHydrationChanged($0, images: images) }
         case .table(let table):
-            return (table.header + table.rows.flatMap { $0 }).contains { containsMath($0) }
-        case .codeBlock, .thematicBreak:
+            return (table.header + table.rows.flatMap { $0 }).contains { mathHydrationChanged($0, images: images) }
+        case .blockMath, .codeBlock, .thematicBreak:
+            // 블록 수식은 벡터 뷰라 이미지 사전을 쓰지 않는다.
             return false
         }
     }
@@ -745,8 +753,9 @@ public final class RichMarkdownUIView: UIView {
             content: verticalStack(spacing: 0, rows.map(\.view)),
             contentSize: CGSize(width: 96, height: 1)
         )
-        block.cells = rows.map(\.cells)
-        block.widthConstraints = rows.map(\.widthConstraints)
+        for row in rows {
+            block.appendRow(row.cells, widthConstraints: row.widthConstraints)
+        }
         block.accessibilityContainerType = .semanticGroup
         applyTableAccessibilityHints(block, header: table.header)
         layoutTableColumns(block)
@@ -814,31 +823,55 @@ public final class RichMarkdownUIView: UIView {
         }
     }
 
-    /// 열 폭(셀 자연 폭의 최대, 96…240pt)과 표 전체 크기를 현재 셀 내용에서 다시 잰다.
-    /// 생성과 스트리밍 in-place 갱신이 같은 규칙을 쓴다.
+    /// 열 폭(셀 자연 폭의 최대, 96…240pt)과 표 전체 크기를 셀 크기에서 정한다. 생성과 스트리밍
+    /// in-place 갱신이 같은 규칙을 쓴다. 셀 크기는 `cellSizes`에 두고 새로 만들었거나 다시 채운 셀만
+    /// 잰다 — 그대로인 셀까지 tick마다 두 번씩 재면 표가 길수록 tick이 느려진다.
     private func layoutTableColumns(_ block: TableScrollBlock) {
+        let sizes = block.cells.indices.map { row in
+            block.cells[row].indices.map { cachedCellSize(block, row: row, column: $0) }
+        }
         let columnCount = block.cells.first?.count ?? 0
         let columnWidths = (0..<columnCount).map { column in
-            let naturalWidth = block.cells.compactMap { row in
-                row.indices.contains(column) ? Self.fittingSize(row[column]).width : nil
+            let naturalWidth = sizes.compactMap { row in
+                row.indices.contains(column) ? row[column].natural.width : nil
             }.max() ?? 96
             return min(max(naturalWidth, 96), 240)
         }
         for row in block.widthConstraints {
-            for (column, constraint) in row.enumerated() where columnWidths.indices.contains(column) {
+            for (column, constraint) in row.enumerated()
+            where columnWidths.indices.contains(column) && constraint.constant != columnWidths[column] {
                 constraint.constant = columnWidths[column]
             }
         }
         let contentWidth = columnWidths.reduce(0, +)
         // content의 고정 높이를 다시 fit하면 초기 1pt 또는 이전 높이에 갇힌다.
-        // 확정 열 폭에서 셀을 측정하고 각 행의 최대 높이를 합산한다.
-        let contentHeight = block.cells.reduce(CGFloat.zero) { height, cells in
-            let rowHeight = zip(cells, columnWidths)
-                .map { Self.fittingSize($0.0, width: $0.1).height }
+        // 확정 열 폭에서 셀 높이를 구하고 각 행의 최대 높이를 합산한다.
+        let contentHeight = block.cells.indices.reduce(CGFloat.zero) { height, row in
+            let rowHeight = zip(block.cells[row].indices, columnWidths)
+                .map { cellHeight(block, row: row, column: $0, width: $1) }
                 .max() ?? 0
             return height + rowHeight
         }
         block.setContentSize(CGSize(width: ceil(contentWidth), height: max(1, ceil(contentHeight))))
+    }
+
+    /// 캐시된 셀 크기. 비어 있으면(새로 만들었거나 다시 채운 셀) 자연 크기를 재서 채운다.
+    private func cachedCellSize(_ block: TableScrollBlock, row: Int, column: Int) -> TableScrollBlock.CellSize {
+        if let size = block.cellSizes[row][column] { return size }
+        let size = TableScrollBlock.CellSize(natural: Self.fittingSize(block.cells[row][column]))
+        block.cellSizes[row][column] = size
+        return size
+    }
+
+    /// 열 폭에서의 셀 높이. 자연 폭이 열 폭 안에 들면 줄바꿈이 없어 자연 높이와 같다. 240pt 상한에 눌려
+    /// 줄바꿈되는 셀만 그 폭에서 한 번 더 재고, 내용과 폭이 그대로인 동안은 그 값을 쓴다.
+    private func cellHeight(_ block: TableScrollBlock, row: Int, column: Int, width: CGFloat) -> CGFloat {
+        let size = cachedCellSize(block, row: row, column: column)
+        if width >= size.natural.width { return size.natural.height }
+        if let wrapped = size.wrapped, wrapped.width == width { return wrapped.height }
+        let height = Self.fittingSize(block.cells[row][column], width: width).height
+        block.cellSizes[row][column]?.wrapped = (width, height)
+        return height
     }
 
     private func textAlignment(
@@ -1365,13 +1398,29 @@ class HorizontalScrollBlock: UIScrollView {
     /// 콘텐츠 자연 크기가 바뀌었을 때 제약 상수만 갱신한다. 뷰 계층은 그대로다.
     func setContentSize(_ size: CGSize) {
         for constraint in sizeConstraints {
-            constraint.constant = constraint.firstAttribute == .width ? size.width : size.height
+            let constant = constraint.firstAttribute == .width ? size.width : size.height
+            // 스트리밍 tick은 크기가 그대로인 경우가 많다. 바뀐 상수만 건다.
+            if constraint.constant != constant { constraint.constant = constant }
         }
     }
 }
 
 /// 표 블록. 셀 텍스트 뷰와 폭 제약을 보관해 스트리밍 tick에서 표 전체를 다시 만들지 않는다.
 final class TableScrollBlock: HorizontalScrollBlock {
-    var cells: [[RichMarkdownTextView]] = []
-    var widthConstraints: [[NSLayoutConstraint]] = []
+    /// 셀 측정값. `natural`은 폭 제한 없는 크기, `wrapped`는 자연 폭보다 좁은 열 폭에서 잰 높이다.
+    struct CellSize {
+        let natural: CGSize
+        var wrapped: (width: CGFloat, height: CGFloat)?
+    }
+
+    private(set) var cells: [[RichMarkdownTextView]] = []
+    private(set) var widthConstraints: [[NSLayoutConstraint]] = []
+    /// `cells`와 같은 모양의 측정 캐시. 다시 채운 셀은 nil로 비워 다음 열 배치에서만 다시 잰다.
+    var cellSizes: [[CellSize?]] = []
+
+    func appendRow(_ rowCells: [RichMarkdownTextView], widthConstraints rowConstraints: [NSLayoutConstraint]) {
+        cells.append(rowCells)
+        widthConstraints.append(rowConstraints)
+        cellSizes.append(Array(repeating: nil, count: rowCells.count))
+    }
 }

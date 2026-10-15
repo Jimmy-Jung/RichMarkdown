@@ -826,6 +826,119 @@ import UIKit
         )
     }
 
+    private func firstAttachment(in textView: UITextView) -> NSTextAttachment? {
+        let attributed = textView.attributedText ?? NSAttributedString()
+        var found: NSTextAttachment?
+        attributed.enumerateAttribute(
+            .attachment,
+            in: NSRange(location: 0, length: attributed.length)
+        ) { value, _, stop in
+            if let attachment = value as? NSTextAttachment {
+                found = attachment
+                stop.pointee = true
+            }
+        }
+        return found
+    }
+
+    /// 표 스트리밍 tick은 바뀐 셀만 다시 채운다. 수식이 든 셀도 내용과 hydration이 그대로면 손대지 않는다
+    /// (2026-10-15 시뮬레이터 실측: 수식 셀을 tick마다 전부 다시 채웠다).
+    @Test func streamingKeepsUnchangedMathCellUntouched() async throws {
+        let prefix = #"| 수식 | 값 |\#n| --- | ---: |\#n| \(a+b\) | "#
+        let view = RichMarkdownUIView(markdown: prefix + "1")
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitFor(view) {
+            !$0.model.hasOutstandingWork && !$0.hasPendingRebuild && attachmentCount(in: $0) == 1
+        }
+        let table = try #require(view.blockStack.arrangedSubviews.first as? TableScrollBlock)
+        let mathCell = table.cells[1][0]
+        let attachment = try #require(firstAttachment(in: mathCell))
+
+        view.markdown = prefix + "12"
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.first === table)
+        #expect(table.cells[1][1].text == "12")
+        #expect(firstAttachment(in: mathCell) === attachment, "내용·hydration이 그대로인 수식 셀은 다시 채우지 않는다")
+    }
+
+    /// 표를 만든 뒤 도착한 셀 수식 raster도 그 셀에 반영한다. 셀 run은 그대로이고 이미지 사전만 바뀌는 게시다.
+    @Test func streamingTableCellHydratesMathArrivingAfterBuild() async throws {
+        let unique = UUID().uuidString.prefix(8)
+        let prefix = "| 항목 | 수식 |\n| --- | --- |\n| 하나 | "
+        let view = RichMarkdownUIView(markdown: prefix)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        let table = try #require(view.blockStack.arrangedSubviews.first as? TableScrollBlock)
+        let cell = table.cells[1][1]
+
+        // 처음 보는 latex라 raster 캐시가 비어 있다 — 문서 게시 뒤 이미지 게시가 따로 온다.
+        view.markdown = prefix + #"\(q_{\#(unique)}\)"#
+        try await waitFor(view) {
+            !$0.model.hasOutstandingWork && !$0.hasPendingRebuild && attachmentCount(in: $0) == 1
+        }
+        #expect(view.blockStack.arrangedSubviews.first === table, "같은 구조의 표는 제자리 갱신한다")
+        #expect(table.cells[1][1] === cell)
+        #expect(attachmentCount(in: cell) == 1, "늦게 도착한 raster도 셀에 붙는다")
+        #expect((cell as RichMarkdownTextView).spokenOverride == "수식: q_{\(unique)}")
+    }
+
+    /// tail이 아닌 목록 항목도 늦게 도착한 수식 raster를 반영한다.
+    @Test func streamingListItemHydratesMathArrivingAfterBuild() async throws {
+        let unique = UUID().uuidString.prefix(8)
+        let view = RichMarkdownUIView(markdown: #"- \(r_{\#(unique)}\)\#n- 둘"#)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitFor(view) {
+            !$0.model.hasOutstandingWork && !$0.hasPendingRebuild && attachmentCount(in: $0) == 1
+        }
+        let list = try #require(view.blockStack.arrangedSubviews.first)
+        #expect(textViews(in: list).count == 2)
+        #expect(attachmentCount(in: textViews(in: list)[0]) == 1, "첫 항목의 수식이 hydration되어야 한다")
+    }
+
+    /// 생성 규칙의 표 높이: 확정 열 폭에서 셀마다 잰 높이의 행별 최대 합.
+    private func perCellTableHeight(_ table: TableScrollBlock) -> CGFloat {
+        let widths = table.widthConstraints.first?.map(\.constant) ?? []
+        let height = table.cells.reduce(CGFloat.zero) { total, row in
+            total + (zip(row, widths).map { cell, width in
+                ceil(cell.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)).height)
+            }.max() ?? 0)
+        }
+        return max(1, ceil(height))
+    }
+
+    /// 셀 크기 캐시(자연 폭에 들면 자연 높이, 줄바꿈 셀만 열 폭에서 재측정)는 셀마다 열 폭에서 잰 높이와 같다.
+    /// 정렬·수식·코드·링크가 섞이고 열 폭 상한에 눌려 줄바꿈되는 셀이 스트리밍으로 자라는 경우를 본다.
+    @Test func cachedTableLayoutMatchesPerCellMeasurement() async throws {
+        let prefix = #"""
+        | 왼쪽 | 가운데 | 오른쪽 |
+        | :--- | :---: | ---: |
+        | 짧음 | \(x^2+1\) | 1 |
+        | `code` | **굵게** | [링크](https://example.com) |
+        | 아주
+        """#
+        let view = RichMarkdownUIView(markdown: prefix)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitFor(view) {
+            !$0.model.hasOutstandingWork && !$0.hasPendingRebuild && attachmentCount(in: $0) == 1
+        }
+        let table = try #require(view.blockStack.arrangedSubviews.first as? TableScrollBlock)
+        #expect(fittedHeight(of: table) == perCellTableHeight(table))
+
+        var markdown = prefix
+        for _ in 0..<6 {
+            markdown += String(repeating: " 긴 설명", count: 8)
+            view.markdown = markdown
+            try await waitForRender(view)
+            #expect(view.blockStack.arrangedSubviews.first === table, "같은 구조의 표는 제자리 갱신한다")
+            #expect(fittedHeight(of: table) == perCellTableHeight(table), "캐시한 높이가 셀별 측정과 같아야 한다")
+        }
+        #expect(table.widthConstraints[0][0].constant == 240, "긴 셀은 열 폭 상한에서 줄바꿈한다")
+    }
+
     /// 항목 수가 같은 목록은 마지막 항목의 문단만 갱신한다.
     @Test func streamingUpdatesTailListItemInPlace() async throws {
         let view = RichMarkdownUIView(markdown: "- 하나\n- 둘")
