@@ -326,7 +326,9 @@ public final class RichMarkdownUIView: UIView {
                 // 갱신한다 (2026-09-15 iPad Pro 실측: 표를 스트리밍하는 구간에서 tick마다 셀
                 // UITextView 12개를 재생성해 hitch가 집중됐다). 앞 블록이 모두 그대로인 일반적인
                 // tick에서는 계층 조작이 없어 읽던 문단의 VoiceOver 포커스도 유지된다.
-                if streaming != nil,
+                // 스트림이 끝나 tail만 바뀐 블록(값·수식 hydration 그대로)도 이 경로로 페이드와 숨긴 마크만 걷는다.
+                let onlyTailChanged = previous.block == block && previous.mathImageCount == mathCount
+                if streaming != nil || onlyTailChanged,
                    updateBlockInPlace(previous.view, from: previous.block, to: block, images: images, tail: tail) {
                     rendered.append(
                         RenderedBlock(block: block, view: previous.view, mathImageCount: mathCount, tail: tail)
@@ -354,10 +356,15 @@ public final class RichMarkdownUIView: UIView {
     }
 
     /// 꼬리 표시(마지막 글자 페이드·미닫힌 강조 숨김)를 쓰지 않는 블록. 스트림이 끝나 tail만 바뀐 경우
-    /// 다시 만들지 않는다 — 코드 블록은 다시 만들면 하이라이트를 다시 돌리고 다이어그램은 WKWebView를 새로 띄운다.
+    /// 손대지 않는다 — 코드 블록은 다시 만들면 하이라이트를 다시 돌리고 다이어그램은 WKWebView를 새로 띄운다.
+    /// 표 셀·블록 수식·구분선은 tail을 받지 않는다.
     private static func ignoresStreamingTail(_ block: ParsedBlock) -> Bool {
-        if case .codeBlock = block { return true }
-        return false
+        switch block {
+        case .codeBlock, .table, .blockMath, .thematicBreak:
+            return true
+        case .paragraph, .heading, .blockQuote, .unorderedList, .orderedList:
+            return false
+        }
     }
 
     /// 같은 종류의 블록이면 기존 뷰의 내용만 바꾸고 true. 표의 행, 목록의 항목, 인용의 자식이 끝에

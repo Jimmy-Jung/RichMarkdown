@@ -654,6 +654,31 @@ import UIKit
         #expect(renderedText(in: view).contains("**"), "스트림이 끝나면 원문대로 보인다")
     }
 
+    /// 스트림이 끝나 tail 옵션만 사라진 마지막 블록은 다시 만들지 않는다. 같은 뷰에서 페이드를 걷고
+    /// 숨긴 마크를 되살린다. tail을 쓰지 않는 블록(구분선·블록 수식)은 그대로 둔다.
+    @Test(arguments: ["앞 문단\n\n**굵게 꼬리", "앞 문단\n\n---", #"앞 문단\#n\#n\[E = mc^2\]"#])
+    func keepsTailBlockViewWhenStreamingEnds(_ markdown: String) async throws {
+        let view = RichMarkdownUIView(markdown: markdown)
+        view.streaming = .default
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews.count == 2)
+        let tail = view.blockStack.arrangedSubviews[1]
+
+        view.streaming = nil
+        try await waitForRender(view)
+        #expect(view.blockStack.arrangedSubviews[1] === tail, "스트림 종료는 tail 블록 뷰를 다시 만들지 않는다")
+
+        let reference = RichMarkdownUIView(markdown: markdown)
+        reference.frame = view.frame
+        try await waitForRender(reference)
+        #expect(
+            StreamingRenderEquivalenceTests.describe(view.blockStack)
+                == StreamingRenderEquivalenceTests.describe(reference.blockStack),
+            "스트림이 끝난 뒤의 표시는 한 번에 그린 결과와 같다"
+        )
+    }
+
     @Test func streamingUpdatesTailTextViewInPlace() async throws {
         let view = RichMarkdownUIView(markdown: "첫 문단\n\n꼬리")
         view.streaming = .default
