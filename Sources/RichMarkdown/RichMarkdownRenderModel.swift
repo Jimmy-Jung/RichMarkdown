@@ -121,7 +121,15 @@ package final class RichMarkdownRenderModel: ObservableObject {
     /// 아직 파싱되지 않은 최신 요청을 표시할 안전한 원문이다.
     /// 과대 입력은 `InputLimits`의 표시 상한으로 잘려 있어 UIKit/SwiftUI fallback에도
     /// 원본 전체 문자열이 전달되지 않는다.
-    @Published package private(set) var fallbackMarkdown = ""
+    ///
+    /// `@Published`가 아니다. 스트리밍 append는 이 값만 바뀌고 표시 문서는 유지되므로,
+    /// 게시하면 아무도 읽지 않는 값 때문에 tick마다 SwiftUI transaction과 UIKit rebuild가
+    /// 한 번씩 더 생긴다. fallback을 실제로 표시하는 경로는 따로 게시된다.
+    /// - 교체·셀 재사용·과대 입력·첫 parse 전 누적: `submit`이 `document = nil`을 대입한다.
+    ///   `@Published`는 값이 이미 nil이어도 objectWillChange를 낸다.
+    /// - UIKit 최초 표시: `rebuildImmediately()`가 게시를 기다리지 않고 이 값을 동기로 읽는다.
+    /// SwiftUI는 이 값을 읽지 않는다 — body가 현재 `Request.markdown`을 직접 쓴다.
+    package private(set) var fallbackMarkdown = ""
 
     private var generation = 0
     private var completedGeneration = 0
@@ -156,6 +164,8 @@ package final class RichMarkdownRenderModel: ObservableObject {
         // 게시될 때까지 이전 렌더(문서 + 이미지)를 유지한다. 매 갱신 원문 fallback으로
         // 되돌리면 화면 전체가 원문 ↔ 렌더를 오가며 출렁인다(데모 실측).
         if parseIdentityChanged {
+            // 게시 없는 대입이다. append면 문서를 유지해 fallback이 보이지 않고,
+            // 그 밖의 경우는 아래 `document = nil`이 게시한다.
             fallbackMarkdown = request.markdown
             if !isStreamingAppend {
                 document = nil

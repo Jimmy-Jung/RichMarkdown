@@ -98,6 +98,30 @@ import UIKit
         #expect(renderedText(in: view).contains("최신 원문 fallback"))
     }
 
+    /// append 제출은 rebuild를 예약하지 않고, 교체 제출은 parse 전에 최신 fallback을 그린다.
+    ///
+    /// append 중에는 문서를 유지하므로 model이 게시하지 않는다. 교체는 `document = nil`
+    /// 게시로 rebuild를 예약하고, 그 rebuild가 `fallbackMarkdown`을 읽는다.
+    @Test func streamingAppendSkipsRebuildButReplacementShowsFallback() async throws {
+        let view = RichMarkdownUIView(markdown: "첫 원문")
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
+        try await waitForRender(view)
+
+        view.markdown = "첫 원문 이어짐"
+        #expect(!view.hasPendingRebuild, "append 제출만으로는 rebuild를 예약하지 않는다")
+        try await waitForRender(view)
+        #expect(renderedText(in: view).contains("첫 원문 이어짐"), "parse 게시 뒤에는 새 문서를 그린다")
+
+        view.markdown = "교체 원문"
+        #expect(view.hasPendingRebuild, "교체 제출은 fallback rebuild를 예약한다")
+        // 예약된 rebuild는 worker 게시보다 먼저 같은 MainActor 큐에서 실행된다.
+        await Task.yield()
+        #expect(view.model.document == nil, "아직 parse 게시 전이다")
+        #expect(renderedText(in: view).contains("교체 원문"), "parse 전에도 최신 fallback이 보인다")
+        #expect(!renderedText(in: view).contains("첫 원문"))
+        try await waitForRender(view)
+    }
+
     @MainActor
     final class CallbackCounter {
         private(set) var count = 0

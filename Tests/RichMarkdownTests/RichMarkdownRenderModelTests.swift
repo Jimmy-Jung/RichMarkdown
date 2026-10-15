@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Testing
 @testable import RichMarkdown
@@ -102,6 +103,56 @@ import Testing
         try await waitForIdle(model)
         let updated = try #require(model.document)
         #expect(flatText(updated).contains("이어지는 답변"), "새 parse가 게시되면 문서가 교체된다")
+    }
+
+    /// 스트리밍 append 제출은 parse가 게시될 때까지 objectWillChange를 내지 않는다.
+    ///
+    /// append 중에는 두 렌더러 모두 이전 문서를 표시하고 fallback 원문을 읽지 않는다.
+    /// 제출 시점에 게시하면 tick마다 SwiftUI transaction·UIKit rebuild가 한 번씩 더 생긴다.
+    @Test func streamingAppendDoesNotPublishUntilParseLands() async throws {
+        let model = RichMarkdownRenderModel()
+        model.submit(request("첫 문단"))
+        try await waitForIdle(model)
+
+        var changes = 0
+        let sink = model.objectWillChange.sink { _ in changes += 1 }
+        defer { sink.cancel() }
+
+        model.submit(request("첫 문단 그리고 이어지는 답변"))
+        #expect(changes == 0, "append 제출 자체는 게시하지 않는다")
+        #expect(model.fallbackMarkdown == "첫 문단 그리고 이어지는 답변", "fallback 원문은 게시 없이도 최신이다")
+
+        try await waitForIdle(model)
+        #expect(changes > 0, "새 parse는 게시된다")
+        let updated = try #require(model.document)
+        #expect(flatText(updated).contains("이어지는 답변"))
+    }
+
+    /// fallback을 표시해야 하는 제출은 계속 즉시 게시한다.
+    /// `document = nil` 대입은 값이 이미 nil이어도 objectWillChange를 낸다.
+    @Test func submissionsThatShowFallbackStillPublishImmediately() async throws {
+        let model = RichMarkdownRenderModel()
+        var changes = 0
+        let sink = model.objectWillChange.sink { _ in changes += 1 }
+        defer { sink.cancel() }
+
+        model.submit(request("스트림 시작"))
+        #expect(changes > 0, "첫 제출은 fallback 표시를 위해 게시한다")
+
+        // 첫 parse 전 누적: 표시 중인 문서가 없어 append가 아니다.
+        changes = 0
+        model.submit(request("스트림 시작 그리고"))
+        #expect(changes > 0, "첫 parse 전 누적 제출도 최신 fallback을 위해 게시한다")
+        #expect(model.fallbackMarkdown == "스트림 시작 그리고")
+        try await waitForIdle(model)
+        #expect(model.document != nil)
+
+        changes = 0
+        model.submit(request("전혀 다른 문서"))
+        #expect(changes > 0, "교체 제출은 이전 문서를 숨기고 fallback을 보이도록 즉시 게시한다")
+        #expect(model.document == nil)
+        #expect(model.fallbackMarkdown == "전혀 다른 문서")
+        try await waitForIdle(model)
     }
 
     @Test func renderConfigurationChangeKeepsMatchingDocumentAndClearsImages() async throws {

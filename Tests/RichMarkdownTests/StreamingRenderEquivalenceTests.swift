@@ -68,16 +68,12 @@ import UIKit
         let identitySink = streamed.model.$parseIdentity
             .compactMap { $0?.markdown }
             .sink { identities.append($0) }
-        let fallbackSink = streamed.model.$fallbackMarkdown
-            .dropFirst()
-            .sink { fallbacks.append($0) }
         // 데모는 100ms 간격이다. 조각 사이 1ms 대기와 짧은 간격으로 latest-wins 합치기와
         // trailing 게시, 렌더 중간 게시가 모두 일어나게 한다.
         let buffer = RichMarkdownStreamingTextBuffer(interval: .milliseconds(5))
         let bufferSink = buffer.$text.dropFirst().sink { streamed.markdown = $0 }
         defer {
             identitySink.cancel()
-            fallbackSink.cancel()
             bufferSink.cancel()
         }
 
@@ -85,8 +81,11 @@ import UIKit
             buffer.append(chunk)
             streamed.layoutIfNeeded()
             try await Task.sleep(for: .milliseconds(1))
+            // fallback 원문은 게시하지 않는 저장 값이다(append 중에는 표시되지 않는다). 조각마다 읽는다.
+            fallbacks.append(streamed.model.fallbackMarkdown)
         }
         buffer.flush()
+        fallbacks.append(streamed.model.fallbackMarkdown)
         streamed.streaming = nil
         try await waitForRender(streamed)
 
@@ -98,10 +97,11 @@ import UIKit
             "스트리밍 최종 문서가 전체 원문 1회 파싱과 다르다"
         )
 
-        // latest-wins: 게시된 문서·fallback 원문은 언제나 앞선 게시를 prefix로 갖는다.
+        // latest-wins: 게시된 문서와 조각마다 읽은 fallback 원문은 언제나 앞선 값을 prefix로 갖는다.
         #expect(Self.firstRegression(in: identities) == nil, "더 새 문서 뒤에 이전 문서가 게시됐다")
-        #expect(Self.firstRegression(in: fallbacks) == nil, "더 새 원문 뒤에 이전 원문이 게시됐다")
+        #expect(Self.firstRegression(in: fallbacks) == nil, "더 새 원문 뒤에 이전 원문이 남았다")
         #expect(identities.last == full)
+        #expect(fallbacks.last == full, "flush 뒤 fallback 원문은 전체 원문이다")
 
         let reference = makeView()
         reference.markdown = full
