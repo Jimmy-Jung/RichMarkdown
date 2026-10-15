@@ -211,8 +211,13 @@ final class AccessibilityAuditUITests: XCTestCase {
         // "Contrast failed" / "Contrast nearly passed": 스크롤로 내비게이션 바 아래에 걸친 요소는
         // 반투명 바 재질을 배경으로 측정된다(SSE 자동 스크롤 직후 표 헤더 '구간·확률·비고', 최대
         // 글자에서 화면 위로 반쯤 밀린 목록 번호 '3.'). 바 밖의 같은 요소는 통과한다.
+        // iOS 26은 바 아래로 스크롤 가장자리 효과(흐림·페이드)가 더 내려온다. SSE(SwiftUI) 화면이 스트림 끝에
+        // 정확히 하단에 붙으면 표 첫 행 셀('68.27%'·'1 시그마', minY = 바 하단 + 15pt)이 그 띠에 걸려
+        // 측정된다(iPhone 17 시뮬레이터 iOS 26.5 실측, 스크린샷에서 셀 글자·배경은 그대로다).
         let barBottom = app.navigationBars.firstMatch.frame.maxY
-        if issue.auditType == .contrast, frame.minY < barBottom {
+        var edgeEffectBand: CGFloat = 0
+        if #available(iOS 26.0, *) { edgeEffectBand = 24 }
+        if issue.auditType == .contrast, frame.minY < barBottom + edgeEffectBand {
             return "내비게이션 바 아래에 걸친 요소의 대비 측정(\(issue.compactDescription)): '\(label)'"
         }
 
