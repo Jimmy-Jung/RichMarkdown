@@ -1089,6 +1089,91 @@ import UIKit
         #expect(renderedText(in: quote).contains("셋"))
     }
 
+    /// 텍스트 뷰는 구성(스크롤·inset·padding)을 끝낸 뒤 내용을 넣는다. 순서만 바뀌었으므로 크기는
+    /// 내용을 먼저 넣던 예전 순서의 뷰와 같아야 한다. 실제 렌더가 만든 문자열(제목·문단·코드·표 셀,
+    /// 수식 attachment·정렬 문단 스타일 포함)과 inset으로 두 뷰를 만들어 여러 폭에서 `sizeThatFits`와
+    /// Auto Layout(intrinsic 2단계 측정) 양쪽을 비교하고, 내용·폰트를 바꾼 뒤에도 본다.
+    @Test func textViewsConfiguredBeforeContentKeepLegacySizes() async throws {
+        let markdown = """
+        ## 제목 **굵게** 😀
+
+        본문 **굵게** *기울임* `inline` [링크](https://example.com) 👩‍👩‍👧 Lorem ipsum dolor sit amet, \
+        consectetur adipiscing elit. 인라인 수식 \\(a^2+b^2\\) 과 긴 단어 Supercalifragilisticexpialidocious
+
+        ```swift
+        let value = compute(42) // 긴 줄 주석 텍스트가 이어진다
+        ```
+
+        | 설명 | 값 |
+        | :--- | ---: |
+        | 한 줄 설명이 길게 이어진다 | 68.27% |
+        """
+        let view = RichMarkdownUIView(markdown: markdown)
+        view.frame = CGRect(x: 0, y: 0, width: 320, height: 800)
+        try await waitForRender(view)
+        let samples = textViews(in: view.blockStack).map {
+            ($0.attributedText ?? NSAttributedString(), $0.textContainerInset)
+        }
+        #expect(samples.count == 7, "제목·문단·코드·표 셀 4개")
+        #expect(attachmentCount(in: view) == 1, "수식 attachment가 든 문자열도 비교한다")
+
+        for (attributed, inset) in samples {
+            let configured = RichMarkdownUIView.textView(attributed, inset: inset)
+            let legacy = legacyOrderTextView(attributed, inset: inset)
+            expectSameSizes(configured, legacy)
+
+            let longer = NSMutableAttributedString(attributedString: attributed)
+            longer.append(NSAttributedString(
+                string: " 이어지는 답변 continues here",
+                attributes: attributed.attributes(at: 0, effectiveRange: nil)
+            ))
+            configured.attributedText = longer
+            legacy.attributedText = longer
+            expectSameSizes(configured, legacy)
+
+            let font = UIFont.preferredFont(forTextStyle: .title2)
+            configured.font = font
+            legacy.font = font
+            expectSameSizes(configured, legacy)
+        }
+    }
+
+    /// 예전 생성 순서: 내용을 먼저 넣고 구성한다.
+    private func legacyOrderTextView(_ attributed: NSAttributedString, inset: UIEdgeInsets) -> UITextView {
+        let legacy = UITextView()
+        legacy.attributedText = attributed
+        legacy.isEditable = false
+        legacy.isSelectable = true
+        legacy.isScrollEnabled = false
+        legacy.backgroundColor = .clear
+        legacy.textContainerInset = inset
+        legacy.textContainer.lineFragmentPadding = 0
+        legacy.linkTextAttributes = [:]
+        legacy.adjustsFontForContentSizeCategory = false
+        return legacy
+    }
+
+    private func expectSameSizes(
+        _ view: UITextView,
+        _ legacy: UITextView,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        for width: CGFloat in [60, 140, 320, .greatestFiniteMagnitude] {
+            let proposal = CGSize(width: width, height: .greatestFiniteMagnitude)
+            #expect(
+                view.sizeThatFits(proposal) == legacy.sizeThatFits(proposal),
+                "sizeThatFits 폭 \(width): \(view.text ?? "")",
+                sourceLocation: sourceLocation
+            )
+            guard width < .greatestFiniteMagnitude else { continue }
+            #expect(
+                fittedHeight(of: view, width: width) == fittedHeight(of: legacy, width: width),
+                "Auto Layout 높이 폭 \(width): \(view.text ?? "")",
+                sourceLocation: sourceLocation
+            )
+        }
+    }
+
     @Test func streamingInstallsChipDecorationWhenInlineCodeCloses() async throws {
         let view = RichMarkdownUIView(markdown: "a `co")
         view.streaming = .default

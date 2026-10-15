@@ -135,7 +135,7 @@ public final class RichMarkdownUIView: UIView {
     /// 거치므로, 그때마다 `UITextView`(TextKit 스택 통째)를 만들고 버리지 않도록 인스턴스 하나를
     /// 유지하고 attributed string만 바꾼다. 스트리밍 append는 이 경로를 거치지 않는다.
     /// 텍스트 레이아웃 비용 자체는 남는다 — 내용이 실제로 바뀌므로 피할 수 없다.
-    private lazy var fallbackTextView: RichMarkdownTextView = textView(NSAttributedString())
+    private lazy var fallbackTextView: RichMarkdownTextView = Self.textView(NSAttributedString())
 
     /// 테스트의 조건 기반 idle 대기용 상태다. 외부 API 계약은 아니다.
     var hasPendingRebuild: Bool { rebuildScheduled || contentSizeChangeScheduled }
@@ -810,10 +810,10 @@ public final class RichMarkdownUIView: UIView {
             let cell = runsTextView(
                 rowIndex == 0 ? runs.map(\.boldened) : runs,
                 images: images,
-                font: bodyUIFont
+                font: bodyUIFont,
+                inset: UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
             )
             cell.textAlignment = textAlignment(for: alignments, at: column)
-            cell.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
             cell.backgroundColor = rowIndex == 0 ? UIColor(theme.codeHeaderBackground) : .clear
             cell.layer.borderColor = borderColor
             cell.layer.borderWidth = 0.5
@@ -960,11 +960,13 @@ public final class RichMarkdownUIView: UIView {
             return view
         }
 
-        let body = textView(NSAttributedString(string: code, attributes: [
-            .font: codeUIFont,
-            .foregroundColor: UIColor(theme.textColor),
-        ]))
-        body.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        let body = Self.textView(
+            NSAttributedString(string: code, attributes: [
+                .font: codeUIFont,
+                .foregroundColor: UIColor(theme.textColor),
+            ]),
+            inset: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        )
 
         let scroll = HorizontalScrollBlock(content: body, contentSize: Self.fittingSize(body))
         scroll.backgroundColor = UIColor(theme.codeBlockBackground)
@@ -1012,7 +1014,7 @@ public final class RichMarkdownUIView: UIView {
             contentSize = vector.intrinsicContentSize
         } else {
             // preflight 초과·latex parse 실패 시 원래 구분자를 포함한 source를 표시한다.
-            let view = textView(NSAttributedString(string: segment.source, attributes: [
+            let view = Self.textView(NSAttributedString(string: segment.source, attributes: [
                 .font: codeUIFont,
                 .foregroundColor: UIColor(theme.textColor),
             ]))
@@ -1062,9 +1064,10 @@ public final class RichMarkdownUIView: UIView {
         _ runs: [InlineRun],
         images: [MathSegment: RenderedMath],
         font: UIFont,
-        tail: RichMarkdownStreamingOptions? = nil
+        tail: RichMarkdownStreamingOptions? = nil,
+        inset: UIEdgeInsets = .zero
     ) -> RichMarkdownTextView {
-        let view = textView(NSAttributedString())
+        let view = Self.textView(NSAttributedString(), inset: inset)
         configure(view, runs: runs, images: images, font: font, tail: tail)
         return view
     }
@@ -1188,19 +1191,23 @@ public final class RichMarkdownUIView: UIView {
 
     // MARK: - View factories
 
-    private func textView(_ attributed: NSAttributedString) -> RichMarkdownTextView {
+    /// 구성(스크롤·inset·padding)을 끝낸 뒤 내용을 넣는다. 내용을 먼저 넣으면 스크롤 가능한 기본
+    /// 상태에서 contentSize용 TextKit 레이아웃이 돌고, 이어지는 구성 변경이 그 레이아웃을 버린다
+    /// (iPad 8 실측: setAttributedText 경로 12%, 2026-10-15 시뮬레이터: 150개 생성 785 → 331 ms).
+    /// internal visibility는 `@testable` 크기 동등성 테스트에도 사용한다.
+    static func textView(_ attributed: NSAttributedString, inset: UIEdgeInsets = .zero) -> RichMarkdownTextView {
         let view = RichMarkdownTextView()
-        view.attributedText = attributed
         view.isEditable = false
         view.isSelectable = true
         view.isScrollEnabled = false
         view.backgroundColor = .clear
-        view.textContainerInset = .zero
+        view.textContainerInset = inset
         view.textContainer.lineFragmentPadding = 0
         // 링크 색·밑줄은 attributed string이 정한다.
         view.linkTextAttributes = [:]
         // 폰트는 rebuild가 다시 만든다. UIKit의 자동 스케일링은 쓰지 않는다.
         view.adjustsFontForContentSizeCategory = false
+        view.attributedText = attributed
         if Self.containsInlineCodeChip(attributed) {
             view.inlineCodeDecoration = InlineCodeDecorationView.install(on: view)
         }
