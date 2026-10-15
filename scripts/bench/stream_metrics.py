@@ -24,7 +24,10 @@ Instruments는 늦은 프레임을 그 수명 동안 다른 프레임(여기서�
   vsync         hz·source. 구간 시작 메시지의 max_fps(데모의 UIScreen.maximumFramesPerSecond)가 있으면 그 값(signpost),
                 없으면 프레임 간격(창 안 frame lifetime 시작 간격 중 2 ms 초과의 5 백분위)을 60·120 Hz 중 가까운 값으로(cadence).
                 cadence_hz는 항상 함께 낸다 — 저전력 모드처럼 실제 주사율이 최대보다 낮으면 둘이 갈린다.
-  phase         구간 시작 메시지의 phase_seed·phase_offset_ms·max_fps (SSE 데모 첫 청크 위상)
+  phase         구간 시작 메시지의 phase_seed·phase_offset_ms·max_fps (SSE 데모가 vsync에서 잰 첫 청크 offset)와
+                실측 measured_ms·grid_r: 창 시작 ±200 ms frame lifetime 시작들의 원형 평균(vsync 1개 주기)을 격자로 잡고, 창 시작
+                (첫 청크 전달)이 그 격자 뒤 몇 ms인지. grid_r(0–1)이 낮으면 격자가 흐려 measured_ms를 믿지 않는다.
+                위상 층화·필터는 measured_ms로 한다 — offset_ms와 상수(격자 정의 차이)+깨어남 지연만큼 다르다.
   device_state  `device-state` signpost 이벤트의 at=start|end → thermal·low_power
 
 `--table`은 여러 요약 JSON을 cfg별로 묶어 (기기, 시나리오, 지표)마다 중앙값·평균·최소–최대·n과 cfg 쌍의
@@ -54,6 +57,7 @@ LIB_CATEGORIES = ("parse", "rebuild", "raster")
 TABLES = ["os-signpost-interval", "os-signpost", "time-profile", "hitches-updates", "hitches-frame-lifetimes", "hitches"]
 # ponytail: iOS 화면은 60 Hz 또는 120 Hz(ProMotion)뿐이라 프레임 간격 추정을 둘 중 가까운 값으로 맞춘다.
 REFRESH_RATES = (60, 120)
+PHASE_GRID_MS = 200
 TABLE_METRICS = ["busy_ms_s", "late_excess_ms_s", "late_frames", "upd_s", "upd_p50", "upd_p90", "upd_over", "fps",
                  "hitch_ms_s"]
 
@@ -181,6 +185,26 @@ def cadence_hz(frame_starts_ns):
     return min(REFRESH_RATES, key=lambda hz: abs(hz - measured))
 
 
+def circular_phase(times_ns, period_ns):
+    """시각들을 period 원 위에서 평균 → (격자 위상 ns, R). R이 1에 가까울수록 한 격자에 모였다. 빈 목록이면 (None, None)."""
+    angles = [2 * math.pi * (t % period_ns) / period_ns for t in times_ns]
+    if not angles:
+        return None, None
+    s, c = sum(map(math.sin, angles)), sum(map(math.cos, angles))
+    return math.atan2(s, c) / (2 * math.pi) % 1 * period_ns, math.hypot(s, c) / len(angles)
+
+
+def measured_phase(start_ns, frame_starts_ns, hz):
+    """창 시작(첫 청크 전달)의 실측 vsync 위상 ms. 격자는 창 시작 ±PHASE_GRID_MS 안 frame lifetime 시작들의 원형 평균이다.
+    실제 주사율이 공칭(60·120 Hz)과 조금 달라 격자가 창 내내 미끄러진다 — 창 전체로 잡으면 iPad 8에서 약 0.9 ms 치우쳤다(실측)."""
+    period = 1e9 / hz
+    near = [t for t in frame_starts_ns if abs(t - start_ns) <= PHASE_GRID_MS * 1_000_000]
+    grid, r = circular_phase(near, period)
+    if grid is None:
+        return {}
+    return {"measured_ms": round((start_ns - grid) % period / 1e6, 3), "grid_r": round(r, 3)}
+
+
 def late_excess(lifetimes_ns, period_ns, span_s):
     """앱 프레임 수명 → (늦은 프레임 수, 초과 ms/s). 수명이 vsync 2개보다 길게 반올림되면 늦은 프레임이다."""
     late = [d for d in lifetimes_ns if round(d / period_ns) > 2]
@@ -220,6 +244,8 @@ def summarize(tables, app, slack_ms):
     frames = [r for r in tables.get("hitches-frame-lifetimes", []) if inside(r["start"])]
     cadence = cadence_hz(number(r["start"]) for r in frames)
     hz, source = (meta["max_fps"], "signpost") if meta.get("max_fps") else (cadence, "cadence")
+    if hz:
+        phase.update(measured_phase(start_ns, [number(r["start"]) for r in frames], hz))
     metrics = window_metrics(tables, app, inside, span_s, frames, hz)
     return {"window": {"signpost": WINDOW_SIGNPOST, "ms": [round(start_ns / 1e6, 1), round(end_ns / 1e6, 1)],
                        "s": round(span_s, 3), "slack_ms": slack_ms},
@@ -333,6 +359,14 @@ def self_test():
     # 120 Hz: 두 surface가 번갈아 vsync에 나가면 간격 ~8.3 ms. 같은 vsync의 surface(0.5 ms 간격)는 빼고 본다.
     assert cadence_hz([0, 500_000, 8_333_333, 16_666_667, 17_100_000, 25_000_000]) == 120
     assert cadence_hz([0, 100_000, 16_600_000, 33_400_000, 50_000_000]) == 60 and cadence_hz([0]) is None
+    # 격자 0 양옆 ±0.5 ms → 0 근처(산술 평균이면 반 프레임). 한 vsync 안에 고르게 흩어지면 R ≈ 0.
+    grid, r = circular_phase([period - 500_000, 2 * period + 500_000], period)
+    assert min(grid, period - grid) < 1_000 and r > .98, (grid, r)
+    assert circular_phase([0, period / 2], period)[1] < 1e-9 and circular_phase([], period) == (None, None)
+    # 실제 주기가 공칭보다 0.05% 길면 900프레임(15 s) 동안 격자가 7.5 ms 미끄러진다. 위상은 창 시작 근처 격자로 잰다.
+    drifting = [3_000_000 + k * period * 1.0005 for k in range(900)]
+    assert abs(measured_phase(4_000_000, drifting, 60)["measured_ms"] - 1.0) < .2
+    assert measured_phase(4_000_000, [], 60) == {}
     assert key_values("swiftui long 20Hz phase_seed=7 phase_offset_ms=4.125 max_fps=120") == \
         {"phase_seed": 7, "phase_offset_ms": 4.125, "max_fps": 120}
 
@@ -360,6 +394,7 @@ def self_test():
                 + update.format(id=20, start=1100 * ms, dur=4 * ms, proc='<process ref="3"/>', swap=2, level=1)
                 + update.format(id=30, start=1200 * ms, dur=20 * ms, proc='<process ref="3"/>', swap=3, level=0)
                 + "</node><node xpath='//trace-toc[1]/run[1]/data[1]/table[2]'>"
+                + lifetime.format(id=35, start=505 * ms, dur=16 * ms, swap=9)  # 창 시작 근처, 앱 프레임 아님
                 + lifetime.format(id=40, start=1010 * ms, dur=50 * ms, swap=1)  # 3 vsync → 늦음, 초과 16.7 ms
                 + lifetime.format(id=50, start=1110 * ms, dur=50 * ms, swap=2)  # 앱 커밋(level 0) 아님
                 + lifetime.format(id=60, start=1210 * ms, dur=33 * ms, swap=3)
@@ -376,12 +411,14 @@ def self_test():
     summary = summarize(parse_export(xml_text, schemas), "App", 300)
     assert summary["window"] == {"signpost": WINDOW_SIGNPOST, "ms": [500.0, 3500.0], "s": 3.0, "slack_ms": 300}, summary
     assert summary["vsync"] == {"hz": 60, "source": "signpost", "cadence_hz": 60}, summary["vsync"]
-    assert summary["phase"] == {"seed": 7, "offset_ms": 4.125, "max_fps": 60}
+    # 창 시작 ±200 ms frame은 505 ms뿐 → 격자 5 ms(R 1). 창 시작 500 ms의 위상 = (500 − 5) mod 16.667 = 11.667 ms.
+    assert summary["phase"] == {"seed": 7, "offset_ms": 4.125, "max_fps": 60, "measured_ms": 11.667, "grid_r": 1.0}, \
+        summary["phase"]
     assert summary["device_state"] == {"start": {"thermal": "nominal", "low_power": 0},
                                        "end": {"thermal": "fair", "low_power": 1}}, summary["device_state"]
     m = summary["metrics"]
     # containment-level 1 커밋 제외 → 커밋 9·20 ms, 20 ms만 예산(16.7 ms) 초과. 4.0 s parse는 창(+300 ms) 밖.
-    assert m["upd_n"] == 2 and m["upd_over"] == 1 and m["upd_p50"] == 14.5 and m["frames"] == 3, m
+    assert m["upd_n"] == 2 and m["upd_over"] == 1 and m["upd_p50"] == 14.5 and m["frames"] == 4, m
     assert m["app_frames"] == 2 and m["late_frames"] == 1 and m["late_excess_ms_s"] == round((50 - 2000 / 60) / 3, 4), m
     assert m["parse_n"] == 1 and m["parse_mean"] == 2.0 and "busy_ms_s" not in m, m
     try:

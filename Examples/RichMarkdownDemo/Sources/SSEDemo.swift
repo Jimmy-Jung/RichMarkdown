@@ -513,7 +513,7 @@ enum SSEDemoRate: String, CaseIterable, Identifiable {
 /// 첫 청크의 vsync 위상. 50ms 청크 간격은 60·120Hz vsync의 정수배라 스트림 시작에 걸린 위상이 끝까지 고정되고,
 /// 렌더가 vsync 직후 몇 ms 구간에서 시작하면 거의 매번 다음 렌더 패스를 놓친다(위상 의존, 실측). 일정을
 /// vsync(`SSEDemoVsync`)에서 U(0, 1프레임)만큼 늦춰 측정마다 위상을 고르게 뽑는다. seed가 같으면 첫 청크의 vsync 위상도
-/// 같아(깨어남 지연만 다르다) 하네스가 seed로 층화한다.
+/// 같아(깨어남 지연만 다르다) 하네스가 seed로 층화한다. 실제 위상은 `stream_metrics.py`의 `phase.measured_ms`로 확인한다.
 struct SSEDemoPhase {
     let seed: UInt64
     let framesPerSecond: Int
