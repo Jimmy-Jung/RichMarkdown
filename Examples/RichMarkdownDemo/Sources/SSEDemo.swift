@@ -556,8 +556,17 @@ enum SSEDemoVsync {
 
         @objc func tick(_ link: CADisplayLink) {
             link.invalidate()
-            continuation.resume(returning: .now + .seconds(link.targetTimestamp - CACurrentMediaTime()))
+            continuation.resume(returning: SSEDemoVsync.instant(ofMediaTime: link.targetTimestamp))
         }
+    }
+
+    /// `CACurrentMediaTime` 기준 시각 → ContinuousClock 시각. 두 시계는 원점이 달라 지금과의 차이만큼 옮긴다.
+    nonisolated static func instant(
+        ofMediaTime mediaTime: CFTimeInterval,
+        mediaNow: CFTimeInterval = CACurrentMediaTime(),
+        now: ContinuousClock.Instant = .now
+    ) -> ContinuousClock.Instant {
+        now + .seconds(mediaTime - mediaNow)
     }
 }
 

@@ -380,6 +380,14 @@ struct SSEDecoderTests {
         #expect(ahead > .milliseconds(-50) && ahead <= frame, "\(ahead)")
     }
 
+    /// CADisplayLink 시각(CACurrentMediaTime 기준)은 ContinuousClock과 원점이 달라, 지금과의 차이만큼 옮긴다.
+    @Test("display link 시각은 지금과의 차이만큼 ContinuousClock 시각으로 옮긴다")
+    func mediaTimeConvertsByDifferenceFromNow() {
+        let now = ContinuousClock.now
+        #expect(SSEDemoVsync.instant(ofMediaTime: 100.25, mediaNow: 100, now: now) == now + .milliseconds(250))
+        #expect(SSEDemoVsync.instant(ofMediaTime: 99.5, mediaNow: 100, now: now) == now - .milliseconds(500))
+    }
+
     /// offset의 기준(vsync)을 키 이름에 담는다. vsync 고정 전 트레이스의 `phase_offset_ms`는 아무 시각 기준이었다.
     @Test("위상 메타데이터는 seed·vsync 기준 offset·최대 fps를 key=value로 남긴다")
     func phaseMetadataIsKeyValue() {
