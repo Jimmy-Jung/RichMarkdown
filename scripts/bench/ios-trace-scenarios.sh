@@ -25,7 +25,7 @@
 # 선택 환경 변수: SKIP_BUILD=1, KINDS="hitches cpu", XCPROF=<xcprof 경로>, RICHMARKDOWN_CC=<xcodebuild CC 덮어쓰기>,
 #   SIGNPOST_INSTRUMENT=<SSE 녹화에 더할 signpost 계측기, 기본 os_signpost — 가벼운 `Points of Interest`로 바꿀 수 있다>,
 #   CPU_SIGNPOST=0 (CPU Profiler 녹화에 signpost 계측기를 더하지 않는다 — 그러면 자동 재생 cpu 창은 트레이스 전체),
-#   SSE_PHASE_SEED=<정수> (자동 재생 앱에 `-ssePhaseSeed`로 넘긴다. 앱은 CADisplayLink의 다음 vsync에서 seed로 정한
+#   SSE_PHASE_SEED=<UInt64 정수> (자동 재생 앱에 `-ssePhaseSeed`로 넘긴다. 앱은 CADisplayLink의 다음 vsync에서 seed로 정한
 #   offset만큼 뒤에 첫 청크 일정을 시작한다 — 같은 seed는 vsync 기준 offset을 재현할 뿐 실제 위상(깨어남 지연 포함)을
 #   고정하지 않는다. 없으면 앱이 스트림마다 새로 뽑는다. 쓴 seed·vsync_offset_ms와 실측 위상 measured_ms(분석은 이 값으로
 #   층화·필터한다)는 metrics.json의 `phase`에 남는다)
@@ -51,8 +51,17 @@ readonly DSYM="$OUT_DIR/build/$APP.app.dSYM"
 readonly SIGNPOST=sse-stream
 SIGNPOST_INSTRUMENT="${SIGNPOST_INSTRUMENT:-os_signpost}"
 XCPROF="${XCPROF:-xcprof}"
-# 앱은 정수가 아닌 seed를 조용히 무작위로 대신하므로 여기서 막는다.
-case "${SSE_PHASE_SEED:-0}" in *[!0-9]*) echo "SSE_PHASE_SEED는 0 이상의 정수여야 한다: $SSE_PHASE_SEED"; exit 1 ;; esac
+# 앱은 UInt64로 읽지 못하는 seed(정수가 아니거나 2^64 이상)를 조용히 무작위로 대신하므로 여기서 막는다.
+# 셸 산술은 2^63 이상에서 넘쳐, 앞자리 0을 뗀 숫자열을 UInt64.max와 자릿수로, 같으면 사전순으로 비교한다.
+seed_fits_uint64() {
+    case "$1" in '' | *[!0-9]*) return 1 ;; esac
+    local digits="${1#"${1%%[!0]*}"}"
+    [ ${#digits} -lt 20 ] || { [ ${#digits} -eq 20 ] && [[ ! $digits > 18446744073709551615 ]]; }
+}
+if [ -n "${SSE_PHASE_SEED:-}" ] && ! seed_fits_uint64 "$SSE_PHASE_SEED"; then
+    echo "SSE_PHASE_SEED는 0–18446744073709551615(UInt64) 정수여야 한다: $SSE_PHASE_SEED"
+    exit 1
+fi
 mkdir -p "$OUT_DIR/failed" "$OUT_DIR/build" "$SLOT_DIR/tmp"
 
 # bash 3.2(/bin/bash)는 `set -u`에서 빈 배열 "${a[@]}"를 unbound로 끝낸다. 비어 있을 수 있는 배열은 ${a[@]+…}로 펼친다.
