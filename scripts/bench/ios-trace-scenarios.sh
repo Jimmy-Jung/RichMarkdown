@@ -128,6 +128,22 @@ device_udid() {
     python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["result"]["hardwareProperties"]["udid"])' "$json"
 }
 
+# xctrace가 기기 앱 런치에서 멈추면 스스로 끝나지 않는다(2026-10-15 iPad 8에서 69분 정지 실측). 제한 시간이 지나면
+# SIGTERM으로 끝내고(스크립트의 백그라운드 작업은 SIGINT를 무시한다), 그래도 남아 있으면 강제 종료한다.
+wait_or_kill() {  # <pid> <초>
+    local i
+    for ((i = 0; i < $2; i++)); do
+        kill -0 "$1" 2>/dev/null || break
+        sleep 1
+    done
+    if kill -0 "$1" 2>/dev/null; then
+        kill -TERM "$1" 2>/dev/null
+        for ((i = 0; i < 20; i++)); do kill -0 "$1" 2>/dev/null || break; sleep 1; done
+        kill -9 "$1" 2>/dev/null
+    fi
+    wait "$1"
+}
+
 wait_for_line() {  # <정규식> <파일> <초>
     local i
     for ((i = 0; i < $3; i++)); do
@@ -198,11 +214,11 @@ record_trace() {  # <시나리오> <종류> <트레이스> <로그>
         if wait_for_line "Ctrl-C to stop" "$4" 90; then
             sleep "$notify_delay"
             xcrun devicectl device notification post --device "$DEVICE" --name "$NOTIFICATION" >/dev/null 2>&1
-            wait "$xctrace_pid"
+            wait_or_kill "$xctrace_pid" $((seconds + 120))
             rc=$?
             grep -q "Output file saved" "$4" && return "$rc"
         else
-            wait "$xctrace_pid"
+            wait_or_kill "$xctrace_pid" 0
             rc=$?
         fi
         echo "  xctrace 시도 $attempt 실패(rc=$rc): $(tail -1 "$4")"
