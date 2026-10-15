@@ -131,9 +131,9 @@ public final class RichMarkdownUIView: UIView {
 
     /// 원문 fallback 전용 재사용 뷰.
     ///
-    /// 스트리밍은 markdown 갱신마다 fallback 게시(`document == nil`)를 거치므로, 매 tick
-    /// `UITextView`(TextKit 스택 통째)를 만들고 버리지 않도록 인스턴스 하나를 유지하고
-    /// attributed string만 바꾼다.
+    /// 교체 제출(편집·셀 재사용)과 첫 parse 전 누적은 갱신마다 fallback 게시(`document == nil`)를
+    /// 거치므로, 그때마다 `UITextView`(TextKit 스택 통째)를 만들고 버리지 않도록 인스턴스 하나를
+    /// 유지하고 attributed string만 바꾼다. 스트리밍 append는 이 경로를 거치지 않는다.
     /// 텍스트 레이아웃 비용 자체는 남는다 — 내용이 실제로 바뀌므로 피할 수 없다.
     private lazy var fallbackTextView: RichMarkdownTextView = textView(NSAttributedString())
 
@@ -297,7 +297,7 @@ public final class RichMarkdownUIView: UIView {
                     .foregroundColor: UIColor(theme.textColor),
                 ]
             )
-            // reusedCount 1: 직전 프레임도 fallback이었다면(연속 스트리밍) 계층 조작이 없다.
+            // reusedCount 1: 직전 프레임도 fallback이었다면(첫 parse 전 연속 누적) 계층 조작이 없다.
             setBlockViews([fallbackTextView], reusedCount: 1)
         }
 
