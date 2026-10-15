@@ -69,12 +69,15 @@ public struct RichMarkdownView: View {
             let lastIndex = document.blocks.count - 1
             VStack(alignment: .leading, spacing: 12) {
                 // identity는 렌더 시점의 위치 + content digest. 편집 사이 영속성은 약속하지 않는다.
+                // `.equatable()`: 스트리밍 게시마다 이 body가 다시 돌아도 값이 같은 블록은
+                // body를 다시 평가하지 않는다.
                 ForEach(Array(document.blocks.enumerated()), id: \.offset) { offset, block in
                     RichMarkdownBlockView(
                         block: block,
                         images: images,
                         tail: offset == lastIndex ? tail : nil
                     )
+                    .equatable()
                 }
             }
         } else {
@@ -154,6 +157,7 @@ struct RichMarkdownBlockView: View {
                             images: images,
                             tail: offset == children.count - 1 ? tail : nil
                         )
+                        .equatable()
                     }
                 }
             }
@@ -200,8 +204,27 @@ struct RichMarkdownBlockView: View {
                     images: images,
                     tail: isLastItem && offset == item.count - 1 ? tail : nil
                 )
+                .equatable()
             }
         }
+    }
+}
+
+/// 블록 경계의 값 비교. 스트리밍으로 마지막 블록·항목만 바뀌는 게시에서 나머지 블록의
+/// body 재평가를 건너뛴다.
+///
+/// 판정은 블록 값, tail 문맥, **이 블록이 쓰는 수식**의 이미지 identity로 한다. 이미지
+/// 사전 전체는 비교하지 않는다 — 다른 블록의 hydration이 이 블록을 다시 그리게 하지 않는다.
+/// segment는 이 블록 안에서만 모으므로 비용은 블록 크기에 비례한다.
+/// 테마·폰트 배율·color scheme은 environment다. 이를 읽는 하위 뷰는 이 판정과 별개로
+/// 무효화되므로 판정에 넣지 않는다.
+extension RichMarkdownBlockView: Equatable {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.block == rhs.block
+            && lhs.tail == rhs.tail
+            && ParsedDocument(blocks: [lhs.block]).allMathSegments.allSatisfy {
+                lhs.images[$0]?.image === rhs.images[$0]?.image
+            }
     }
 }
 
