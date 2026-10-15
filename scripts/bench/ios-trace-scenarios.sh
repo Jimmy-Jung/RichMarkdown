@@ -25,9 +25,10 @@
 # 선택 환경 변수: SKIP_BUILD=1, KINDS="hitches cpu", XCPROF=<xcprof 경로>, RICHMARKDOWN_CC=<xcodebuild CC 덮어쓰기>,
 #   SIGNPOST_INSTRUMENT=<SSE 녹화에 더할 signpost 계측기, 기본 os_signpost — 가벼운 `Points of Interest`로 바꿀 수 있다>,
 #   CPU_SIGNPOST=0 (CPU Profiler 녹화에 signpost 계측기를 더하지 않는다 — 그러면 자동 재생 cpu 창은 트레이스 전체),
-#   SSE_PHASE_SEED=<정수> (자동 재생 앱에 `-ssePhaseSeed`로 넘긴다. 앱은 CADisplayLink vsync에서 seed로 정한 offset만큼
-#   뒤에 첫 청크를 낸다 — 라운드마다 seed를 바꿔 위상을 층화한다. 없으면 앱이 스트림마다 새로 뽑는다. 쓴 seed·offset과
-#   실측 위상 measured_ms(분석은 이 값으로 층화·필터한다)는 metrics.json의 `phase`에 남는다)
+#   SSE_PHASE_SEED=<정수> (자동 재생 앱에 `-ssePhaseSeed`로 넘긴다. 앱은 CADisplayLink의 다음 vsync에서 seed로 정한
+#   offset만큼 뒤에 첫 청크 일정을 시작한다 — 같은 seed는 vsync 기준 offset을 재현할 뿐 실제 위상(깨어남 지연 포함)을
+#   고정하지 않는다. 없으면 앱이 스트림마다 새로 뽑는다. 쓴 seed·vsync_offset_ms와 실측 위상 measured_ms(분석은 이 값으로
+#   층화·필터한다)는 metrics.json의 `phase`에 남는다)
 # 빌드 뒤 `$OUT_DIR/build/`에 dSYM 사본과 provenance.txt(git SHA·dirty, 앱·dSYM UUID)를 남기고 분석은 그 dSYM을 쓴다.
 # UI 조작은 PerfScenarioUITests가 한다. 녹화가 시작되면 이 스크립트가 Darwin 알림을 보내고, 테스트는 그때부터
 # 시나리오를 실행한 뒤 xctrace가 --time-limit으로 스스로 끝날 때까지 앱을 살려 둔다.

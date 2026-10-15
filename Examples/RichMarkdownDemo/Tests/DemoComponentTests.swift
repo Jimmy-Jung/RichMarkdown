@@ -380,11 +380,12 @@ struct SSEDecoderTests {
         #expect(ahead > .milliseconds(-50) && ahead <= frame, "\(ahead)")
     }
 
-    @Test("위상 메타데이터는 seed·offset·최대 fps를 key=value로 남긴다")
+    /// offset의 기준(vsync)을 키 이름에 담는다. vsync 고정 전 트레이스의 `phase_offset_ms`는 아무 시각 기준이었다.
+    @Test("위상 메타데이터는 seed·vsync 기준 offset·최대 fps를 key=value로 남긴다")
     func phaseMetadataIsKeyValue() {
         let phase = SSEDemoPhase(seed: 7, framesPerSecond: 60)
         let offset = String(format: "%.3f", phase.offset / .milliseconds(1))
-        #expect(phase.metadata == "phase_seed=7 phase_offset_ms=\(offset) max_fps=60")
+        #expect(phase.metadata == "phase_seed=7 phase_vsync_offset_ms=\(offset) max_fps=60")
     }
 
     @Test("기기 상태는 열 상태·저전력 모드를 key=value로 남긴다")

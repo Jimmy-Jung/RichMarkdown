@@ -388,7 +388,7 @@ extension SSEDemoFixtures {
     /// 비동기로 돈다. 분석 쪽(`trace_summary.py`의 `WINDOW_SLACK_MS`)이 창 끝 여유로 이 꼬리를 덮는다.
     ///
     /// 일정은 다음 vsync(`vsync`, 기본 `SSEDemoVsync.next`)에서 위상 offset(`SSEDemoPhase`)만큼 뒤에 시작한다.
-    /// 구간 시작 메시지에 seed·offset·최대 fps를 남기고, 구간 시작·끝에 기기 상태(`device-state` 이벤트)를 남긴다.
+    /// 구간 시작 메시지에 seed·vsync 기준 offset·최대 fps를 남기고, 구간 시작·끝에 기기 상태(`device-state` 이벤트)를 남긴다.
     @MainActor
     static func play(
         _ frames: [[String]],
@@ -440,7 +440,8 @@ extension SSEDemoFixtures {
 /// `*-auto` 시나리오가 `xctrace record --launch -- <번들> -sseAutoplay swiftui -sseFixture long`처럼 넘긴다.
 /// - `-sseAutoplay swiftui|uikit`: 해당 SSE 화면을 루트로 바로 열고, 녹화 시작 알림 1초 뒤 20Hz로 시작한다.
 /// - `-sseFixture short|long`: 시뮬레이션 답변(기본 short). 자동 재생이 아니어도 적용된다.
-/// - `-ssePhaseSeed <n>`: 첫 청크 위상 seed(`SSEDemoPhase`). 없으면 스트림마다 새로 뽑는다. 자동 재생이 아니어도 적용된다.
+/// - `-ssePhaseSeed <n>`: 첫 청크의 vsync 기준 offset을 정하는 UInt64 seed(`SSEDemoPhase`). 없거나 UInt64로 읽히지 않으면
+///   스트림마다 새로 뽑는다. 자동 재생이 아니어도 적용된다.
 enum SSEDemoLaunchOptions {
     enum Screen: String {
         case swiftui
@@ -510,10 +511,13 @@ enum SSEDemoRate: String, CaseIterable, Identifiable {
     }
 }
 
-/// 첫 청크의 vsync 위상. 50ms 청크 간격은 60·120Hz vsync의 정수배라 스트림 시작에 걸린 위상이 끝까지 고정되고,
-/// 렌더가 vsync 직후 몇 ms 구간에서 시작하면 거의 매번 다음 렌더 패스를 놓친다(위상 의존, 실측). 일정을
-/// vsync(`SSEDemoVsync`)에서 U(0, 1프레임)만큼 늦춰 측정마다 위상을 고르게 뽑는다. seed가 같으면 첫 청크의 vsync 위상도
-/// 같아(깨어남 지연만 다르다) 하네스가 seed로 층화한다. 실제 위상은 `stream_metrics.py`의 `phase.measured_ms`로 확인한다.
+/// 첫 청크의 vsync 기준 offset. 50ms 청크 간격은 60·120Hz vsync의 정수배라 스트림 시작에 걸린 위상이 끝까지 고정되고,
+/// 렌더가 vsync 직후 몇 ms 구간에서 시작하면 거의 매번 다음 렌더 패스를 놓친다(위상 의존, 실측). 그래서 일정을
+/// CADisplayLink의 다음 vsync(`SSEDemoVsync`)에서 offset만큼 늦춰 시작한다. offset은 seed로 정한 U(0, 1/최대 fps)라
+/// 같은 seed는 같은 offset을 재현하고, seed를 새로 뽑으면 offset이 한 프레임 안에 고르게 퍼진다.
+/// 보장하는 것은 예정 시각의 vsync 기준 offset뿐이다. 실제 첫 청크 전달은 깨어남 지연만큼 더 늦고, 실제 주사율이 최대
+/// fps보다 낮으면(저전력 모드 등) offset이 한 프레임을 다 덮지 못한다. 실제 위상은 `stream_metrics.py`의
+/// `phase.measured_ms`로 확인한다.
 struct SSEDemoPhase {
     let seed: UInt64
     let framesPerSecond: Int
@@ -528,7 +532,7 @@ struct SSEDemoPhase {
 
     /// `sse-stream` 구간 시작 메시지에 붙는다. `scripts/bench/stream_metrics.py`가 key=value로 읽는다.
     var metadata: String {
-        "phase_seed=\(seed) phase_offset_ms=\(String(format: "%.3f", offset / .milliseconds(1))) max_fps=\(framesPerSecond)"
+        "phase_seed=\(seed) phase_vsync_offset_ms=\(String(format: "%.3f", offset / .milliseconds(1))) max_fps=\(framesPerSecond)"
     }
 }
 

@@ -24,10 +24,12 @@ Instruments는 늦은 프레임을 그 수명 동안 다른 프레임(여기서�
   vsync         hz·source. 구간 시작 메시지의 max_fps(데모의 UIScreen.maximumFramesPerSecond)가 있으면 그 값(signpost),
                 없으면 프레임 간격(창 안 frame lifetime 시작 간격 중 2 ms 초과의 5 백분위)을 60·120 Hz 중 가까운 값으로(cadence).
                 cadence_hz는 항상 함께 낸다 — 저전력 모드처럼 실제 주사율이 최대보다 낮으면 둘이 갈린다.
-  phase         구간 시작 메시지의 phase_seed·phase_offset_ms·max_fps (SSE 데모가 vsync에서 잰 첫 청크 offset)와
-                실측 measured_ms·grid_r: 창 시작 ±200 ms frame lifetime 시작들의 원형 평균(vsync 1개 주기)을 격자로 잡고, 창 시작
-                (첫 청크 전달)이 그 격자 뒤 몇 ms인지. grid_r(0–1)이 낮으면 격자가 흐려 measured_ms를 믿지 않는다.
-                위상 층화·필터는 measured_ms로 한다 — offset_ms와 상수(격자 정의 차이)+깨어남 지연만큼 다르다.
+  phase         구간 시작 메시지의 phase_seed·phase_vsync_offset_ms·max_fps → seed·vsync_offset_ms·max_fps. SSE 데모가 예정한
+                첫 청크 시각의 CADisplayLink vsync 기준 offset이다(seed가 같으면 같다). vsync에 고정하기 전 빌드가 남긴
+                phase_offset_ms는 아무 시각 기준이라 읽지 않는다. 실측 measured_ms·grid_r: 창 시작 ±200 ms frame lifetime
+                시작들의 원형 평균(vsync 1개 주기)을 격자로 잡고, 창 시작(첫 청크 전달)이 그 격자 뒤 몇 ms인지.
+                grid_r(0–1)이 낮으면 격자가 흐려 measured_ms를 믿지 않는다.
+                위상 층화·필터는 measured_ms로 한다 — vsync_offset_ms와 상수(격자 정의 차이)+깨어남 지연만큼 다르다.
   device_state  `device-state` signpost 이벤트의 at=start|end → thermal·low_power
 
 `--table`은 여러 요약 JSON을 cfg별로 묶어 (기기, 시나리오, 지표)마다 중앙값·평균·최소–최대·n과 cfg 쌍의
@@ -238,7 +240,7 @@ def summarize(tables, app, slack_ms):
         return t is not None and lo <= t <= hi
 
     meta = key_values(message)
-    phase = {k: meta[f"phase_{k}"] for k in ("seed", "offset_ms") if f"phase_{k}" in meta}
+    phase = {k: meta[f"phase_{k}"] for k in ("seed", "vsync_offset_ms") if f"phase_{k}" in meta}
     if "max_fps" in meta:
         phase["max_fps"] = meta["max_fps"]
     frames = [r for r in tables.get("hitches-frame-lifetimes", []) if inside(r["start"])]
@@ -367,8 +369,8 @@ def self_test():
     drifting = [3_000_000 + k * period * 1.0005 for k in range(900)]
     assert abs(measured_phase(4_000_000, drifting, 60)["measured_ms"] - 1.0) < .2
     assert measured_phase(4_000_000, [], 60) == {}
-    assert key_values("swiftui long 20Hz phase_seed=7 phase_offset_ms=4.125 max_fps=120") == \
-        {"phase_seed": 7, "phase_offset_ms": 4.125, "max_fps": 120}
+    assert key_values("swiftui long 20Hz phase_seed=7 phase_vsync_offset_ms=4.125 max_fps=120") == \
+        {"phase_seed": 7, "phase_vsync_offset_ms": 4.125, "max_fps": 120}
 
     # 두 번째·세 번째 표에는 <schema>가 없고, ref가 첫 표의 process 요소를 가리킨다(실제 export 모양).
     app = '<process id="3" fmt="App (1)"/>'
@@ -400,7 +402,7 @@ def self_test():
                 + lifetime.format(id=60, start=1210 * ms, dur=33 * ms, swap=3)
                 + "</node><node xpath='//trace-toc[1]/run[1]/data[1]/table[3]'>"
                 + interval.format(id=70, start=500 * ms, dur=3000 * ms, name=WINDOW_SIGNPOST, cat="PointsOfInterest",
-                                  sub=DEMO_SUBSYSTEM, msg="swiftui short 20Hz phase_seed=7 phase_offset_ms=4.125 max_fps=60")
+                                  sub=DEMO_SUBSYSTEM, msg="swiftui short 20Hz phase_seed=7 phase_vsync_offset_ms=4.125 max_fps=60")
                 + interval.format(id=80, start=1200 * ms, dur=2 * ms, name="parse", cat="parse", sub=LIB_SUBSYSTEM, msg="")
                 + interval.format(id=90, start=4000 * ms, dur=2 * ms, name="parse", cat="parse", sub=LIB_SUBSYSTEM, msg="")
                 + "</node><node xpath='//trace-toc[1]/run[1]/data[1]/table[4]'>"
@@ -412,7 +414,8 @@ def self_test():
     assert summary["window"] == {"signpost": WINDOW_SIGNPOST, "ms": [500.0, 3500.0], "s": 3.0, "slack_ms": 300}, summary
     assert summary["vsync"] == {"hz": 60, "source": "signpost", "cadence_hz": 60}, summary["vsync"]
     # 창 시작 ±200 ms frame은 505 ms뿐 → 격자 5 ms(R 1). 창 시작 500 ms의 위상 = (500 − 5) mod 16.667 = 11.667 ms.
-    assert summary["phase"] == {"seed": 7, "offset_ms": 4.125, "max_fps": 60, "measured_ms": 11.667, "grid_r": 1.0}, \
+    assert summary["phase"] == {"seed": 7, "vsync_offset_ms": 4.125, "max_fps": 60, "measured_ms": 11.667,
+                                "grid_r": 1.0}, \
         summary["phase"]
     assert summary["device_state"] == {"start": {"thermal": "nominal", "low_power": 0},
                                        "end": {"thermal": "fair", "low_power": 1}}, summary["device_state"]
