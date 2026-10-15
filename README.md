@@ -277,7 +277,9 @@ coalescing이 흡수하지만(실행 1 + 대기 1), 불필요한 파싱을 줄�
 
 `RichMarkdownStreamingTextBuffer`가 그 합치기를 대신한다. 간격(기본 100ms) 안의 갱신은 마지막 값만
 남기고, 간격이 끝나면 trailing 게시 1회로 흘려 보낸다 — 마지막 조각이 다음 조각까지 화면에
-못 오르는 일이 없다.
+못 오르는 일이 없다. 게시는 간격이 지난 뒤 첫 디스플레이 프레임 첫머리에 한다(첫 갱신 포함, 최대
+한 프레임 지연). 뷰 갱신이 프레임 중간에 시작해 렌더 패스를 놓치는 hitch를 줄인다. `flush()`만
+동기로 즉시 게시한다.
 
 ```swift
 @StateObject private var buffer = RichMarkdownStreamingTextBuffer()   // interval: .milliseconds(100)
