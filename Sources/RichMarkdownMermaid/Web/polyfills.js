@@ -5,7 +5,7 @@
 // 로드되지 않아 모든 다이어그램이 원문으로 대체됐다. 번들의 사용처를 집계해 존재 확인 없이 부르는 것은 아래 넷이다.
 //   Object.hasOwn (Chrome 93) · Array/String/TypedArray .at (Chrome 92) · structuredClone (Chrome 98)
 //   URL.canParse (Chrome 120, 다이어그램 링크 검사에서만 불려 페이로드 테스트 click-href-external이 찾았다)
-// iOS 16 이상 WKWebView와 최신 WebView에는 모두 내장돼 있어 이 코드는 아무것도 정의하지 않는다.
+// iOS 16 WKWebView도 URL.canParse가 없으면 보완한다. 각 환경에 이미 있는 API는 그대로 사용한다.
 
 if (typeof Object.hasOwn !== 'function') {
     Object.defineProperty(Object, 'hasOwn', {

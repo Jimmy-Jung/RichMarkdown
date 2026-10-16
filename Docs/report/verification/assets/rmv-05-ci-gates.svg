@@ -4,7 +4,7 @@
 <path d="M40.00 40.00 C507.84 40.00,975.68 40.00,1220.00 40.00 M40.00 40.00 C435.10 40.00,830.20 40.00,1220.00 40.00 M1220.00 40.00 C1220.00 110.89,1220.00 181.78,1220.00 310.00 M1220.00 40.00 C1220.00 113.50,1220.00 187.00,1220.00 310.00 M1220.00 310.00 C751.69 310.00,283.39 310.00,40.00 310.00 M1220.00 310.00 C934.10 310.00,648.20 310.00,40.00 310.00 M40.00 310.00 C40.00 217.94,40.00 125.89,40.00 40.00 M40.00 310.00 C40.00 207.90,40.00 105.80,40.00 40.00" stroke="#b5b5b5" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 </g>
 <g transform="translate(0.00,0.00)">
-<text x="54.00" y="68.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="18" fill="#1b1b1b" text-anchor="start"><tspan x="54.00" dy="0">커밋마다 자동 (GitHub Actions)</tspan></text>
+<text x="54.00" y="68.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="18" fill="#1b1b1b" text-anchor="start"><tspan x="54.00" dy="0">PR · main 푸시 자동 (GitHub Actions)</tspan></text>
 </g>
 <g transform="translate(0.00,0.00)">
 <path d="M60.00 100.00 L234.00 100.00 L234.00 176.00 L60.00 176.00" stroke="none" fill="#ffffff" />
@@ -67,7 +67,7 @@
 <path d="M884.00 100.00 C953.00 100.00,1022.00 100.00,1058.00 100.00 M884.00 100.00 C935.82 100.00,987.64 100.00,1058.00 100.00 M1058.00 100.00 C1058.00 127.37,1058.00 154.73,1058.00 176.00 M1058.00 100.00 C1058.00 117.86,1058.00 135.71,1058.00 176.00 M1058.00 176.00 C1012.19 176.00,966.37 176.00,884.00 176.00 M1058.00 176.00 C1017.49 176.00,976.99 176.00,884.00 176.00 M884.00 176.00 C884.00 159.53,884.00 143.06,884.00 100.00 M884.00 176.00 C884.00 148.47,884.00 120.95,884.00 100.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 </g>
 <g transform="translate(0.00,0.00)">
-<text x="971.00" y="134.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="971.00" dy="0">의존성 감사</tspan><tspan x="971.00" dy="18.75">osv · npm audit</tspan></text>
+<text x="971.00" y="134.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="971.00" dy="0">iOS 의존성 감사</tspan><tspan x="971.00" dy="18.75">osv · npm audit</tspan></text>
 </g>
 <g transform="translate(0.00,0.00)">
 <path d="M852.00 138.00 C864.69 138.00,877.38 138.00,884.00 138.00 M852.00 138.00 C862.90 138.00,873.79 138.00,884.00 138.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -82,7 +82,7 @@
 <path d="M1090.00 100.00 C1133.62 100.00,1177.25 100.00,1200.00 100.00 M1090.00 100.00 C1132.15 100.00,1174.31 100.00,1200.00 100.00 M1200.00 100.00 C1200.00 117.49,1200.00 134.97,1200.00 176.00 M1200.00 100.00 C1200.00 123.45,1200.00 146.90,1200.00 176.00 M1200.00 176.00 C1164.14 176.00,1128.28 176.00,1090.00 176.00 M1200.00 176.00 C1162.99 176.00,1125.98 176.00,1090.00 176.00 M1090.00 176.00 C1090.00 148.34,1090.00 120.68,1090.00 100.00 M1090.00 176.00 C1090.00 159.49,1090.00 142.98,1090.00 100.00" stroke="#355579" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 </g>
 <g transform="translate(0.00,0.00)">
-<text x="1145.00" y="143.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="1145.00" dy="0">병합 가능</tspan></text>
+<text x="1145.00" y="143.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="1145.00" dy="0">병합 전 확인</tspan></text>
 </g>
 <g transform="translate(0.00,0.00)">
 <path d="M1058.00 138.00 C1070.69 138.00,1083.38 138.00,1090.00 138.00 M1058.00 138.00 C1065.23 138.00,1072.46 138.00,1090.00 138.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -93,7 +93,7 @@
 <path d="M60.00 238.00 C455.79 238.00,851.58 238.00,1058.00 238.00 M60.00 238.00 C306.78 238.00,553.56 238.00,1058.00 238.00 M1058.00 238.00 C1058.00 251.00,1058.00 264.00,1058.00 284.00 M1058.00 238.00 C1058.00 252.43,1058.00 266.86,1058.00 284.00 M1058.00 284.00 C685.74 284.00,313.47 284.00,60.00 284.00 M1058.00 284.00 C794.34 284.00,530.68 284.00,60.00 284.00 M60.00 284.00 C60.00 273.68,60.00 263.36,60.00 238.00 M60.00 284.00 C60.00 269.81,60.00 255.61,60.00 238.00" stroke="#5f5f5f" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 </g>
 <g transform="translate(0.00,0.00)">
-<text x="559.00" y="266.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="559.00" dy="0">실패 시 병합 차단 — 로그 · 결과 파일 보존</tspan></text>
+<text x="559.00" y="266.63" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="559.00" dy="0">실패 표시 · 로그와 결과 보존 · 병합 전 확인 (자동 병합 차단 없음)</tspan></text>
 </g>
 <g transform="translate(0.00,0.00)">
 <path d="M40.00 340.00 L1220.00 340.00 L1220.00 540.00 L40.00 540.00" stroke="none" fill="#f6f6f6" />
@@ -131,6 +131,6 @@
 <text x="1060.00" y="439.25" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="15" fill="#1b1b1b" text-anchor="middle"><tspan x="1060.00" dy="0">패리티 비교</tspan><tspan x="1060.00" dy="18.75">두 플랫폼 정규화 결과</tspan></text>
 </g>
 <g transform="translate(0.00,0.00)">
-<text x="60.00" y="517.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="13" fill="#555555" text-anchor="start"><tspan x="60.00" dy="0">iOS는 macOS 러너에서 xcodebuild, Android는 Linux 러너에서 Gradle로 같은 순서를 실행한다</tspan></text>
+<text x="60.00" y="517.00" font-family="Helvetica, Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="13" fill="#555555" text-anchor="start"><tspan x="60.00" dy="0">iOS: macOS·Linux / Android: Linux · 일부 작업 병렬 실행 · Android 의존성 감사는 수동 실행</tspan></text>
 </g>
 </svg>
