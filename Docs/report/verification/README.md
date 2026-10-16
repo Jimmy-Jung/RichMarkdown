@@ -1,6 +1,8 @@
 # RichMarkdown 검증 보고서 — iOS·Android 렌더러의 정확성·성능·보안 검증
 
 > 기준: 2026-10-14. 보강 전 iOS 0.9.1(`a166873`)·Android 0.3.0(`664fff0`), 보강 후 iOS 0.10.0·Android 0.4.0(각 저장소 태그 `0.10.0`·`0.4.0`).
+> 2026-10-15 정정: 원시 결과를 다시 확인해 2.1·2.3·2.4·3.1·4.3·5.5·6.2·7.1~7.3절과 부록 B·C의 서술을 바로잡았습니다.
+> 2026-10-16 갱신: 20 Hz 스트리밍 경로를 개선하고 고친 측정 하네스로 다시 재어 0·2.4·5.3·5.8·8·9절과 부록 C를 고쳤습니다. iOS 개선 코드는 0.10.0 이후 커밋(`84d69a4`)이고, iOS·Android 모두 아직 릴리스 태그에 들어가지 않았습니다.
 > 관련 문서: [패키지 보고서](../README.md), [검증 기록](../validation.md), [CHANGELOG](../../../CHANGELOG.md)
 
 ## 0. 요약
@@ -13,19 +15,19 @@ RichMarkdown은 AI 도구로 작성한 코드라는 이유로 오류·성능·�
 - **처리 시간 폭증 2건**: 특정 기호가 수만 개 반복되는 입력에서 처리 시간이 입력 길이의 제곱으로 늘었습니다(디버그 테스트 빌드 12.9초, 릴리스 빌드 약 300 ms). 반복 탐색을 이진 탐색으로 바꿔 릴리스 빌드 기준 18 ms로 줄였습니다.
 - **iOS 화면 오표시 다수**: 들여쓴 연속 줄·역슬래시 줄바꿈 등에서 수식 자리에 가림 문자(`xxxxx`)가 보이거나 글자가 사라졌습니다. 상위 파서(swift-cmark)의 위치 보고 오류를 보정해 고쳤습니다.
 
-검증은 수정이 만든 부작용도 잡았습니다. 위치 보정을 넣자 iPad의 50 KiB 파싱이 11.8 ms에서 16.9 ms로 느려졌고, 출력을 바꾸지 않는 범위에서 트리 순회를 줄여 11.5 ms로 되돌렸습니다(P-03). 최종 코드로 새니타이저를 다시 돌려 Debug 빌드의 스택 여유 문제도 찾아 고쳤습니다(F-40).
+검증은 수정이 만든 부작용도 잡았습니다. 위치 보정을 넣자 iPad의 50 KiB 파싱이 11.8 ms에서 16.9 ms로 느려졌고, 출력을 바꾸지 않는 범위에서 트리 순회를 줄여 11.5 ms로 되돌렸습니다(P-03). 최종 코드로 새니타이저를 다시 돌려 Debug 빌드의 스택 여유 문제도 찾아 고쳤습니다(F-40). 스트리밍 개선 뒤 재측정에서는 저사양 iPad에서 한 시나리오가 오히려 나빠진 것을 찾아 원인을 좁혔습니다(5.3절).
 
 | 질문 | 결과 | 판정 |
 |---|---|---|
 | Q1 오류 | 공용 fixture 829건 비교: 일치 825·승인 예외 4·미해결 0. 퍼즈 10만 회 양 플랫폼 무크래시, 정규화 결과 99.6% 일치(나머지 409건 원인 전부 분류). 제품 결함 52건 수정 | 충족 |
-| Q2 성능 | 50 KiB 파싱 중앙값 iPad Pro M5 11.5 ms·Galaxy S20 Ultra 58.8 ms. 스크롤 hitch 0.64–1.9 ms/s(3회 중앙값). 20 Hz 스트리밍은 iOS UIKit 5.5·SwiftUI 15.9 ms/s, Android 프레임 P90 13.0 ms로 기준 초과 | 조건부 충족 |
+| Q2 성능 | 50 KiB 파싱 중앙값 iPad Pro M5 11.5 ms·Galaxy S20 Ultra 58.8 ms. 스크롤 hitch 0.64–1.9 ms/s(3회 중앙값). 20 Hz 스트리밍은 개선 후 iPad Pro M5 0.6–3.4 ms/s로 기준 안, 저사양 iPad 8세대 16–74 ms/s로 기준 초과. Android 스트리밍은 판정 보류 | 조건부 충족 |
 | Q3 보안 | Mermaid 공격 입력 18종 전부 차단, 라이브러리 정적 분석 지적 0건, 알려진 취약 의존성 0건, ASan·TSan 오류 0건 | 충족 |
 | Q4 유지보수 | iOS 라인 커버리지 84.0% → 92.1%(Core 97.9%), Android 91.3%(JVM 단위·계측 합산). 함수 복잡도 중앙값 2. 두 저장소 CI 게이트 | 충족 |
 
 **권고**: 서비스 도입을 진행하되 아래 조건을 함께 관리합니다.
 
-1. 20 Hz 스트리밍 경로는 개선 대상입니다. iOS hitch 비율과 Android 프레임 시간이 기준을 넘습니다(5.3절).
-2. 실기기 성능은 iPad Pro M5와 Galaxy S20 Ultra 두 대에서만 측정했습니다. iPhone·저사양 iPad는 기기 준비 후 같은 스크립트로 측정합니다(8절).
+1. 20 Hz 스트리밍은 개선 뒤 iPad Pro M5에서 기준(5 ms/s) 안으로 들어왔지만, 저사양 iPad 8세대에서는 UIKit 16–22·SwiftUI 72–74 ms/s로 기준을 넘습니다. SwiftUI 긴 답변은 개선 전보다 나빠졌습니다(5.3절).
+2. 실기기 성능은 iPad Pro M5와 Galaxy S20 Ultra에서 측정했고, 저사양 iPad 8세대는 20 Hz 스트리밍만 측정했습니다. iPhone과 iPad 8세대의 나머지 시나리오는 같은 스크립트로 측정합니다(8절).
 3. 두 플랫폼이 쓰는 파서의 명세 해석 차이 일곱 가지는 표시가 다를 수 있습니다. 같은 글자를 표·목록·강조·코드 중 무엇으로 보는지만 다르고, 본문 글자는 사라지지 않습니다(4.4절).
 
 ## 1. 배경과 범위
@@ -63,7 +65,7 @@ RichMarkdown은 AI 도구로 작성한 코드라는 이유로 오류·성능·�
 
 두 플랫폼은 같은 입력 파일을 읽고 같은 형식의 결과를 냅니다. 입력 파일은 iOS 저장소가 정본이고, Android는 SHA-256 해시를 대조한 뒤 사용합니다. 비교 스크립트가 결과를 일치·승인 예외·미해결 차이로 나눕니다. 미해결 차이는 결함으로 보고 고친 뒤 같은 입력으로 다시 실행합니다.
 
-보고서의 수치도 같은 원칙을 따릅니다. 원시 결과(벤치마크 JSON, 커버리지, 정적 분석 결과)를 스크립트가 CSV로 모으고, 그래프는 CSV만 읽어 그립니다. 사람이 수치를 옮겨 적는 단계가 없습니다.
+보고서의 수치도 같은 원칙을 따릅니다. 원시 결과(벤치마크 JSON, 커버리지, 정적 분석 결과)를 스크립트가 CSV로 모으고, 그래프는 CSV만 읽어 그립니다. 부록 A 표와 발표·논문의 핵심 수치는 외장 작업 폴더의 보조 스크립트(`p5/make_numbers.py`, `p5/fill_appendix_a.py`, `docgen/build-deck.js`)가 같은 CSV에서 채웁니다. 이 문서 본문의 표는 CSV 값을 보고 옮겨 적었으므로, 대조할 때는 부록 C의 CSV와 직접 비교합니다.
 
 ### 2.2 테스트 계층
 
@@ -75,30 +77,34 @@ RichMarkdown은 AI 도구로 작성한 코드라는 이유로 오류·성능·�
 
 ### 2.3 사용 도구
 
-| 구분 | 도구 | 하는 일 |
-|---|---|---|
-| 테스트 | Swift Testing · XCTest · XCUITest | iOS 단위·UI 테스트, 접근성 감사(`performAccessibilityAudit`) |
-| 테스트 | JUnit · AndroidX Test · Espresso · ATF | Android 단위·계측 테스트, 접근성 검사(Accessibility Test Framework) |
-| 성능 | XCTest metrics | 시간·CPU·메모리·앱 실행 시간을 반복 측정 |
-| 성능 | Instruments(xctrace) · xcprof | Time Profiler·Animation Hitches·Activity Monitor 추적과 분석 |
-| 성능 | Jetpack Microbenchmark · Macrobenchmark | 함수 지연·할당 수, 앱 실행·프레임 시간 측정(CPU 클럭 고정·워밍업 포함) |
-| 성능 | dumpsys gfxinfo · Perfetto | Android 프레임 시간 히스토그램, 시스템 추적 |
-| 보안 | semgrep 1.157.0 | 규칙 기반 정적 분석(Swift·Kotlin·JavaScript·OWASP Top 10) |
-| 보안 | osv-scanner 2.7.0 · npm audit | 의존성의 알려진 취약점 조회 |
-| 보안 | cdxgen 12.8.5 · CycloneDX | 소프트웨어 자재 명세서(SBOM) 생성 |
-| 보안 | AddressSanitizer · ThreadSanitizer | 실행 중 메모리 오류·데이터 경합 탐지 |
-| 품질 | xccov · Kover | 라인 커버리지(iOS·Android) |
-| 품질 | lizard 1.24.1 · scc 4.1.0 · SwiftLint 0.62.2 · Android lint | 함수 복잡도, 코드 규모, 스타일·안티패턴 |
-| 보고 | matplotlib 3.10 · Excalidraw · LibreOffice 26.8 | 그래프·도식, docx·pptx의 PDF 변환 |
+| 구분 | 도구 | 하는 일 | 왜 이 도구인가 |
+|---|---|---|---|
+| 테스트 | Swift Testing · XCTest · XCUITest | iOS 단위·UI 테스트, 접근성 감사(`performAccessibilityAudit`) | fixture를 입력별로 판정하는 매개변수 테스트와 UI 조작·접근성 감사를 Xcode 기본 도구로 CI에서 반복 |
+| 테스트 | JUnit(Core 6, 나머지 모듈 4.13.2) · AndroidX Test · ATF 4.1.1 | Android JVM 단위 테스트, 에뮬레이터 계측 테스트(Compose·View·WebView), 접근성 검사 | Core는 JVM에서 퍼즈 1만 회가 1.7초라 커밋마다 돌고, 화면·WebView·수식 엔진 경로는 실제 Android 런타임이 필요 |
+| 성능 | XCTest metrics | 시간·CPU·메모리·앱 실행 시간을 실기기 Release에서 반복 측정 | 예열 제외·반복 분포·결과 번들 기록을 기본 제공해 스크립트로 집계 |
+| 성능 | Instruments(xctrace) · xcprof | Time Profiler·Animation Hitches·Activity Monitor·os_signpost 추적, xcprof는 트레이스 요약 보조 | 실제 화면 조작 중 끊김·메인 스레드·메모리를 한 타임라인에 기록하고, Apple이 hitch 판정선까지 제공 |
+| 성능 | Jetpack Microbenchmark · Macrobenchmark | 함수 지연·할당 수, 앱 실행·프레임 시간 측정(예열 포함) | Android 공식 도구로 예열·발열 감지·컴파일 상태 통제와 결과 JSON·반복별 트레이스 제공 |
+| 성능 | dumpsys gfxinfo · Perfetto | Android 프레임 시간 히스토그램, 시스템 추적 | gfxinfo는 앱에 아무것도 붙이지 않아 커널 패닉이 난 Macrobenchmark 스크롤 측정을 대신하고, Perfetto는 느린 프레임의 원인을 스레드 단위로 확인 |
+| 보안 | semgrep 1.157.0 | 규칙 기반 정적 분석(Swift·Kotlin·JavaScript·OWASP Top 10) | 세 언어를 한 규칙 체계로 검사하는 언어 공통 보안 패턴 도구(언어 전용 규칙이 적어 보조 근거) |
+| 보안 | osv-scanner 2.7.0 · npm audit | 의존성의 알려진 취약점 조회 | lockfile과 SBOM을 서로 다른 취약점 데이터 출처(OSV.dev·npm 레지스트리)로 겹쳐 조회 |
+| 보안 | cdxgen 12.8.5 · CycloneDX | 소프트웨어 자재 명세서(SBOM) 생성 | 취약점이 공지되면 해당 버전 포함 여부를 바로 답할 목록이자, lockfile이 없는 Android 의존성 감사의 입력 |
+| 보안 | AddressSanitizer · ThreadSanitizer | 실행 중 메모리 오류·데이터 경합 탐지 | Rust·JavaScriptCore 경계와 스레드 공유 캐시처럼 컴파일러가 보장하지 못하는 곳을 기존 테스트에 옵션 하나로 검사 |
+| 품질 | xccov · Kover · AGP JaCoCo | 라인 커버리지(iOS, Android JVM 단위, Android 계측) | 플랫폼 기본·공식 도구라 CI에서 바로 쓰고, Kover와 JaCoCo는 같은 XML 형식이라 줄 단위로 합산 |
+| 품질 | lizard 1.24.1 · scc 4.1.0 | 함수 복잡도, 코드 규모 | Swift와 Kotlin을 같은 정의로 세어 두 플랫폼을 나란히 비교 |
+| 품질 | SwiftLint 0.62.2 · Android lint | 스타일·관례 위반, Android API·리소스·Manifest 문제 | 두 플랫폼에서 가장 널리 쓰는 기본 검사라 다른 팀원도 같은 도구로 다시 확인 |
+| 자체 | 정확성 검증·성능 측정 스크립트 | fixture 해시 대조, 패리티 비교, 퍼즈 잔여 분류, 커버리지 기준, 실기기 측정 순서 고정 | 두 구현의 결과를 같은 형식으로 비교할 기성 도구가 없고, 실기기 측정은 조작·녹화 시점을 고정해야 반복 가능 |
+| 보고 | 보고서 수치 스크립트 · matplotlib 3.10 · Excalidraw · LibreOffice 26.8 | 원시 결과의 CSV·그래프 변환, 도식, docx·pptx의 PDF 변환 | 원시 결과 → CSV → 그래프의 단일 경로를 명령 하나로 다시 만들 수 있음 |
+
+Espresso는 테스트 코드에서 직접 쓰지 않았습니다. Compose UI 테스트 라이브러리가 의존하므로 `espresso-core` 3.7.0을 고정했을 뿐이고, 데모 접근성은 ATF 검사기(`AccessibilityValidator`)를 화면 전체에 직접 돌립니다. 도구마다 설치·명령·결과 화면·오독 함정은 검증 도구 - 목록에서 시작하는 도구 문서 29종에 있습니다.
 
 ### 2.4 실행 환경
 
 | 구분 | 환경 |
 |---|---|
 | 호스트 | MacBook Pro (M4 Pro, 24 GB), macOS 26.6.2, Xcode 26.6 (iOS SDK 26.5), Swift 6.3.3 |
-| iOS 실기기 | iPad Pro 11 (M5), iPadOS 26.6.2 — Release 빌드, 충전 중, 열 상태 정상 |
+| iOS 실기기 | iPad Pro 11 (M5), iPadOS 26.6.2 — Release 빌드, 충전 중, 열 상태 정상. 20 Hz 스트리밍 재측정(5.3절)은 iPad 8세대(A12, 60 Hz), iPadOS 26.0.1을 더함 |
 | iOS 시뮬레이터 | iPhone 16 Pro (iOS 18.6), iPhone 14 (iOS 16.4), iPhone 15 (iOS 17.5·18.6), iPhone 17 Pro (iOS 26.5) |
-| Android 실기기 | Galaxy S20 Ultra (SM-G988N), Android 13 (API 33), 120 Hz — release·benchmark 빌드, CPU 클럭 고정 |
+| Android 실기기 | Galaxy S20 Ultra (SM-G988N), Android 13 (API 33), 120 Hz — release·benchmark 빌드. Microbenchmark 결과 JSON은 CPU 클럭 고정(`cpuLocked=true`)으로 기록했으나 `lockClocks` 실행 기록은 없어 라이브러리 판정값이고, Macrobenchmark는 `cpuLocked=false` |
 | Android 에뮬레이터 | Pixel 6 (API 37.1, 16 KB 페이지), API 30 |
 | JVM | JetBrains Runtime 21, Kotlin 2.4, AGP 9.4, Gradle 9.6 |
 
@@ -111,14 +117,14 @@ RichMarkdown은 AI 도구로 작성한 코드라는 이유로 오류·성능·�
 | 항목 | 보강 전 | 보강 후 |
 |---|---:|---:|
 | iOS 패키지 테스트 함수 | 307 | 363 |
-| iOS 매개변수 케이스(fixture·병리 입력 등) | 86 | 370 |
+| iOS 매개변수 케이스(fixture·병리 입력 등) | 86 | 381 |
 | iOS 데모 UI 테스트 | 23 | 26 (+ 수동 전용 측정·문서 캡처 10) |
 | Android JVM 단위 테스트 케이스 | 187 | 1,017 |
 | Android 계측 테스트 | 89 | 147 (API 37 기준) |
 | 공용 fixture 입력(CommonMark 예제 포함) | 없음 | 847 |
 | 퍼즈 | 없음 | CI 1만 회, 수동 10만 회 |
 
-Swift Testing은 매개변수화한 테스트를 함수 하나로 셉니다. 그래서 fixture처럼 입력마다 실행되는 경우를 "매개변수 케이스"로 따로 적었습니다. CommonMark 명세 예제 652건은 한 테스트 안에서 반복합니다. JUnit은 매개변수 케이스를 하나씩 세므로 Android 단위 테스트 수에는 fixture·CommonMark 입력이 각각 들어갑니다(Core 935건).
+Swift Testing은 매개변수화한 테스트를 함수 하나로 셉니다. 그래서 fixture처럼 입력마다 실행되는 경우를 "매개변수 케이스"로 따로 적었습니다. 매개변수 케이스 381은 xcresult 집계("381 test runs")와 로그의 `with N test cases` 합계입니다. 처음 적은 370은 로그의 케이스 시작 줄을 센 값이라, 인자에 줄바꿈이 든 케이스 11개가 빠졌습니다. CommonMark 명세 예제 652건은 한 테스트 안에서 반복합니다. JUnit은 매개변수 케이스를 하나씩 세므로 Android 단위 테스트 수에는 fixture·CommonMark 입력이 각각 들어갑니다(Core 935건). Android JVM 테스트는 Core가 JUnit 6(Jupiter), 표시·편집기·데모 모듈이 JUnit 4.13.2입니다.
 
 ### 3.2 공용 fixture 코퍼스
 
@@ -246,7 +252,7 @@ iOS 시간은 최적화하지 않은 Debug 빌드라 깁니다. 릴리스 빌드
 | 렌더 스냅샷 | 대표 입력 × 라이트·다크 × 글자 크기, 40장 | 없음 — 화면 구조 비교(스트리밍 동등성)로 대신함 |
 | 코드 하이라이트 | 번들 언어 16종 전수, 별칭 7종, 범위 경계 19종 | 언어 19종 전수, 엔진 오염 시도 이름 12종(`__proto__` 등), 상한 직전 입력 214 ms |
 | Mermaid 공격 입력 | 18종 전부 차단(6.3절) | 18종 전부 차단, WebView 설정 기준 5종 고정(API 30·37) |
-| 접근성 | 데모 전 화면 자동 감사 — 기본·다크·최대 글자 크기 | ATF 4.1.1, 데모 8개 화면 라이트·다크, 오류 0건(Compose 글자 대비는 ATF가 읽지 못해 미검사) |
+| 접근성 | 데모 전 화면 자동 감사 — 기본·다크·최대 글자 크기 | ATF 4.1.1, 데모 8개 화면 라이트·다크, 오류 0건. 경고 2종(블록 수식 복사 버튼 라벨 중복, View 쇼케이스 복사 아이콘 대비 추정 1.12·1.23)은 기록(Compose 글자 대비는 ATF가 읽지 못해 미검사) |
 | 최소 OS·최신 OS | iOS 16.4·17.5 시뮬레이터에서 Core·표시·Mermaid 테스트 251개 통과(각각). 데모 앱은 iOS 18.6·26.5 시뮬레이터에서 51개 통과 | API 30 에뮬레이터에서 표시 46·Mermaid 42개 통과. 데모 접근성 2개는 ATF 한계로 API 33 미만에서 건너뜀 |
 | 편집기 다크 모드 실시간 전환 | iOS 17.5·26.5 시뮬레이터 육안 확인(본문·인용 바·수식·인라인 코드) | — |
 
@@ -305,22 +311,76 @@ iOS는 iPad Pro 11 (M5) Release 10회, Android는 Galaxy S20 Ultra release 50회
 
 hitch 시간 비율은 화면이 제때 그려지지 못한 시간을 초당 ms로 나타낸 값입니다. Apple은 5 ms/s 미만을 양호, 5–10 ms/s를 사용자가 끊김을 알아채 조사가 필요한 수준, 10 ms/s 초과를 경험을 크게 해치는 수준으로 안내합니다[3].
 
-- 스크롤·화면 진입·앱 실행은 중앙값이 모두 5 ms/s 미만입니다. 콜드 런치는 3회 중 1회만 23.1 ms/s였습니다.
-- 20 Hz 스트리밍은 UIKit 5.5 ms/s(4.7–12.7, 조사 필요 구간), SwiftUI 15.9 ms/s(15.1–18.3, 경험을 크게 해치는 구간)로 기준을 넘습니다. 메인 스레드 상위 비용은 SwiftUI의 게시 단계(`publishPending`, 238 ms)입니다.
-- 오전 1회 측정에서 SwiftUI 스트리밍은 11.8 ms/s였습니다. 같은 구간의 메인 스레드 작업량은 오전 1,691 ms, 최종 1,650 ms로 비슷해 앱 코드 회귀보다 측정 변동으로 보이지만, 1회 값과 비교한 것이라 확정하지 않습니다.
-- UI 자동화가 화면을 조회하는 접근성 호출이 메인 스레드에서 약 420 ms를 차지합니다. 실제 사용자 조작에는 없는 비용이라 hitch 일부는 측정 도구의 영향입니다.
+- 스크롤·화면 진입·앱 실행은 중앙값이 모두 5 ms/s 미만입니다. 콜드 런치는 3회 중 1회만 23.1 ms/s였습니다. 이 값들은 UI 테스트가 앱을 조작하는 첫 판 하네스로 3회 잰 것입니다. 아래 스트리밍 재측정에서 hitch 수가 같은 작업량에서도 시작 위상에 따라 크게 갈린다는 것을 확인했으므로, 이 통과 판정은 잠정입니다.
+- 그림 11의 SSE 20 Hz 막대(SwiftUI 15.88·UIKit 5.54 ms/s)는 첫 판 측정값입니다. 탭부터 고정 10초 창으로 계산해 스트림이 끝난 뒤의 유휴 시간까지 분모에 넣었으므로 끊김을 약 1.35배 작게 보였고, UI 테스트가 켠 접근성 모드 비용(SwiftUI 스트림 중 메인 스레드의 약 11–12%)이 섞여 있었습니다. 첫 판의 "접근성 호출 약 420 ms"는 함수 이름으로 넓게 센 과대 집계였고, UI 테스트의 직접 조회는 40–47 ms였습니다(도구와 해석 9.1·9.2절). 스트리밍 판정은 아래 재측정 값으로 대신합니다.
+
+**재측정 방법.** 스트리밍 경로를 개선하면서 측정 하네스도 고쳤습니다. UI 테스트 없이 데모가 저장된 응답을 자동 재생하므로 접근성 모드가 꺼진 상태이고, 데모가 기록하는 스트림 구간(os_signpost)을 측정 창으로 씁니다. 청크는 50 ms 절대 일정으로 보내고, 스트림 시작을 vsync에 맞춘 뒤 seed로 정한 offset을 더해 회차마다 시작 위상을 통제합니다. 입력은 짧은 답변(1.1 KB)과 긴 답변(약 6 KB)입니다.
+
+개선 전 빌드(M0′: 0.10.0에 측정 하네스만 더한 빌드, 라이브러리 코드는 0.10.0과 같음)와 개선 후 빌드(`84d69a4`)를 같은 날 같은 기기에서 6회씩 번갈아 쟀습니다. 회차마다 순서를 바꾸고(라틴 방진), 같은 회차의 두 빌드에는 같은 seed를 줬습니다. 기기는 iPad Pro 11(M5, 120 Hz)과 저사양 기기로 새로 확보한 iPad 8세대(A12, 60 Hz)입니다.
+
+**지표.** 판정은 Apple 기준과 비교할 수 있는 hitch ms/s로 합니다. 다만 hitch 수는 같은 작업량에서도 시작 위상과 화면의 다른 움직임에 따라 크게 갈리므로 두 지표를 함께 봅니다. late excess ms/s는 앱 프레임마다 화면 수명에서 vsync 두 칸을 뺀 초과분을 더해 구간 길이로 나눈 값이고, busy ms/s는 메인 스레드가 1초에 일한 시간입니다. 개선 효과는 같은 회차(같은 seed)끼리 뺀 짝 차이로 판단했습니다.
+
+**개선 내용.** 라이브러리는 다섯 군데를 고쳤습니다.
+
+1. 스트리밍 append가 원문 fallback을 따로 게시하지 않고 변경 알림을 한 번만 냅니다.
+2. 입력이 같은 블록은 다시 그리지 않습니다(SwiftUI 블록 뷰 비교, UIKit 표·목록의 행 단위 증분 갱신).
+3. 렌더 결과를 다음 디스플레이 프레임 첫머리에 게시합니다.
+4. 원문만 바뀐 SwiftUI 갱신이 문서 하위 뷰를 다시 평가하지 않습니다.
+5. 스트리밍 꼬리 문단의 인라인 조각을 합치고 재사용합니다.
+
+데모에서는 청크마다 바뀌던 상태 표시를 본문 밖 고정 헤더로 옮기고, 하단 추적을 게시 밖으로 뺐습니다.
+
+![20 Hz 스트리밍 hitch 시간 비율의 개선 전후. iPad Pro M5는 SwiftUI 짧은 답변 11.7→1.8, 긴 답변 33.2→3.4, UIKit 짧은 답변 10.9→0.6, 긴 답변 3.9→1.4 ms/s로 모두 5 ms/s 아래로 내려왔고, iPad 8세대는 SwiftUI 짧은 답변 134.8→71.6, 긴 답변 36.0→73.8로 나빠졌으며 UIKit 짧은 답변 68.0→22.3, 긴 답변 46.7→16.3 ms/s](assets/rmv-chart-13-stream-before-after.png)
+
+*그림 12. 20 Hz 스트리밍 개선 전후 hitch 시간 비율 (6회 교차 측정의 중앙값과 회차별 값, 점선은 Apple 판정선 5·10 ms/s)*
+
+| 기기 · 시나리오 | hitch 개선 전 | hitch 개선 후 | late excess 전 → 후 | late excess가 줄어든 회차 |
+|---|---:|---:|---:|---:|
+| M5 · SwiftUI 짧은 답변 | 11.7 (1.2–24.7) | **1.8** (1.2–2.3) | 73.7 → 34.4 | 4/6 |
+| M5 · SwiftUI 긴 답변 | 33.2 (24.8–45.0) | **3.4** (1.1–5.1) | 100.2 → 25.2 | 6/6 |
+| M5 · UIKit 짧은 답변 | 10.9 (8.2–14.1) | **0.6** (0.0–1.2) | 22.8 → 9.6 | 6/6 |
+| M5 · UIKit 긴 답변 | 3.9 (2.3–6.8) | **1.4** (0.0–3.4) | 49.3 → 29.0 | 6/6 |
+| iPad 8 · SwiftUI 짧은 답변 | 134.8 (86.8–162.0) | **71.6** (56.3–86.8) | 151.2 → 131.4 | 3/6 |
+| iPad 8 · SwiftUI 긴 답변 | 36.0 (7.9–41.7) | **73.8** (68.7–91.2) | 64.2 → 120.2 | 0/6 |
+| iPad 8 · UIKit 짧은 답변 | 68.0 (51.6–75.1) | **22.3** (14.1–30.5) | 86.8 → 44.6 | 6/6 |
+| iPad 8 · UIKit 긴 답변 | 46.7 (34.9–51.8) | **16.3** (13.5–22.5) | 112.6 → 69.8 | 6/6 |
+
+단위는 ms/s이고, 값은 6회 중앙값(괄호는 최소–최대)입니다.
+
+- **iPad Pro M5**: 네 시나리오 모두 개선 후 5 ms/s 미만(양호 구간)이고, late excess 중앙값도 모두 줄었습니다. 개선 전 SwiftUI 짧은 답변의 범위가 1.2–24.7로 넓은 것은 hitch 수가 시작 위상에 따라 갈리는 현상이며, 개선 후에는 1.2–2.3으로 좁아졌습니다. 개선 후에도 late excess가 0이 아닌 데에는 120 Hz 화면이 갱신 빈도를 바꾸며 프레임 수명을 늘리는 영향이 섞인 것으로 봅니다(추정). 그래서 M5는 hitch만 기준과 비교했습니다.
+- **iPad 8세대 UIKit**: 두 시나리오 모두 6회 전부 개선됐지만(68.0 → 22.3, 46.7 → 16.3) 여전히 10 ms/s를 넘습니다.
+- **iPad 8세대 SwiftUI 짧은 답변**: hitch는 절반 가까이 줄었지만 late excess가 줄어든 회차는 3/6이라 효과가 확실하지 않습니다.
+- **iPad 8세대 SwiftUI 긴 답변**: 6회 모두 개선 전보다 나빠졌습니다(36.0 → 73.8).
+
+**iPad 8세대 SwiftUI 긴 답변이 나빠진 이유.** 개선 단계를 하나씩 되돌린 빌드를 같은 방식으로 6회씩 쟀습니다. 데모의 하단 추적 변경이나 프레임 첫머리 게시를 되돌리면 오히려 더 나빠져, 이 둘은 원인이 아니었습니다. 반대로 append의 fallback 게시를 되살리면 late excess가 22–35 ms/s 줄었습니다. 일을 더 하는 빌드가 더 부드러웠던 것입니다.
+
+그래서 스트림 구간의 메인 스레드 Time Profiler 표본이 어느 코어에서 찍혔는지 셌습니다. 고성능(P) 코어 비율은 개선 전 81–82%, 개선 후 23–29%였습니다. 메인 스레드 일이 줄자(busy 369 → 317 ms/s) iOS가 메인 스레드를 효율(E) 코어로 옮겼고, 갱신 한 번의 처리 시간이 길어져 프레임이 늦었다고 봅니다. 코어 배치는 운영체제가 정하므로, 이 설명은 측정한 코어 비율에서 추론한 것입니다.
+
+최종 빌드는 fallback 원문은 게시하지 않되 변경 알림은 한 번 내도록 일부를 되살렸습니다. 이 조합으로 iPad 8세대 SwiftUI의 late excess가 11–14 ms/s 더 줄었지만, 긴 답변은 개선 전 수준으로 돌아가지 못했습니다. 디스플레이 링크를 계속 살려 두는 변형도 시험했지만 P 코어 비율이 그대로(0.28 대 0.29)라 채택하지 않았습니다. A12처럼 코어 배치가 부하에 민감한 기기에서는 평균 작업량보다 갱신 한 번의 최대 비용을 줄여야 합니다.
 
 ![Android 프레임 시간 백분위. SSE 20 Hz Compose는 P50 5.37·P90 12.97·P95 13.33·P99 13.89 ms, 챗 스크롤 View는 5·5·6·10 ms, Compose는 5·6·7·13 ms이며 120 Hz 예산 8.3 ms 선 표시](assets/rmv-chart-03-android-frames.png)
 
-*그림 12. Android 프레임 시간 백분위 (Galaxy S20 Ultra, 120 Hz)*
+*그림 13. Android 프레임 시간 백분위 (Galaxy S20 Ultra, 120 Hz)*
 
-Android 스크롤은 P90이 5–6 ms로 120 Hz 예산 8.3 ms 안입니다. 20 Hz 스트리밍은 P90 13.0 ms로 예산을 넘습니다. 스트리밍 tick마다 재파싱·재배치가 일어나기 때문이며, iOS와 같은 개선 대상입니다. 스크롤 값은 `dumpsys gfxinfo`의 총 프레임 시간이고 스트리밍 값은 Macrobenchmark의 CPU 프레임 시간이라 서로 다른 지표입니다.
+Android 스크롤은 P90이 5–6 ms로 120 Hz 예산 8.3 ms 안입니다. 스크롤 값은 `dumpsys gfxinfo`의 총 프레임 시간이고 스트리밍 값은 Macrobenchmark의 CPU 프레임 시간이라 서로 다른 지표입니다.
+
+20 Hz 스트리밍의 합산 P90 13.0 ms는 첫 판에서 미달 근거로 썼지만, 반복별로 나누면 7.63·13.59·7.54·7.04·7.52 ms입니다. 반복 한 번에서 화면으로 보낼 그래픽 버퍼가 밀려(BufferQueue stuffing) 거의 모든 프레임이 버퍼를 기다렸고, Macrobenchmark는 반복을 합쳐 백분위를 내므로 그 반복이 합산 P90을 끌어올렸습니다. 첫 판의 원인 설명(재파싱·재배치)은 이 지표로 뒷받침되지 않아 철회합니다.
+
+나머지 4회의 P90은 예산 안이지만, `frameOverrunMs`로 보면 그 4회에서도 프레임의 10–15%가 마감을 넘었습니다. 버퍼가 밀리는 반복도 무작위로 나타납니다. 그래서 Android 스트리밍은 통과로도 미달로도 단정하지 않고 판정을 보류합니다.
+
+Android 라이브러리도 같은 방향으로 고쳤습니다. append에서 fallback 게시를 없애고, 렌더 문맥을 재사용하고, 바뀌지 않은 블록을 그대로 공유합니다. Galaxy S20 Ultra에서 개선 전후를 각 2회(유효 반복 9회씩) 쟀습니다.
+
+- 게시 1회당 Compose 재구성(`Compose:recompose`) 구간이 4.80개에서 2.59개로 줄었습니다(−46%).
+- 스트림 구간의 RichMarkdown 메인 스레드 작업(재구성·변경 적용·측정·배치 합)이 381 ms에서 285 ms로 줄었습니다(−25%).
+- 콘텐츠 프레임 UI 시간 중앙값(3.34 → 3.36 ms)과 마감을 놓친 프레임 수(14 → 12건)는 그대로였습니다.
+
+일은 줄었지만 끊김이 줄었다고는 말할 수 없습니다. 이 비교는 두 빌드를 번갈아 돌리지 않았고(개선 전 2회 뒤 개선 후 2회), Android 개선 코드는 아직 작업 브랜치에 있습니다.
 
 ### 5.4 메모리
 
 ![iPad Pro M5에서 20 Hz 스트리밍 동안 앱 physical footprint. SwiftUI 45.9에서 최대 51.6 MiB, UIKit 45.5에서 최대 50.5 MiB로 스트리밍 중 5–6 MiB 늘고 끝난 뒤 유지](assets/rmv-chart-04-memory-timeline.png)
 
-*그림 13. 스트리밍 중 메모리 (iPad Pro M5, Activity Monitor 약 1초 간격)*
+*그림 14. 스트리밍 중 메모리 (iPad Pro M5, Activity Monitor 약 1초 간격)*
 
 스트리밍 동안 5–6 MiB 늘고, 끝난 뒤에는 그 수준을 유지합니다. 늘어난 양은 렌더한 블록과 수식 이미지 캐시입니다. 스트리밍이 끝난 뒤 계속 늘지 않으므로 누수 징후는 없습니다.
 
@@ -328,15 +388,15 @@ Android 스크롤은 P90이 5–6 ms로 120 Hz 예산 8.3 ms 안입니다. 20 Hz
 
 ![데모 앱 첫 화면 표시까지 시간. iOS 콜드 중앙값 196 ms, Android 콜드 컴파일 없음 322 ms, 부분 컴파일 233 ms, 웜 컴파일 없음 93 ms, 부분 컴파일 76 ms](assets/rmv-chart-05-launch.png)
 
-*그림 14. 데모 앱 실행 시간*
+*그림 15. 데모 앱 실행 시간*
 
-iOS 콜드 실행 중앙값은 196 ms입니다(5회, 193–202 ms). Android 콜드 실행은 설치 직후 322 ms, 프로파일 컴파일 후 233 ms입니다. Android 콜드 측정 3건은 기기 온도가 높은 상태(thermal 2)였으므로 참고값입니다.
+iOS 콜드 실행 중앙값은 196 ms입니다(5회, 193–202 ms). Android 콜드 실행은 설치 직후 322 ms, 프로파일 컴파일 후 233 ms입니다. Android 콜드 측정 2건(컴파일 없음·부분 컴파일)과 웜 측정 1건(컴파일 없음)은 기기 온도가 높은 상태(thermal 2)였으므로 참고값입니다.
 
 ### 5.6 앱 크기
 
 ![iOS 데모 실행 파일 arm64에서 RaTeX Rust FFI 2,561 KiB가 가장 크고 swift-markdown 590, RichMarkdown 364 KiB 순이며, Android는 의존성 libratex_ffi.so 3,053 KiB, mermaid AAR 1,002, libquickjs.so 772 KiB 순](assets/rmv-chart-06-app-size.png)
 
-*그림 15. 모듈별 크기*
+*그림 16. 모듈별 크기*
 
 | 항목 | 값 |
 |---|---|
@@ -363,8 +423,10 @@ iOS 콜드 실행 중앙값은 196 ms입니다(5회, 193–202 ms). Android 콜�
 | 기준 | 결과 | 판정 |
 |---|---|---|
 | 50 KiB 파싱 p50 < 300 ms (시뮬레이터 Debug 게이트) | 78.7 ms (최적화 전 146.1 ms) | 통과 |
-| 스크롤 hitch < 5 ms/s (iOS), 프레임 P90 < 8.3 ms (Android) | 0.64–1.9 ms/s, 5–6 ms | 통과 |
-| 20 Hz 스트리밍 hitch < 5 ms/s, P90 < 8.3 ms | 5.5–15.9 ms/s, 13.0 ms | **미달 — 개선 대상** |
+| 스크롤 hitch < 5 ms/s (iOS), 프레임 P90 < 8.3 ms (Android) | 0.64–1.9 ms/s(첫 판 하네스 3회, 잠정), 5–6 ms | 통과 |
+| 20 Hz 스트리밍 hitch < 5 ms/s (iPad Pro M5, 개선 후) | 0.6–3.4 ms/s(시나리오 4개, 6회 중앙값) | 통과 |
+| 20 Hz 스트리밍 hitch < 5 ms/s (iPad 8세대, 개선 후) | UIKit 16.3–22.3, SwiftUI 71.6–73.8 ms/s | **미달 — 개선 대상** |
+| 20 Hz 스트리밍 프레임 P90 < 8.3 ms (Android) | 합산 13.0 ms는 반복 1회의 버퍼 밀림 영향(반복별 7.0–13.6 ms) | **보류 — 반복별 재측정** |
 | 스트리밍 뒤 메모리 증가 지속 없음 | 5–6 MiB 증가 후 유지 | 통과 |
 
 ## 6. 보안 (Q3)
@@ -373,7 +435,7 @@ iOS 콜드 실행 중앙값은 196 ms입니다(5회, 193–202 ms). Android 콜�
 
 ![신뢰할 수 없는 LLM 답변이 신뢰 경계를 넘어 입력 제한을 거친 뒤 네이티브 텍스트 뷰, RaTeX 수식 엔진, 코드 하이라이트, Mermaid WebView로 나뉘고 각각 링크 스킴 악용·자원 고갈·스크립트 실행·외부 요청·네이티브 메모리 오류 위협을 막는 구조](assets/rmv-03-threat-model.svg)
 
-*그림 16. 위협 모델*
+*그림 17. 위협 모델*
 
 LLM 답변은 신뢰할 수 없는 입력으로 다룹니다. 답변은 먼저 입력 제한을 거치고, 표시 경로마다 다른 방어를 둡니다.
 
@@ -389,7 +451,7 @@ LLM 답변은 신뢰할 수 없는 입력으로 다룹니다. 답변은 먼저 �
 
 | 검사 | iOS | Android |
 |---|---|---|
-| semgrep (`p/swift`·`p/kotlin`·`p/javascript`·`p/owasp-top-ten`) | 지적 0건 (파일 138개) | 지적 6건, 전부 데모 앱의 `exported` 화면(스크린샷 자동화용). 라이브러리 0건 (파일 133개) |
+| semgrep (`p/swift`·`p/kotlin`·`p/javascript`·`p/owasp-top-ten`) | 지적 0건 (파일 138개) | 지적 6건, 전부 데모 앱의 `exported` 화면(스크린샷 자동화용). 라이브러리 0건 (데모 15개 포함 파일 133개) |
 | osv-scanner | 알려진 취약점 0건 | 0건 (릴리스 런타임 컴포넌트 97개) |
 | npm audit (Mermaid 웹 번들 빌드) | 0건 | 같은 번들 |
 | SBOM (CycloneDX) | Swift 의존성·Mermaid 웹 번들 2종 | 릴리스 런타임 1종 |
@@ -427,7 +489,7 @@ iOS 패키지 테스트 전체를 AddressSanitizer와 ThreadSanitizer로 각각 
 
 ![모듈별 라인 커버리지. iOS Core 97.9%, BlockEditor 94.5%, Highlight 93.0%, Mermaid 87.7%, RichMarkdown 86.9%, Android core 97.8%, editor 91.8%, highlight 91.5%, 표시 88.6%, mermaid 84.5%와 게이트 80% 선](assets/rmv-chart-07-coverage.png)
 
-*그림 17. 모듈별 라인 커버리지*
+*그림 18. 모듈별 라인 커버리지*
 
 | 모듈 | 보강 전 | 보강 후 |
 |---|---:|---:|
@@ -444,13 +506,13 @@ iOS 패키지 테스트 전체를 AddressSanitizer와 ThreadSanitizer로 각각 
 | Android Mermaid | 측정 도구 없음 | 84.5% |
 | **Android 전체** | — | **91.3%** |
 
-Android는 JVM 단위 테스트를 Kover로, 에뮬레이터 계측 테스트를 AGP JaCoCo로 측정한 뒤 줄 단위로 합쳤습니다(어느 한쪽에서라도 실행된 줄을 커버로 봅니다). Compose·View·WebView 경로는 계측 테스트에서만 실행되기 때문입니다. CI는 계측 테스트를 돌리지 않으므로 커밋 기준은 Core 90%(Kover)만 둡니다.
+Android는 JVM 단위 테스트를 Kover로, API 37 에뮬레이터 계측 테스트를 AGP JaCoCo로 측정한 뒤 줄 단위로 합쳤습니다(어느 한쪽에서라도 실행된 줄을 커버로 봅니다). Compose·View·WebView 경로는 계측 테스트에서만 실행되기 때문입니다. 합산한 결과는 2026-10-14 Kover 14:58, JaCoCo 14:59–15:04 실행분이며, 이어 실행한 API 30 계측 테스트는 커버리지 보고서를 만들지 않아 합산에 들어가지 않습니다. CI는 계측 테스트를 돌리지 않으므로 커밋 기준은 Core 90%(Kover)만 둡니다.
 
 ### 7.2 복잡도와 규모
 
 ![함수별 순환 복잡도 분포. iOS 552개·Android 541개 함수 모두 중앙값 2이고 대부분 5 이하](assets/rmv-chart-09-complexity.png)
 
-*그림 18. 함수별 순환 복잡도 분포 (테스트 코드 제외)*
+*그림 19. 함수별 순환 복잡도 분포 (테스트 코드 제외)*
 
 | 항목 | iOS | Android |
 |---|---:|---:|
@@ -462,30 +524,34 @@ Android는 JVM 단위 테스트를 Kover로, 에뮬레이터 계측 테스트를
 
 복잡도가 가장 높은 함수는 iOS가 swift-cmark 위치 보정을 계산하는 `InlineColumnShift.init`(28), Android가 스트리밍 중 닫히지 않은 강조 기호를 숨기는 `strippingUnclosedOpeners`(34)입니다. 앞의 것은 상위 파서의 위치 오류 유형별 분기가, 뒤의 것은 구분자 종류별 분기가 많기 때문입니다. 두 함수 모두 퍼즈 10만 회 패리티와 회귀 fixture가 지나는 경로입니다.
 
-SwiftLint 기본 규칙 위반은 157건입니다. 대부분 짧은 변수명(30)·줄 길이(28)·후행 쉼표(26) 같은 스타일 항목이고, 저장소에 SwiftLint 설정 파일은 없습니다. 앱을 멈출 수 있는 강제 캐스트 2건은 `layerClass`가 `CAShapeLayer`를 돌려주는 뷰라 항상 성공합니다. Android lint는 오류 0건입니다.
+SwiftLint 기본 규칙 위반은 157건입니다. 대부분 짧은 변수명(30)·줄 길이(28)·후행 쉼표(26) 같은 스타일 항목이고, 저장소에 SwiftLint 설정 파일은 없습니다. 앱을 멈출 수 있는 강제 캐스트 2건은 `layerClass`가 `CAShapeLayer`를 돌려주는 뷰라 항상 성공합니다. Android lint는 라이브러리 4개 모듈에서 오류 0건, 경고 15건(표시 11·편집기 3·Mermaid 1)이며, 경고는 오래된 SDK 버전 분기, KTX 확장 함수·버전 카탈로그 사용 권고 같은 개선 제안이 대부분입니다. Mermaid의 `MissingOnRenderProcessGone` 1건은 오탐으로 보입니다.
+
+이 절의 수치는 2026-10-14 15시 37분 코드(F-40 수정 전)로 집계했습니다. F-40이 블록 변환 함수를 나눈 뒤 iOS 값은 조금 달라져, 2026-10-15 main(`61b768b`)에서는 함수 558개·복잡도 16 이상 6개·SwiftLint 155건입니다. Android 값은 같습니다.
 
 ### 7.3 CI 게이트
 
 ![커밋마다 빌드, 단위·fixture·퍼즈 1만 회, 커버리지 기준 Core 90%·전체 80%, semgrep·lint 정적 분석, osv·npm audit 의존성 감사를 거쳐 병합 가능하고 실패하면 병합을 막으며, 릴리스 전에는 실기기 성능·퍼즈 10만 회·계측 UI 테스트·패리티 비교를 수동 실행](assets/rmv-05-ci-gates.svg)
 
-*그림 19. CI 게이트*
+*그림 20. CI 게이트*
 
 두 저장소에 GitHub Actions 워크플로를 넣었습니다. iOS는 macOS 러너에서 xcodebuild로, Android는 Linux 러너에서 Gradle로 같은 순서를 실행합니다. 실기기 성능·10만 회 퍼즈·계측 테스트는 릴리스 전에 수동으로 실행합니다.
 
 push 뒤 첫 실행에서 Android는 모든 잡이 통과했습니다. iOS는 공유 가상 머신에서 시간에 민감한 테스트가 차례로 드러났습니다. 퍼즈 입력 하나가 러너의 일시 지연으로 입력당 시간 상한을 넘었고(T-06), Mermaid 테스트가 첫 WebView 로드를 15초 안에 마치지 못했으며(T-07), CI가 고른 iOS 26.5 시뮬레이터에서 블록 편집기 UI 테스트 3개가 실패했습니다(T-08). 앞의 둘은 재측정과 대기 상한 조정으로, 마지막은 iOS 26의 편집 메뉴 동작에 맞춰 고쳤습니다. 로컬 최종 검증에서 데모를 iOS 18.6에서만 돌려 놓쳤던 부분입니다.
 
-그 뒤에도 데모 UI 테스트는 실행마다 다른 이유(첫 WebView 초기화 시간 초과, 접근성 감사 시간 초과, 한글 입력 지연)로 실패했습니다(T-09). 같은 테스트가 로컬 iOS 18.6·26.5 시뮬레이터에서 모두 통과하므로, Android의 에뮬레이터 계측 테스트처럼 수동 실행 잡으로 분리했습니다. 커밋마다 도는 게이트는 빌드, 패키지 테스트(퍼즈 1만 회 포함), 커버리지 기준, 데모 단위 테스트, 정적 분석, 의존성 감사입니다. 워크플로 실행 결과는 각 저장소의 Actions 탭에서 확인합니다.
+그 뒤에도 데모 UI 테스트는 실행마다 다른 이유(첫 WebView 초기화 시간 초과, 접근성 감사 시간 초과, 한글 입력 지연)로 실패했습니다(T-09). 같은 테스트가 로컬 iOS 18.6·26.5 시뮬레이터에서 모두 통과하므로, Android의 에뮬레이터 계측 테스트처럼 수동 실행 잡으로 분리했습니다. 커밋마다 도는 게이트는 빌드, 패키지 테스트(퍼즈 1만 회 포함), 커버리지 기준, 데모 단위 테스트, 정적 분석, 의존성 감사입니다. 최종 커밋(iOS `8d3f97e`, Android `f17d1a2`)에서 두 저장소의 커밋 게이트가 모두 통과했습니다([iOS 실행](https://github.com/Jimmy-Jung/RichMarkdown/actions/runs/38549486380), [Android 실행](https://github.com/Jimmy-Jung/RichMarkdown-Android/actions/runs/38549490147)). 다만 Android `f17d1a2` 실행의 JVM 테스트 작업 4개는 Gradle 빌드 캐시의 이전 통과 결과를 재사용했습니다(`FROM-CACHE`). Android 수동 계측 잡(API 34, 라이브러리 4개 모듈, 데모 미포함)은 2026-10-15까지 한 번도 실행하지 않았고, 3.1절의 계측 테스트 147개는 로컬 에뮬레이터 실행 결과입니다.
 
 ## 8. 남은 조건과 확인하지 않은 범위
 
 | 항목 | 상태 | 다음 조치 |
 |---|---|---|
-| 20 Hz 스트리밍 끊김 | iOS UIKit 5.5·SwiftUI 15.9 ms/s(3회 중앙값), Android P90 13.0 ms | 스트리밍 경로 최적화(게시 빈도 조절·블록 단위 재사용) 후 같은 스크립트로 재측정 |
-| iPhone·저사양 iPad 실기기 성능 | 미측정. iPhone 16 Pro는 최종 재측정 때도 잠금 해제가 필요해 연결되지 않았고, iPad 8세대는 개발자 모드가 꺼져 있음 | 기기 준비 후 `scripts/bench/ios-micro.sh`·`ios-trace-scenarios.sh` 재실행 |
+| 20 Hz 스트리밍 끊김 | iPad Pro M5는 개선 후 0.6–3.4 ms/s로 기준 안. iPad 8세대는 UIKit 16–22·SwiftUI 72–74 ms/s이고, SwiftUI 긴 답변은 개선 전(36.0)보다 나빠짐(메인 스레드 코어 배치 변화로 추정). Android는 판정 보류 | iPad 8세대 SwiftUI는 갱신 한 번의 최대 비용을 줄이는 방향으로 개선. Android는 반복별·갱신 프레임 기준으로 두 빌드를 번갈아 재측정 |
+| 스트리밍 개선 코드 배포 | iOS는 0.10.0 이후 커밋(`84d69a4`), Android는 작업 브랜치. 둘 다 릴리스 태그 전 | 다음 릴리스에 포함하고 같은 스크립트로 확인 |
+| iOS 스크롤·진입·실행 hitch | 첫 판 하네스 3회 측정이라 잠정 판정(5.3절) | 고친 하네스로 재측정 |
+| iPhone·저사양 iPad 실기기 성능 | iPad 8세대는 2026-10-16 개발자 모드를 켜 20 Hz 스트리밍만 측정. 파싱·스크롤·실행은 미측정. iPhone 16 Pro는 최종 재측정 때도 잠금 해제가 필요해 연결되지 않아 미측정 | `scripts/bench/ios-micro.sh`·`ios-trace-scenarios.sh` 재실행 |
 | Android 14 이상 실기기 Macrobenchmark | Galaxy S20 Ultra(Android 13)가 하네스 실행 중 커널 패닉으로 3회 재시작. Compose 스크롤 매크로 미측정 | Android 14 이상 기기에서 `scripts/run-benchmarks.sh macro` |
 | iOS 16·17 실기기 | 시뮬레이터만 확인 | 해당 OS 기기 확보 시 |
 | VoiceOver·TalkBack 실사용 | 자동 감사만 | 출시 전 사람 확인 |
-| Android 접근성 경고 | 블록 수식 복사 버튼이 모두 "수식 원문 복사"로 읽혀 구분되지 않음(ATF 경고, 실패 아님). Compose 화면 글자 대비는 ATF가 읽지 못해 미검사 | 복사 버튼 라벨에 수식 요약 추가 검토, Compose 대비는 수동 확인 |
+| Android 접근성 경고 | 블록 수식 복사 버튼이 모두 "수식 원문 복사"로 읽혀 구분되지 않음, View 쇼케이스 복사 버튼 아이콘의 대비 추정치 1.12(라이트)·1.23(다크)(둘 다 ATF 경고, 실패 아님). Compose 화면 글자 대비는 ATF가 읽지 못해 미검사 | 복사 버튼 라벨에 수식 요약 추가 검토, 아이콘 대비 확인, Compose 대비는 수동 확인 |
 | Android 렌더 스냅샷 | 없음(iOS만 40장). 화면 구조는 스트리밍 동등성 테스트로 비교 | 필요 시 Compose 스크린샷 테스트 도입 |
 | Mermaid 첫 WebView 초기화 지연 | 느린 CI 러너에서 첫 초기화가 로드 상한 15초를 넘어 다이어그램이 원문과 안내 문구로 대체된 사례 1건(설계대로 동작). 로컬 시뮬레이터 iOS 18.6·26.5에서는 재현되지 않음 | 시간 초과 뒤 한 번 자동 재시도하는 방안 검토 |
 | 상위 파서 차이 D-03~D-09 | 기록 | 상위 저장소 수정 시 갱신 |
@@ -495,7 +561,7 @@ push 뒤 첫 실행에서 Android는 모든 잡이 통과했습니다. iOS는 �
 
 AI 도구로 작성했다는 사실은 코드의 품질을 직접 말해 주지 않습니다. 이 보고서는 출처 대신 결과를 검증했습니다. 같은 입력을 두 플랫폼의 독립 구현에 넣어 비교하고, 무작위 입력 10만 건과 극단 입력 25종으로 경계를 시험하고, 실기기에서 측정하고, 공격 입력과 정적 분석으로 보안을 확인했습니다.
 
-이 과정에서 크래시 1건, 처리 시간 폭증 2건, iOS 화면 오표시와 최소 OS(iOS 16·Android WebView 91) 호환 결함을 포함한 결함을 찾아 모두 고쳤습니다. 결함마다 재현 입력을 회귀 테스트로 남겼으므로 같은 결함은 CI에서 다시 걸립니다. 남은 개선 과제는 20 Hz 스트리밍의 프레임 끊김이며, 기기를 더 확보하면 같은 스크립트로 측정 범위를 넓힐 수 있습니다.
+이 과정에서 크래시 1건, 처리 시간 폭증 2건, iOS 화면 오표시와 최소 OS(iOS 16·Android WebView 91) 호환 결함을 포함한 결함을 찾아 모두 고쳤습니다. 결함마다 재현 입력을 회귀 테스트로 남겼으므로 같은 결함은 CI에서 다시 걸립니다. 20 Hz 스트리밍의 프레임 끊김은 iPad Pro M5에서 기준 안으로 줄였고, 남은 과제는 저사양 iPad의 스트리밍 끊김입니다. 기기를 더 확보하면 같은 스크립트로 측정 범위를 넓힐 수 있습니다.
 
 따라서 RichMarkdown은 8절의 조건을 관리하는 전제로 서비스에 도입할 수 있는 상태입니다. 도입 이후에도 커밋마다 CI가 같은 검증을 반복하고, 릴리스 전에는 실기기 측정과 10만 회 퍼즈를 수동으로 다시 실행합니다.
 
@@ -611,9 +677,10 @@ python3 scripts/fixtures-manifest.py --check         # iOS: 파일 목록·SHA-2
 scripts/sync-ios-fixtures.sh && python3 scripts/verify-fixtures.py   # Android: iOS 정본과 해시 대조
 
 # 정규화 결과 출력 (iOS: xcodebuild 환경 변수는 TEST_RUNNER_ 접두사로 전달)
-TEST_RUNNER_RICHMARKDOWN_FIXTURE_OUT=<out>/ios xcodebuild test -scheme RichMarkdown-Package \
+# 러너가 <out> 아래에 ios/·android/ 폴더를 붙이므로 상위 폴더 <out>을 준다
+TEST_RUNNER_RICHMARKDOWN_FIXTURE_OUT=<out> xcodebuild test -scheme RichMarkdown-Package \
   -only-testing:RichMarkdownCoreTests -destination '<시뮬레이터>'
-RICHMARKDOWN_FIXTURE_OUT=<out>/android ./gradlew :richmarkdown-core:test
+RICHMARKDOWN_FIXTURE_OUT=<out> ./gradlew :richmarkdown-core:test
 python3 scripts/fixtures-parity.py <out>/ios <out>/android --md parity.md --json parity.json
 python3 scripts/fuzz-residual.py <out>/ios/fuzz-24301.jsonl <out>/android/fuzz-24301.jsonl --json residual.json  # 잔여 차이 원인 분류
 
