@@ -421,136 +421,251 @@ struct InlineRunsText: View {
     @Environment(\.richMarkdownFontScale) private var fontScale
 
     var body: some View {
-        chipDecoratedText
+        // 표시용 run은 body마다 한 번만 만든다. 칩 판정·접근성 라벨도 이 run을 써서 숨긴 마크가
+        // 읽히거나 칩 경로를 고르지 않게 한다.
+        let displayRuns = self.displayRuns
+        decorated(combinedText(displayRuns), hasInlineCode: Self.hasInlineCode(displayRuns))
             .modifier(MathAccessibilityLabel(runs: displayRuns))
     }
 
     /// 표시용 run. 스트리밍 tail이면 미닫힌 opener를 숨긴 결과다.
-    /// 칩 판정·접근성 라벨도 이 run을 써서 숨긴 마크가 읽히거나 칩 경로를 고르지 않게 한다.
     private var displayRuns: [InlineRun] {
         guard let tail, tail.options.hidesUnclosedInlineMarks else { return runs }
         return StreamingTail.hidingUnclosedOpeners(runs, dollarMath: tail.dollarMath.core)
     }
 
     /// iOS 18+는 `TextRenderer`로 인라인 코드 칩(둥근 배경+테두리)을 그린다.
-    /// 이전 OS는 `text(for:)`가 넣은 사각 `backgroundColor`가 fallback이다.
+    /// 이전 OS는 `append(_:to:)`가 넣은 사각 `backgroundColor`가 fallback이다.
     ///
     /// `.textSelection(.enabled)`은 선택 가능한 텍스트 경로로 바꿔 커스텀
     /// `TextRenderer` 드로잉을 우회한다(실측 — 수식자 순서와 무관). 그래서
     /// 인라인 코드가 있는 문단만 선택 대신 칩을 택한다. UIKit 렌더러는
     /// 둘 다 지원하므로 선택이 필요하면 `RichMarkdownUIView`를 쓴다.
-    @ViewBuilder private var chipDecoratedText: some View {
+    @ViewBuilder
+    private func decorated(_ text: Text, hasInlineCode: Bool) -> some View {
         if #available(iOS 18.0, *), hasInlineCode {
-            combinedText.textRenderer(
+            text.textRenderer(
                 InlineCodeChipTextRenderer(
                     background: theme.inlineCodeBackground,
                     border: theme.inlineCodeBorder
                 )
             )
         } else {
-            combinedText.textSelection(.enabled)
+            text.textSelection(.enabled)
         }
     }
 
-    private var hasInlineCode: Bool {
-        displayRuns.contains { run in
+    private static func hasInlineCode(_ runs: [InlineRun]) -> Bool {
+        runs.contains { run in
             if case .code = run.content { return true }
             return false
         }
     }
 
-    private var combinedText: Text {
+    /// 이어지는 run을 `Text` 하나의 AttributedString으로 합친다. `Text`를 끊는 것은 따로 둬야 하는
+    /// 것뿐이다: 굵기가 바뀌는 곳(`Text.bold()`), iOS 18 인라인 코드(칩 attribute는 `Text`에만 붙는다),
+    /// 수식 이미지, 줄바꿈 앞뒤의 굵은 run. 꼬리 페이드의 grapheme 조각도 같은 AttributedString에
+    /// 붙인다 — 조각마다 `Text`를 만들면 tick마다 `Text` 해석이 조각 수만큼 늘어난다.
+    private func combinedText(_ runs: [InlineRun]) -> Text {
         let plan = StreamingTail.fadePlan(
-            displayRuns,
+            runs,
             graphemeCount: tail?.options.tailFadeGraphemeCount ?? 0
         )
-        let head = plan.head.reduce(Text(verbatim: "")) { partial, run in
-            partial + text(for: run)
+        var builder = InlineTextBuilder()
+        for run in plan.head {
+            append(run, to: &builder)
         }
         // 꼬리 조각은 grapheme 하나씩 alpha만 다르고 나머지 스타일은 원 run을 따른다.
-        return plan.tail.reduce(head) { partial, piece in
-            partial + styled(Text(emphasized(base(piece.text, alpha: piece.alpha), piece.run)), piece.run)
+        for piece in plan.tail {
+            builder.append(segment(piece.text, run: piece.run, alpha: piece.alpha), bold: piece.run.bold)
         }
+        return builder.build()
     }
 
-    private func text(for run: InlineRun) -> Text {
+    private func append(_ run: InlineRun, to builder: inout InlineTextBuilder) {
         switch run.content {
         case .text(let string):
-            return styled(Text(emphasized(base(string), run)), run)
+            builder.append(segment(string, run: run), bold: run.bold)
 
         case .code(let code):
-            var attributed = base(code)
-            attributed.font = theme.codeFont.resolvedFont(
-                scaledBy: fontScale.factor(for: theme.codeFont.relativeTo)
-            )
-            attributed.foregroundColor = theme.inlineCodeForeground
             if #available(iOS 18.0, *) {
                 // 칩은 `InlineCodeChipTextRenderer`가 그린다. 사각 배경을 겹치지 않는다.
-                return styled(Text(emphasized(attributed, run)), run)
-                    .customAttribute(InlineCodeChipTextAttribute())
+                let text = Text(codeSegment(code, run: run, background: nil))
+                builder.append((run.bold ? text.bold() : text).customAttribute(InlineCodeChipTextAttribute()))
+            } else {
+                // iOS 16·17 fallback: Text run은 둥근 칩을 그릴 수 없어 사각 배경까지만.
+                builder.append(codeSegment(code, run: run, background: theme.inlineCodeBackground), bold: run.bold)
             }
-            // iOS 16·17 fallback: Text run은 둥근 칩을 그릴 수 없어 사각 배경까지만.
-            attributed.backgroundColor = theme.inlineCodeBackground
-            return styled(Text(emphasized(attributed, run)), run)
 
         case .math(let segment):
             if let rendered = images[segment] {
                 // `-descent` baseline 보정 (DEVELOPMENT.md §5).
-                return Text(Image(uiImage: rendered.image))
-                    .baselineOffset(-rendered.descent)
+                builder.append(Text(Image(uiImage: rendered.image)).baselineOffset(-rendered.descent))
+            } else {
+                // 렌더 전/실패 시 원래 구분자를 포함한 source를 표시한다.
+                builder.append(self.segment(segment.source, run: run), bold: run.bold)
             }
-            // 렌더 전/실패 시 원래 구분자를 포함한 source를 표시한다.
-            return styled(Text(emphasized(base(segment.source), run)), run)
 
         case .link(let label, let destination):
-            var attributed = base(label)
-            attributed.link = destination
             // 대비 기준을 넘는 링크 색 + 밑줄(색 외 구분 수단).
-            attributed.foregroundColor = theme.linkColor
-            attributed.underlineStyle = .single
-            return styled(Text(emphasized(attributed, run)), run)
+            builder.append(segment(label, run: run, link: destination), bold: run.bold)
 
         case .hardBreak:
-            return Text(verbatim: "\n")
+            // 폰트·색 없이 둔다(환경 값). 굵게도 하지 않는다 — 줄 높이가 이전과 같다.
+            builder.append(AttributedString("\n"), bold: false)
 
         case .softBreak:
-            return Text(verbatim: " ")
+            builder.append(AttributedString(" "), bold: false)
         }
     }
 
-    /// 기본 전경색과 폰트를 실은 AttributedString.
+    /// 본문·링크·수식 원문 조각. 기본 전경색과 폰트를 싣는다.
     ///
     /// `Text`는 색·폰트를 지정하지 않으면 주변 환경 값을 쓴다. 그러면 `theme.textColor`와
     /// `theme.bodyFont`가 본문 글자에 닿지 않고, 소비 앱이 바깥에 건 `.font(_:)`가
     /// 우연히 새어 들어온다. 모든 텍스트 run은 여기서 값을 실어
     /// UIKit 렌더러(`RichMarkdownUIView`)와 같은 규칙을 갖는다.
-    private func base(_ string: String, alpha: Double = 1) -> AttributedString {
-        var attributed = AttributedString(string)
-        attributed.foregroundColor = alpha < 1 ? theme.textColor.opacity(alpha) : theme.textColor
-        attributed.font = font.resolvedFont(scaledBy: fontScale.factor(for: font.relativeTo))
-        return attributed
+    private func segment(
+        _ string: String,
+        run: InlineRun,
+        alpha: Double = 1,
+        link: URL? = nil
+    ) -> AttributedString {
+        InlineSegments.attributed(InlineSegments.Key(
+            string: string,
+            link: link,
+            italic: run.italic,
+            strikethrough: run.strikethrough,
+            font: font,
+            scale: fontScale.factor(for: font.relativeTo),
+            foreground: link == nil ? theme.textColor : theme.linkColor,
+            alpha: alpha,
+            background: nil
+        ))
     }
 
-    /// 굵게/기울임/취소선 적용.
-    ///
-    /// - 기울임·취소선은 AttributedString의 `inlinePresentationIntent`로 준다.
-    ///   `Text.italic()`/`.strikethrough()`는 여러 `Text`를 `+`로 합치면 사라진다.
-    /// - 굵게는 `Text.bold()`로 준다. bold를 intent로 함께 주면 italic과 겹칠 때
-    ///   한글처럼 italic 변형이 없는 폰트에서 굵기까지 잃는다.
-    /// - 한글은 시스템 폰트에 italic 변형이 없어 기울임이 시각적으로 적용되지 않는다
-    ///   (iOS 제약). 영문·숫자에는 적용된다.
-    private func styled(_ text: Text, _ run: InlineRun) -> Text {
-        run.bold ? text.bold() : text
+    private func codeSegment(_ code: String, run: InlineRun, background: Color?) -> AttributedString {
+        InlineSegments.attributed(InlineSegments.Key(
+            string: code,
+            link: nil,
+            italic: run.italic,
+            strikethrough: run.strikethrough,
+            font: theme.codeFont,
+            scale: fontScale.factor(for: theme.codeFont.relativeTo),
+            foreground: theme.inlineCodeForeground,
+            alpha: 1,
+            background: background
+        ))
+    }
+}
+
+/// 같은 굵기로 이어지는 AttributedString 조각을 `Text` 하나로 모은다.
+///
+/// 굵게는 `Text.bold()`로 준다. bold를 `inlinePresentationIntent`로 함께 주면 italic과 겹칠 때
+/// 한글처럼 italic 변형이 없는 폰트에서 굵기까지 잃는다.
+private struct InlineTextBuilder {
+    private var result: Text?
+    private var pending = AttributedString()
+    private var pendingBold = false
+
+    mutating func append(_ attributed: AttributedString, bold: Bool) {
+        if bold != pendingBold { flush() }
+        pendingBold = bold
+        pending.append(attributed)
     }
 
-    private func emphasized(_ attributed: AttributedString, _ run: InlineRun) -> AttributedString {
+    /// 따로 둬야 하는 `Text`(인라인 코드 칩, 수식 이미지).
+    mutating func append(_ text: Text) {
+        flush()
+        result = result.map { $0 + text } ?? text
+    }
+
+    mutating func build() -> Text {
+        flush()
+        return result ?? Text(verbatim: "")
+    }
+
+    private mutating func flush() {
+        guard !pending.characters.isEmpty else { return }
+        let text = pendingBold ? Text(pending).bold() : Text(pending)
+        result = result.map { $0 + text } ?? text
+        pending = AttributedString()
+    }
+}
+
+/// run 하나(또는 꼬리 조각)의 AttributedString과 해석한 폰트를 재사용한다. 스트리밍 tail 문단은
+/// tick마다 다시 그려지지만 자라는 마지막 run 앞의 run은 그대로다 — 같은 입력이면 지난 값을 쓴다.
+@MainActor
+enum InlineSegments {
+    /// 조각의 스타일을 정하는 입력 전부.
+    struct Key: Hashable {
+        let string: String
+        let link: URL?
+        let italic: Bool
+        let strikethrough: Bool
+        let font: RichMarkdownFont
+        let scale: CGFloat
+        let foreground: Color
+        let alpha: Double
+        let background: Color?
+    }
+
+    private struct FontKey: Hashable {
+        let font: RichMarkdownFont
+        let scale: CGFloat
+    }
+
+    // ponytail: 2세대 캐시(세대당 128개)와 길이 상한. 자라는 마지막 run은 tick마다 키가 바뀌어
+    // 맞지 않으므로 긴 문자열은 넣지 않는다. 적중률이 문제면 문단 단위 캐시로 바꾼다.
+    private static let generationLimit = 128
+    private static let maximumCachedUTF8 = 256
+    private static var current: [Key: AttributedString] = [:]
+    private static var previous: [Key: AttributedString] = [:]
+    private static var fonts: [FontKey: Font] = [:]
+
+    static func attributed(_ key: Key) -> AttributedString {
+        guard key.string.utf8.count <= maximumCachedUTF8 else { return make(key) }
+        if let hit = current[key] { return hit }
+        let value = previous[key] ?? make(key)
+        if current.count >= generationLimit {
+            previous = current
+            current = [:]
+        }
+        current[key] = value
+        return value
+    }
+
+    static func font(_ font: RichMarkdownFont, scale: CGFloat) -> Font {
+        let key = FontKey(font: font, scale: scale)
+        if let hit = fonts[key] { return hit }
+        let resolved = font.resolvedFont(scaledBy: scale)
+        // ponytail: 테마 폰트 × Dynamic Type 크기만큼만 생긴다. 넘치면 비운다.
+        if fonts.count >= 64 { fonts.removeAll() }
+        fonts[key] = resolved
+        return resolved
+    }
+
+    /// 기울임·취소선은 `inlinePresentationIntent`로 준다. `Text.italic()`/`.strikethrough()`는
+    /// 여러 `Text`를 `+`로 합치면 사라진다. 한글은 시스템 폰트에 italic 변형이 없어 기울임이
+    /// 시각적으로 적용되지 않는다(iOS 제약). 영문·숫자에는 적용된다.
+    private static func make(_ key: Key) -> AttributedString {
+        var attributed = AttributedString(key.string)
+        attributed.foregroundColor = key.alpha < 1 ? key.foreground.opacity(key.alpha) : key.foreground
+        attributed.font = font(key.font, scale: key.scale)
+        if let link = key.link {
+            attributed.link = link
+            attributed.underlineStyle = .single
+        }
+        if let background = key.background {
+            attributed.backgroundColor = background
+        }
         var intent: InlinePresentationIntent = []
-        if run.italic { intent.insert(.emphasized) }
-        if run.strikethrough { intent.insert(.strikethrough) }
-        guard !intent.isEmpty else { return attributed }
-        var copy = attributed
-        copy.inlinePresentationIntent = intent
-        return copy
+        if key.italic { intent.insert(.emphasized) }
+        if key.strikethrough { intent.insert(.strikethrough) }
+        if !intent.isEmpty {
+            attributed.inlinePresentationIntent = intent
+        }
+        return attributed
     }
 }
 

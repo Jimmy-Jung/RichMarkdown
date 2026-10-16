@@ -48,16 +48,20 @@ struct SwiftUIStreamingUpdateBenchmarks {
         }
     }
 
-    /// 꼬리 문단 블록 하나. 문서 하위 뷰가 tail 블록에 넘기는 것과 같은 입력이다.
+    /// 꼬리 문단 하나. `legacy`면 run마다 `Text`를 만들던 이전 구현이다(같은 프로세스 A/B).
     private struct TailHarness: View {
         static let tail = RichMarkdownStreamingTailContext(options: .default, dollarMath: [])
-        let block: ParsedBlock
+        let runs: [InlineRun]
+        let legacy: Bool
 
         var body: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    RichMarkdownBlockView(block: block, images: [:], tail: Self.tail)
-                        .equatable()
+                    if legacy {
+                        LegacyInlineRunsText(runs: runs, images: [:], font: RichMarkdownFont(), tail: Self.tail)
+                    } else {
+                        InlineRunsText(runs: runs, images: [:], font: RichMarkdownFont(), tail: Self.tail)
+                    }
                 }
                 .padding(16)
             }
@@ -135,26 +139,37 @@ struct SwiftUIStreamingUpdateBenchmarks {
     It is surprisingly hard to beat on small tabular datasets.
     """, count: 3)
 
-    /// 꼬리 문단이 12자씩 자랄 때 tail 블록 한 개의 갱신(`post`의 블록 몫).
+    /// 꼬리 문단이 12자씩 자랄 때 그 문단 하나의 갱신(`post`의 블록 몫). 현재 구현과 이전 구현을
+    /// 틱마다 번갈아 재 시뮬레이터 잡음을 상쇄한다.
     @Test(arguments: ["plain", "styled"])
     func tailParagraphUpdate(_ kind: String) async throws {
         let paragraph = kind == "plain" ? Self.plainParagraph : Self.styledParagraph
-        let blocks = prefixes(of: paragraph, chunk: 12).compactMap {
-            RichMarkdownParser.parse(markdown: $0, parsesDollarMath: false).blocks.last
+        let steps: [[InlineRun]] = prefixes(of: paragraph, chunk: 12).compactMap {
+            guard case .paragraph(let runs) = RichMarkdownParser.parse(markdown: $0, parsesDollarMath: false)
+                .blocks.last else { return nil }
+            return runs
         }
-        let (controller, window) = host(TailHarness(block: blocks[0]))
-        defer { window.isHidden = true }
+        let (current, currentWindow) = host(TailHarness(runs: steps[0], legacy: false))
+        let (legacy, legacyWindow) = host(TailHarness(runs: steps[0], legacy: true))
+        defer {
+            currentWindow.isHidden = true
+            legacyWindow.isHidden = true
+        }
 
-        var samples: [Duration] = []
-        for round in 0..<3 {
-            for (index, block) in blocks.enumerated() {
-                let begin = ContinuousClock.now
-                controller.rootView = TailHarness(block: block)
-                controller.view.layoutIfNeeded()
-                if round > 0 || index >= 5 { samples.append(ContinuousClock.now - begin) }
-                try await Task.sleep(for: .milliseconds(2))
+        var samples: [Bool: [Duration]] = [false: [], true: []]
+        for round in 0..<5 {
+            for (index, runs) in steps.enumerated() {
+                for isLegacy in [round.isMultiple(of: 2), !round.isMultiple(of: 2)] {
+                    let controller = isLegacy ? legacy : current
+                    let begin = ContinuousClock.now
+                    controller.rootView = TailHarness(runs: runs, legacy: isLegacy)
+                    controller.view.layoutIfNeeded()
+                    if round > 0 || index >= 5 { samples[isLegacy]?.append(ContinuousClock.now - begin) }
+                    try await Task.sleep(for: .milliseconds(2))
+                }
             }
         }
-        report("tail-paragraph \(kind) chars=\(paragraph.count)", samples)
+        report("tail-paragraph \(kind) chars=\(paragraph.count) current", samples[false] ?? [])
+        report("tail-paragraph \(kind) chars=\(paragraph.count) legacy", samples[true] ?? [])
     }
 }
