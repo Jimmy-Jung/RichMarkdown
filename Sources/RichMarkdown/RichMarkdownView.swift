@@ -120,7 +120,7 @@ public struct RichMarkdownView: View {
     }
 }
 
-/// 수식 raster 색. body는 tick마다 두 번 돈다 — `UIColor(Color)` 변환과 trait 해석(시뮬레이터 약 7 µs)
+/// 수식 raster 색. body는 tick마다 여러 번 돈다(markdown 변경·append 알림·parse 게시) — `UIColor(Color)` 변환과 trait 해석(시뮬레이터 약 7 µs)
 /// 대신 마지막 (색, scheme) 결과를 재사용한다(`Color` 비교는 0.01 µs).
 @MainActor
 private enum TextColorRGBA {
@@ -168,7 +168,7 @@ struct RichMarkdownDocumentView: View {
     }
 }
 
-/// 모델이 게시하지 않은 동안 문서와 이미지 사전은 같은 저장소라 비교가 짧다(배열 identity 지름길).
+/// 새 parse가 게시되기 전에는 문서와 이미지 사전이 같은 저장소라 비교가 짧다(배열 identity 지름길).
 /// 이미지는 `RichMarkdownBlockView`와 같이 raster identity로 비교한다. 테마·폰트 배율은
 /// environment라 이 판정과 별개로 블록에 닿는다.
 extension RichMarkdownDocumentView: Equatable {

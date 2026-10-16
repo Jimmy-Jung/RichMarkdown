@@ -81,7 +81,7 @@ import UIKit
             buffer.append(chunk)
             streamed.layoutIfNeeded()
             try await Task.sleep(for: .milliseconds(1))
-            // fallback 원문은 게시하지 않는 저장 값이다(append 중에는 표시되지 않는다). 조각마다 읽는다.
+            // fallback 원문은 `@Published`가 아니다(append 중에는 표시되지 않는다). 조각마다 읽는다.
             fallbacks.append(streamed.model.fallbackMarkdown)
         }
         buffer.flush()

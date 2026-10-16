@@ -135,9 +135,9 @@ package final class RichMarkdownRenderModel: ObservableObject {
     /// 과대 입력은 `InputLimits`의 표시 상한으로 잘려 있어 UIKit/SwiftUI fallback에도
     /// 원본 전체 문자열이 전달되지 않는다.
     ///
-    /// `@Published`가 아니다. 스트리밍 append는 이 값만 바뀌고 표시 문서는 유지되므로,
-    /// 게시하면 아무도 읽지 않는 값 때문에 tick마다 SwiftUI transaction과 UIKit rebuild가
-    /// 한 번씩 더 생긴다. fallback을 실제로 표시하는 경로는 따로 게시된다.
+    /// `@Published`가 아니다. 제출의 변경 알림은 `submit`이 경로마다 정한다.
+    /// - 스트리밍 append: 표시 문서·이미지는 그대로 두고 `objectWillChange.send()`를 한 번 낸다
+    ///   (이유는 `submit`의 주석).
     /// - 교체·셀 재사용·과대 입력·첫 parse 전 누적: `submit`이 `document = nil`을 대입한다.
     ///   `@Published`는 값이 이미 nil이어도 objectWillChange를 낸다.
     /// - UIKit 최초 표시: `rebuildImmediately()`가 게시를 기다리지 않고 이 값을 동기로 읽는다.
@@ -195,15 +195,23 @@ package final class RichMarkdownRenderModel: ObservableObject {
         // 게시될 때까지 이전 렌더(문서 + 이미지)를 유지한다. 매 갱신 원문 fallback으로
         // 되돌리면 화면 전체가 원문 ↔ 렌더를 오가며 출렁인다(데모 실측).
         if parseIdentityChanged {
-            // 게시 없는 대입이다. append면 문서를 유지해 fallback이 보이지 않고,
-            // 그 밖의 경우는 아래 `document = nil`이 게시한다.
-            fallbackMarkdown = request.markdown
-            if !isStreamingAppend {
+            if isStreamingAppend {
+                // 문서·이미지는 그대로 두고(fallback이 보이지 않는다) 변경 알림만 한 번 낸다.
+                // 실측(iPad 8 A12 60 Hz, 6라운드 교차): 이 알림을 빼면 SwiftUI 스트리밍의 늦은
+                // 프레임 초과가 11–35 ms/s 늘었다. iPad Pro M5는 차이가 없었고 UIKit도 나빠지지 않았다.
+                // 추정(트레이스 해석, 증명 안 됨): 제출 시점에 알림이 있으면 SwiftUI가 이 tick의 갱신을
+                // 프레임 초반 run loop observer flush에서 처리하고, 없으면 UIKit 갱신 순서 안의 늦은
+                // dispatchImmediately에서 처리해 렌더 패스를 놓친다.
+                // UIKit은 이 알림으로 rebuild를 한 번 더 돌지만 문서가 그대로라 계층·높이 무효화·
+                // `onContentSizeChange` 없이 끝나 비용이 작다.
+                objectWillChange.send()
+            } else {
                 document = nil
                 parseIdentity = nil
                 mathImages = [:]
                 imageRequest = nil
             }
+            fallbackMarkdown = request.markdown
         } else {
             // 수식 설정만 바뀐 경우: parsed document는 유지하고 이미지만 무효화한다.
             mathImages = [:]

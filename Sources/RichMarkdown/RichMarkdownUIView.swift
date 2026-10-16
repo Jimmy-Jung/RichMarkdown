@@ -280,9 +280,9 @@ public final class RichMarkdownUIView: UIView {
         } else {
             // 최신 원문 fallback 즉시 표시 (DEVELOPMENT.md §4).
             //
-            // `renderedBlocks`는 비우지 않는다. 스트리밍 append는 model이 문서를 유지하고
-            // 게시하지 않아 이 단계를 거치지 않지만, 교체(편집·셀 재사용)와 첫 parse 전
-            // 누적은 거친다. 뷰 인스턴스를 살려 두고 계층에서만 떼어, parse가 끝난 다음
+            // `renderedBlocks`는 비우지 않는다. 스트리밍 append는 model이 문서를 유지해
+            // (제출 알림은 와도 `document`가 남는다) 이 단계를 거치지 않지만, 교체(편집·셀 재사용)와
+            // 첫 parse 전 누적은 거친다. 뷰 인스턴스를 살려 두고 계층에서만 떼어, parse가 끝난 다음
             // 게시에서 값이 같은 앞쪽 블록을 그대로 되돌린다.
             //
             // 폰트·색은 매번 현재 값으로 다시 만든다 — fallback 표시 중의 테마·trait

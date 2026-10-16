@@ -98,19 +98,37 @@ import UIKit
         #expect(renderedText(in: view).contains("최신 원문 fallback"))
     }
 
-    /// append 제출은 rebuild를 예약하지 않고, 교체 제출은 parse 전에 최신 fallback을 그린다.
+    /// append 제출의 rebuild는 계층·크기 콜백을 건드리지 않고, 교체 제출은 parse 전에 최신 fallback을 그린다.
     ///
-    /// append 중에는 문서를 유지하므로 model이 게시하지 않는다. 교체는 `document = nil`
-    /// 게시로 rebuild를 예약하고, 그 rebuild가 `fallbackMarkdown`을 읽는다.
-    @Test func streamingAppendSkipsRebuildButReplacementShowsFallback() async throws {
+    /// append 제출은 model이 문서를 유지한 채 한 번 알린다. 그 rebuild는 같은 문서라 아무것도
+    /// 바꾸지 않고, parse 결과가 실제로 바뀐 뒤에야 계층과 `onContentSizeChange`가 움직인다.
+    /// 교체는 `document = nil` 게시로 rebuild를 예약하고, 그 rebuild가 `fallbackMarkdown`을 읽는다.
+    @Test func streamingAppendKeepsHierarchyButReplacementShowsFallback() async throws {
         let view = RichMarkdownUIView(markdown: "첫 원문")
         view.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
         try await waitForRender(view)
+        let counter = CallbackCounter()
+        view.onContentSizeChange = { counter.increment() }
+        let blockViews = view.blockStack.arrangedSubviews
+        let document = view.model.document
 
         view.markdown = "첫 원문 이어짐"
-        #expect(!view.hasPendingRebuild, "append 제출만으로는 rebuild를 예약하지 않는다")
+        #expect(view.hasPendingRebuild, "append 제출은 알림으로 rebuild를 예약한다")
+        // 예약된 rebuild는 프레임을 기다리는 parse 게시보다 먼저 같은 MainActor 큐에서 실행된다.
+        await Task.yield()
+        #expect(!view.hasPendingRebuild, "예약된 rebuild가 돌았다")
+        #expect(view.model.document == document, "아직 parse 게시 전이다")
+        let unchanged = view.blockStack.arrangedSubviews
+        #expect(
+            unchanged.count == blockViews.count && zip(unchanged, blockViews).allSatisfy { $0 === $1 },
+            "같은 문서의 rebuild는 계층을 바꾸지 않는다"
+        )
+        #expect(!renderedText(in: view).contains("이어짐"), "parse 게시 전에는 이전 문서를 그대로 그린다")
+        #expect(counter.count == 0, "같은 문서의 rebuild는 크기 콜백을 부르지 않는다")
+
         try await waitForRender(view)
         #expect(renderedText(in: view).contains("첫 원문 이어짐"), "parse 게시 뒤에는 새 문서를 그린다")
+        #expect(counter.count > 0, "parse 결과가 바뀌면 크기 콜백이 온다")
 
         view.markdown = "교체 원문"
         #expect(view.hasPendingRebuild, "교체 제출은 fallback rebuild를 예약한다")

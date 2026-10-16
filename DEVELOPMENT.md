@@ -246,7 +246,8 @@ SwiftUI `body`와 `.task`의 MainActor 구간에서 CPU 파싱이나 수식 rast
   ├─ MainActor: generation 증가, 최신 원문 fallback 즉시 표시
   │             (스트리밍 append — 새 markdown이 표시 중 문서의 확장 — 는 예외:
   │              새 parse 게시까지 이전 렌더를 유지한다. 2026-08-28 개정.
-  │              제출 시점에는 게시도 없다 — fallbackMarkdown은 게시 없는 저장 값. 2026-10-15)
+  │              제출은 문서를 유지한 채 objectWillChange를 한 번 낸다 — fallbackMarkdown은
+  │              @Published가 아니다. 알림을 빼면 iPad 8 SwiftUI 스트리밍이 나빠졌다. 2026-10-16)
   ├─ 단일 worker: 실행 중 1개 + 최신 대기 1개만 유지
   ├─ non-MainActor RenderService: parse
   ├─ MainActor: generation 일치 시 수식을 원문으로 둔 ParsedDocument 게시
@@ -420,7 +421,7 @@ Dynamic Type 뒤 높이를 UI 테스트한다.
   - **suffix 교체다.** 값이 처음 달라지는 index부터 뒤쪽 전부를 새로 만든다. 스트리밍은
     append 중심이라 앞쪽이 안정적이므로 중간 삽입 diff(LCS)는 구현하지 않는다.
   - **`document == nil` 게시(원문 fallback)에서 `renderedBlocks`를 비우지 않는다.**
-    스트리밍 append는 model이 문서를 유지하고 게시하지 않아 이 단계를 거치지 않지만,
+    스트리밍 append는 model이 문서를 유지해(제출 알림은 와도 `document`가 남는다) 이 단계를 거치지 않지만,
     교체(편집·셀 재사용)와 첫 parse 전 누적은 거친다. 뷰 인스턴스를 살려 두고
     계층에서만 떼어 다음 게시에서 값이 같은 앞쪽 블록을 그대로 되돌린다.
   - `addArrangedSubview`는 **계층에서 떼어낸 뷰에만** 호출한다. 이미 arranged인 뷰에

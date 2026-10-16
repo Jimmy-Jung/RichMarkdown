@@ -125,25 +125,29 @@ import UIKit
         #expect(flatText(updated).contains("이어지는 답변"), "새 parse가 게시되면 문서가 교체된다")
     }
 
-    /// 스트리밍 append 제출은 parse가 게시될 때까지 objectWillChange를 내지 않는다.
+    /// 스트리밍 append 제출은 parse가 게시되기 전에 objectWillChange를 정확히 한 번 낸다.
     ///
-    /// append 중에는 두 렌더러 모두 이전 문서를 표시하고 fallback 원문을 읽지 않는다.
-    /// 제출 시점에 게시하면 tick마다 SwiftUI transaction·UIKit rebuild가 한 번씩 더 생긴다.
-    @Test func streamingAppendDoesNotPublishUntilParseLands() async throws {
+    /// 표시 문서·이미지는 그대로 둔다(fallback이 보이지 않는다). 이 알림을 빼면 iPad 8
+    /// SwiftUI 스트리밍의 늦은 프레임이 늘었다(실측, `RichMarkdownRenderModel.submit` 주석).
+    @Test func streamingAppendPublishesOnceBeforeParseLands() async throws {
         let model = RichMarkdownRenderModel()
-        model.submit(request("첫 문단"))
+        let first = request("첫 문단")
+        model.submit(first)
         try await waitForIdle(model)
+        let original = try #require(model.document)
 
         var changes = 0
         let sink = model.objectWillChange.sink { _ in changes += 1 }
         defer { sink.cancel() }
 
         model.submit(request("첫 문단 그리고 이어지는 답변"))
-        #expect(changes == 0, "append 제출 자체는 게시하지 않는다")
-        #expect(model.fallbackMarkdown == "첫 문단 그리고 이어지는 답변", "fallback 원문은 게시 없이도 최신이다")
+        #expect(changes == 1, "append 제출은 변경 알림을 한 번만 낸다")
+        #expect(model.document == original, "parse 게시 전에는 이전 문서를 유지한다")
+        #expect(model.parseIdentity == first.parseIdentity)
+        #expect(model.fallbackMarkdown == "첫 문단 그리고 이어지는 답변", "fallback 원문은 최신이다")
 
         try await waitForIdle(model)
-        #expect(changes > 0, "새 parse는 게시된다")
+        #expect(changes > 1, "새 parse는 따로 게시된다")
         let updated = try #require(model.document)
         #expect(flatText(updated).contains("이어지는 답변"))
     }
