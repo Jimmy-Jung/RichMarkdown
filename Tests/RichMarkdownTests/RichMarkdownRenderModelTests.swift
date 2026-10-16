@@ -30,6 +30,25 @@ import UIKit
         try await Task.sleep(nanoseconds: 50_000_000)
     }
 
+    /// 스트리밍 prefix 판정은 `String.hasPrefix`와 같다 — 바이트 지름길이 grapheme·정규화 경계에서 갈리지 않는다.
+    @Test(arguments: [
+        ("가나다", "가나다라"),
+        ("", "abc"),
+        ("abc", "abd"),
+        ("abc", "ab"),
+        ("e", "e\u{301}x"),            // 결합 문자가 붙어 grapheme 중간에서 잘린다
+        ("e\u{301}", "\u{e9}x"),        // 바이트는 다르지만 정규화 동치
+        ("\u{1100}", "\u{1100}\u{1161}"), // 한글 자모 L+V가 한 grapheme
+        ("👨‍👩", "👨‍👩‍👧"),              // ZWJ 시퀀스 중간
+        ("👍", "👍🏽"),                   // 피부색 수식자
+    ])
+    func streamingPrefixMatchesHasPrefix(_ older: String, _ newer: String) {
+        func identity(_ markdown: String) -> RichMarkdownRenderModel.ParseIdentity {
+            request(markdown).parseIdentity
+        }
+        #expect(identity(older).isStreamingPrefix(of: identity(newer)) == newer.hasPrefix(older))
+    }
+
     @Test func latestSubmissionWinsPublication() async throws {
         let model = RichMarkdownRenderModel()
         for i in 1...20 {

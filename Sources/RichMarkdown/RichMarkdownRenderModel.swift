@@ -20,7 +20,19 @@ package final class RichMarkdownRenderModel: ObservableObject {
         package func isStreamingPrefix(of other: ParseIdentity) -> Bool {
             dollarMath == other.dollarMath
                 && !wasTruncated && !other.wasTruncated
-                && other.markdown.hasPrefix(markdown)
+                && Self.hasPrefix(other.markdown, markdown)
+        }
+
+        /// `String.hasPrefix`와 같은 판정. 비ASCII 원문은 표준 라이브러리가 grapheme 단위로 비교해
+        /// tick마다 누적 원문 전체를 훑는다(시뮬레이터 실측: 3.4 KB에 바이트 비교의 약 6배).
+        /// 바이트 prefix이고 자른 자리가 grapheme 경계면 grapheme 열도 같으므로 바로 참이다.
+        /// 그 밖(정규화 동치, grapheme 중간 절단)은 표준 판정에 맡긴다.
+        private static func hasPrefix(_ string: String, _ prefix: String) -> Bool {
+            if string.utf8.starts(with: prefix.utf8) {
+                let end = string.utf8.index(string.utf8.startIndex, offsetBy: prefix.utf8.count)
+                if end.samePosition(in: string) != nil { return true }
+            }
+            return string.hasPrefix(prefix)
         }
     }
 

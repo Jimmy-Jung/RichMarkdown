@@ -18,6 +18,7 @@ public struct RichMarkdownView: View {
     @Environment(\.richMarkdownStreaming) private var streaming
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.richMarkdownBodyProbe) private var probe
     /// `@ScaledMetric(relativeTo:)`의 기준 style은 컴파일 시점 상수여서 style별
     /// 배율을 root에서 측정한 뒤 하위 renderer에 environment로 전달한다.
     @ScaledMetric(relativeTo: .body) private var bodyScale: CGFloat = 1
@@ -41,22 +42,24 @@ public struct RichMarkdownView: View {
         // 요청을 한 번만 canonicalize한다. 대형 원문의 bounded fallback도 body와
         // `.task(id:)`가 같은 값을 써야 이전 문서가 한 프레임 되살아나지 않는다.
         let request = currentRequest
-        content(for: request)
+        let document = displayedDocument(for: request)
+        let _ = probe?.didEvaluateRoot(showsDocument: document != nil)
+        content(for: request, document: document)
             .environment(\.richMarkdownFontScale, fontScale)
             .task(id: request) {
                 model.submit(request)
             }
     }
 
+    /// 이 body는 markdown이 바뀔 때마다(스트리밍 tick마다) 돈다. 문서 렌더는 하위
+    /// `RichMarkdownDocumentView`에 두고 입력을 모델이 게시한 값으로만 채운다 — 새 parse가
+    /// 게시되기 전의 갱신에서는 `==`가 참이라 블록·ForEach·레이아웃을 다시 돌지 않는다.
     @ViewBuilder
-    private func content(for request: RichMarkdownRenderModel.Request) -> some View {
-        // `.task(id:)`는 body 뒤에 시작된다. 모델 문서가 현재 요청과 같은 parse identity거나
-        // 그 **스트리밍 prefix**면 표시한다 — append 중에는 새 parse가 게시될 때까지 이전
-        // 렌더를 유지해 화면 전체가 원문 fallback으로 출렁이지 않게 한다. 다른 문서
-        // (셀 재사용)는 여전히 한 프레임도 되살아나지 않는다.
-        if let identity = model.parseIdentity,
-           identity == request.parseIdentity || identity.isStreamingPrefix(of: request.parseIdentity),
-           let document = model.document {
+    private func content(
+        for request: RichMarkdownRenderModel.Request,
+        document: ParsedDocument?
+    ) -> some View {
+        if let document {
             // 색·폰트·scale이 바뀐 새 raster가 준비되기 전에는 이전 bitmap을 섞지 않고
             // source fallback을 유지한다. markdown만 다른 stale 이미지는 계속 쓴다 —
             // 수식 raster는 문서 안 위치와 무관하다.
@@ -66,20 +69,8 @@ public struct RichMarkdownView: View {
             let tail = streaming.map {
                 RichMarkdownStreamingTailContext(options: $0, dollarMath: dollarMath)
             }
-            let lastIndex = document.blocks.count - 1
-            VStack(alignment: .leading, spacing: 12) {
-                // identity는 렌더 시점의 위치 + content digest. 편집 사이 영속성은 약속하지 않는다.
-                // `.equatable()`: 스트리밍 게시마다 이 body가 다시 돌아도 값이 같은 블록은
-                // body를 다시 평가하지 않는다.
-                ForEach(Array(document.blocks.enumerated()), id: \.offset) { offset, block in
-                    RichMarkdownBlockView(
-                        block: block,
-                        images: images,
-                        tail: offset == lastIndex ? tail : nil
-                    )
-                    .equatable()
-                }
-            }
+            RichMarkdownDocumentView(document: document, images: images, tail: tail, probe: probe)
+                .equatable()
         } else {
             // Request가 입력을 제한해 보관하므로 raw markdown을 UI에 직접 전달하지 않는다.
             Text(request.markdown)
@@ -87,6 +78,17 @@ public struct RichMarkdownView: View {
                 .foregroundStyle(theme.textColor)
                 .textSelection(.enabled)
         }
+    }
+
+    /// 표시할 모델 문서. `.task(id:)`는 body 뒤에 시작된다. 모델 문서가 현재 요청과 같은
+    /// parse identity거나 그 **스트리밍 prefix**면 표시한다 — append 중에는 새 parse가 게시될
+    /// 때까지 이전 렌더를 유지해 화면 전체가 원문 fallback으로 출렁이지 않게 한다. 다른 문서
+    /// (셀 재사용)는 여전히 한 프레임도 되살아나지 않는다.
+    private func displayedDocument(for request: RichMarkdownRenderModel.Request) -> ParsedDocument? {
+        guard let identity = model.parseIdentity,
+              identity == request.parseIdentity || identity.isStreamingPrefix(of: request.parseIdentity)
+        else { return nil }
+        return model.document
     }
 
     /// 수식 raster 기준 크기. 수식은 본문 폰트가 선택한 Dynamic Type 기준을 따른다.
@@ -114,10 +116,98 @@ public struct RichMarkdownView: View {
     }
 
     private var resolvedTextColorRGBA: UInt32 {
+        TextColorRGBA.resolve(theme.textColor, colorScheme: colorScheme)
+    }
+}
+
+/// 수식 raster 색. body는 tick마다 두 번 돈다 — `UIColor(Color)` 변환과 trait 해석(시뮬레이터 약 7 µs)
+/// 대신 마지막 (색, scheme) 결과를 재사용한다(`Color` 비교는 0.01 µs).
+@MainActor
+private enum TextColorRGBA {
+    // ponytail: 1칸 캐시. 테마가 다른 뷰가 번갈아 그리면 매번 다시 변환할 뿐 결과는 같다.
+    private static var last: (color: Color, colorScheme: ColorScheme, rgba: UInt32)?
+
+    static func resolve(_ color: Color, colorScheme: ColorScheme) -> UInt32 {
+        if let last, last.color == color, last.colorScheme == colorScheme { return last.rgba }
         let style: UIUserInterfaceStyle = colorScheme == .dark ? .dark : .light
-        return UIColor(theme.textColor)
+        let rgba = UIColor(color)
             .resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
             .rgbaValue
+        last = (color, colorScheme, rgba)
+        return rgba
+    }
+}
+
+// MARK: - Document
+
+/// 모델이 게시한 문서의 블록 목록. 입력이 문서·이미지·tail 문맥뿐이라 markdown만 바뀐 상위
+/// 갱신(스트리밍 tick의 parse 전 갱신)에서는 값이 같아 body를 다시 평가하지 않는다.
+struct RichMarkdownDocumentView: View {
+    let document: ParsedDocument
+    let images: [MathSegment: RenderedMath]
+    let tail: RichMarkdownStreamingTailContext?
+    /// 테스트 관측점. `==`에 넣지 않는다. environment로 읽지 않고 상위가 넘겨 이 뷰의 의존을
+    /// 문서 입력으로만 둔다.
+    var probe: RichMarkdownBodyProbe? = nil
+
+    var body: some View {
+        let _ = probe?.didEvaluateDocument()
+        let lastIndex = document.blocks.count - 1
+        VStack(alignment: .leading, spacing: 12) {
+            // identity는 렌더 시점의 위치 + content digest. 편집 사이 영속성은 약속하지 않는다.
+            // `.equatable()`: 새 문서가 게시돼도 값이 같은 블록은 body를 다시 평가하지 않는다.
+            ForEach(Array(document.blocks.enumerated()), id: \.offset) { offset, block in
+                RichMarkdownBlockView(
+                    block: block,
+                    images: images,
+                    tail: offset == lastIndex ? tail : nil
+                )
+                .equatable()
+            }
+        }
+    }
+}
+
+/// 모델이 게시하지 않은 동안 문서와 이미지 사전은 같은 저장소라 비교가 짧다(배열 identity 지름길).
+/// 이미지는 `RichMarkdownBlockView`와 같이 raster identity로 비교한다. 테마·폰트 배율은
+/// environment라 이 판정과 별개로 블록에 닿는다.
+extension RichMarkdownDocumentView: Equatable {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.tail == rhs.tail
+            && lhs.document == rhs.document
+            && lhs.images.count == rhs.images.count
+            && lhs.images.allSatisfy { rhs.images[$0.key]?.image === $0.value.image }
+    }
+}
+
+/// 테스트 전용 관측점. body 평가 횟수를 센다. 기본값 nil이라 앱에서는 environment 읽기 외 비용이 없다.
+/// environment에서는 `RichMarkdownView`만 읽는다(어차피 markdown마다 도는 body).
+@MainActor
+final class RichMarkdownBodyProbe {
+    /// `RichMarkdownView` body 평가 수와 그중 원문 fallback을 고른 수.
+    private(set) var rootBodies = 0
+    private(set) var fallbackBodies = 0
+    /// `RichMarkdownDocumentView` body 평가 수.
+    private(set) var documentBodies = 0
+
+    func didEvaluateRoot(showsDocument: Bool) {
+        rootBodies += 1
+        if !showsDocument { fallbackBodies += 1 }
+    }
+
+    func didEvaluateDocument() {
+        documentBodies += 1
+    }
+}
+
+private struct RichMarkdownBodyProbeKey: EnvironmentKey {
+    static let defaultValue: RichMarkdownBodyProbe? = nil
+}
+
+extension EnvironmentValues {
+    var richMarkdownBodyProbe: RichMarkdownBodyProbe? {
+        get { self[RichMarkdownBodyProbeKey.self] }
+        set { self[RichMarkdownBodyProbeKey.self] = newValue }
     }
 }
 
